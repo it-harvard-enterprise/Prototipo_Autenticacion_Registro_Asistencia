@@ -73,16 +73,16 @@ export default function LoginPage() {
   }
 
   return (
-    <Card className="shadow-md">
-      <CardHeader className="space-y-1">
-        <CardTitle className="text-2xl font-bold">Iniciar sesión</CardTitle>
-        <CardDescription>
+    <Card className="shadow-md p-2">
+      <CardHeader className="space-y-2">
+        <CardTitle className="text-3xl font-semibold">Iniciar sesión</CardTitle>
+        <CardDescription className="text-base">
           Ingrese sus credenciales para acceder al sistema
         </CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
             {serverError && (
               <div className="rounded-md bg-red-50 border border-red-200 p-3">
                 <p className="text-sm text-red-700">{serverError}</p>
@@ -94,12 +94,13 @@ export default function LoginPage() {
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Correo electrónico</FormLabel>
+                  <FormLabel className="text-base">Correo electrónico</FormLabel>
                   <FormControl>
                     <Input
                       type="email"
                       placeholder="correo@ejemplo.com"
                       autoComplete="email"
+                      className="h-11 text-base"
                       {...field}
                     />
                   </FormControl>
@@ -113,12 +114,13 @@ export default function LoginPage() {
               name="password"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Contraseña</FormLabel>
+                  <FormLabel className="text-base">Contraseña</FormLabel>
                   <FormControl>
                     <Input
                       type="password"
                       placeholder="••••••••"
                       autoComplete="current-password"
+                      className="h-11 text-base"
                       {...field}
                     />
                   </FormControl>
@@ -127,10 +129,10 @@ export default function LoginPage() {
               )}
             />
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button type="submit" className="w-full h-11 text-base" disabled={isLoading}>
               {isLoading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                   Iniciando sesión...
                 </>
               ) : (
@@ -141,7 +143,7 @@ export default function LoginPage() {
         </Form>
       </CardContent>
       <CardFooter className="flex justify-center">
-        <p className="text-sm text-slate-600">
+        <p className="text-base text-slate-600">
           ¿No tiene cuenta?{' '}
           <Link
             href="/register"
