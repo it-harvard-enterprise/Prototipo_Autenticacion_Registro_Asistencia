@@ -109,42 +109,42 @@ export default function RegisterPage() {
   }
 
   return (
-    <Card className="shadow-md">
-      <CardHeader className="space-y-1">
-        <CardTitle className="text-2xl font-bold">Crear cuenta</CardTitle>
-        <CardDescription>
+    <Card className="shadow-md p-2">
+      <CardHeader className="space-y-2">
+        <CardTitle className="text-3xl font-semibold">Crear cuenta</CardTitle>
+        <CardDescription className="text-base">
           Complete el formulario para registrarse en el sistema
         </CardDescription>
       </CardHeader>
       <CardContent>
         {successMessage ? (
-          <div className="rounded-md bg-green-50 border border-green-200 p-4 text-center">
-            <p className="text-sm text-green-700 font-medium">{successMessage}</p>
+          <div className="rounded-md bg-green-50 border border-green-200 p-5 text-center">
+            <p className="text-base text-green-700 font-medium">{successMessage}</p>
             <Link
               href="/login"
-              className="mt-3 inline-block text-sm text-green-800 font-semibold hover:underline"
+              className="mt-3 inline-block text-base text-green-800 font-semibold hover:underline"
             >
               Ir a iniciar sesión
             </Link>
           </div>
         ) : (
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
               {serverError && (
                 <div className="rounded-md bg-red-50 border border-red-200 p-3">
                   <p className="text-sm text-red-700">{serverError}</p>
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-5">
                 <FormField
                   control={form.control}
                   name="firstName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Nombre</FormLabel>
+                      <FormLabel className="text-base">Nombre</FormLabel>
                       <FormControl>
-                        <Input placeholder="Juan" autoComplete="given-name" {...field} />
+                        <Input placeholder="Juan" autoComplete="given-name" className="h-11 text-base" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -156,9 +156,9 @@ export default function RegisterPage() {
                   name="lastName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Apellido</FormLabel>
+                      <FormLabel className="text-base">Apellido</FormLabel>
                       <FormControl>
-                        <Input placeholder="Pérez" autoComplete="family-name" {...field} />
+                        <Input placeholder="Pérez" autoComplete="family-name" className="h-11 text-base" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -171,12 +171,13 @@ export default function RegisterPage() {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Correo electrónico</FormLabel>
+                    <FormLabel className="text-base">Correo electrónico</FormLabel>
                     <FormControl>
                       <Input
                         type="email"
                         placeholder="correo@ejemplo.com"
                         autoComplete="email"
+                        className="h-11 text-base"
                         {...field}
                       />
                     </FormControl>
@@ -190,12 +191,13 @@ export default function RegisterPage() {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Contraseña</FormLabel>
+                    <FormLabel className="text-base">Contraseña</FormLabel>
                     <FormControl>
                       <Input
                         type="password"
                         placeholder="••••••••"
                         autoComplete="new-password"
+                        className="h-11 text-base"
                         {...field}
                       />
                     </FormControl>
@@ -204,10 +206,10 @@ export default function RegisterPage() {
                 )}
               />
 
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              <Button type="submit" className="w-full h-11 text-base" disabled={isLoading}>
                 {isLoading ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                     Creando cuenta...
                   </>
                 ) : (
@@ -219,7 +221,7 @@ export default function RegisterPage() {
         )}
       </CardContent>
       <CardFooter className="flex justify-center">
-        <p className="text-sm text-slate-600">
+        <p className="text-base text-slate-600">
           ¿Ya tiene cuenta?{' '}
           <Link
             href="/login"
