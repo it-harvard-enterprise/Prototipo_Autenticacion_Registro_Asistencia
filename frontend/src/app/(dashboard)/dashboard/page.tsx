@@ -38,8 +38,8 @@ export default async function DashboardPage() {
       value: studentsCount ?? 0,
       description: 'Estudiantes registrados',
       icon: Users,
-      color: 'text-blue-600',
-      bg: 'bg-blue-50',
+      color: 'text-[#b92f2d]',
+      bg: 'bg-[#b92f2d]/10',
     },
     {
       title: 'Total Cursos',
@@ -72,10 +72,10 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">
+        <h1 className="text-2xl font-bold text-gray-900">
           Bienvenido, {displayName}
         </h1>
-        <p className="text-slate-500 mt-1">
+        <p className="text-gray-500 mt-1">
           Resumen general del sistema de asistencia
         </p>
       </div>
@@ -89,7 +89,7 @@ export default async function DashboardPage() {
               className={stat.disabled ? 'opacity-60' : ''}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-slate-600">
+                <CardTitle className="text-sm font-medium text-gray-600">
                   {stat.title}
                 </CardTitle>
                 <div className={`p-2 rounded-lg ${stat.bg}`}>
@@ -97,7 +97,7 @@ export default async function DashboardPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-slate-900">
+                <div className="text-3xl font-bold text-gray-900">
                   {stat.value}
                 </div>
                 <CardDescription className="mt-1">

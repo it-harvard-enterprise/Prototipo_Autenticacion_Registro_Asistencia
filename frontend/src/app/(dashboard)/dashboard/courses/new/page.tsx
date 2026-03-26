@@ -73,7 +73,7 @@ export default function NewCoursePage() {
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" asChild className="shrink-0">
           <Link href="/dashboard/courses">
@@ -81,14 +81,14 @@ export default function NewCoursePage() {
           </Link>
         </Button>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Nuevo Curso</h1>
-          <p className="text-slate-500 mt-0.5 text-sm">
+          <h1 className="text-2xl font-bold text-gray-900">Nuevo Curso</h1>
+          <p className="text-gray-500 mt-0.5 text-sm">
             Complete el formulario para registrar un nuevo curso
           </p>
         </div>
       </div>
 
-      <Card>
+      <Card className="max-w-2xl mx-auto">
         <CardHeader>
           <CardTitle className="text-lg">Información del Curso</CardTitle>
           <CardDescription>
