@@ -1,25 +1,24 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { ArrowLeft, Loader2 } from 'lucide-react'
-import { toast } from 'sonner'
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { ArrowLeft, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
-import { createCourse } from '@/app/actions/courses'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
+import { createCourse } from "@/app/actions/courses";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
+} from "@/components/ui/card";
 import {
   Form,
   FormControl,
@@ -27,48 +26,69 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from '@/components/ui/form'
+} from "@/components/ui/form";
 
-const courseSchema = z.object({
-  name: z
-    .string()
-    .min(2, 'El nombre del curso es requerido')
-    .max(100, 'Nombre demasiado largo'),
-  description: z.string().max(500, 'Descripción demasiado larga').optional(),
-  schedule: z.string().max(200, 'Horario demasiado largo').optional(),
-})
+const courseSchema = z
+  .object({
+    nombre_curso: z
+      .string()
+      .min(2, "El nombre del curso es requerido")
+      .max(150),
+    nivel_curso: z.string().min(1, "El nivel es requerido").max(50),
+    hora_inicio: z.string().min(1, "La hora de inicio es requerida"),
+    hora_fin: z.string().min(1, "La hora de fin es requerida"),
+    salon: z.string().max(50).optional(),
+    fecha_inicio: z.string().min(1, "La fecha de inicio es requerida"),
+    fecha_fin: z.string().min(1, "La fecha de fin es requerida"),
+  })
+  .refine((values) => values.hora_fin > values.hora_inicio, {
+    message: "La hora de fin debe ser mayor que la hora de inicio",
+    path: ["hora_fin"],
+  })
+  .refine((values) => values.fecha_fin > values.fecha_inicio, {
+    message: "La fecha de fin debe ser mayor que la fecha de inicio",
+    path: ["fecha_fin"],
+  });
 
-type CourseFormValues = z.infer<typeof courseSchema>
+type CourseFormValues = z.infer<typeof courseSchema>;
 
 export default function NewCoursePage() {
-  const router = useRouter()
-  const [isLoading, setIsLoading] = useState(false)
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
 
   const form = useForm<CourseFormValues>({
     resolver: zodResolver(courseSchema),
     defaultValues: {
-      name: '',
-      description: '',
-      schedule: '',
+      nombre_curso: "",
+      nivel_curso: "",
+      hora_inicio: "",
+      hora_fin: "",
+      salon: "",
+      fecha_inicio: "",
+      fecha_fin: "",
     },
-  })
+  });
 
   async function onSubmit(values: CourseFormValues) {
-    setIsLoading(true)
+    setIsLoading(true);
 
     const result = await createCourse({
-      name: values.name,
-      description: values.description || null,
-      schedule: values.schedule || null,
-    })
+      nombre_curso: values.nombre_curso,
+      nivel_curso: values.nivel_curso,
+      hora_inicio: values.hora_inicio,
+      hora_fin: values.hora_fin,
+      salon: values.salon || null,
+      fecha_inicio: values.fecha_inicio,
+      fecha_fin: values.fecha_fin,
+    });
 
     if (result.success) {
-      toast.success('Curso creado correctamente')
-      router.push('/dashboard/courses')
-      router.refresh()
+      toast.success("Curso creado correctamente");
+      router.push("/dashboard/courses");
+      router.refresh();
     } else {
-      toast.error(result.error ?? 'Error al crear el curso')
-      setIsLoading(false)
+      toast.error(result.error ?? "Error al crear el curso");
+      setIsLoading(false);
     }
   }
 
@@ -83,16 +103,16 @@ export default function NewCoursePage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Nuevo Curso</h1>
           <p className="text-gray-500 mt-0.5 text-sm">
-            Complete el formulario para registrar un nuevo curso
+            Formulario basado en db_schema.sql
           </p>
         </div>
       </div>
 
       <Card className="max-w-2xl mx-auto">
         <CardHeader>
-          <CardTitle className="text-lg">Información del Curso</CardTitle>
+          <CardTitle className="text-lg">Información del curso</CardTitle>
           <CardDescription>
-            Ingrese los datos del curso a registrar
+            Ingrese los datos requeridos del esquema de cursos
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -100,53 +120,107 @@ export default function NewCoursePage() {
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
               <FormField
                 control={form.control}
-                name="name"
+                name="nombre_curso"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Nombre del Curso *</FormLabel>
+                    <FormLabel>Nombre del curso *</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ej: Matemáticas Avanzadas" {...field} />
+                      <Input {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Descripción</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Descripción del curso (opcional)"
-                        className="resize-none"
-                        rows={3}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="nivel_curso"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nivel del curso *</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Ej: Básico, Intermedio, Avanzado"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="salon"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Salón</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ej: Salón 3" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
-              <FormField
-                control={form.control}
-                name="schedule"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Horario</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="Ej: Lunes y Miércoles 8:00 - 10:00 AM"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="hora_inicio"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Hora de inicio *</FormLabel>
+                      <FormControl>
+                        <Input type="time" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="hora_fin"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Hora de fin *</FormLabel>
+                      <FormControl>
+                        <Input type="time" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="fecha_inicio"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Fecha de inicio *</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="fecha_fin"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Fecha de fin *</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
               <div className="flex justify-end gap-3 pt-2">
                 <Button
@@ -164,7 +238,7 @@ export default function NewCoursePage() {
                       Guardando...
                     </>
                   ) : (
-                    'Guardar Curso'
+                    "Guardar Curso"
                   )}
                 </Button>
               </div>
@@ -173,5 +247,5 @@ export default function NewCoursePage() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
