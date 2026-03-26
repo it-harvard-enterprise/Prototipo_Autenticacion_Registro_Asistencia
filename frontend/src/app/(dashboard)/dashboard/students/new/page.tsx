@@ -84,7 +84,7 @@ export default function NewStudentPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" asChild className="shrink-0">
           <Link href="/dashboard/students">
@@ -92,14 +92,14 @@ export default function NewStudentPage() {
           </Link>
         </Button>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Nuevo Estudiante</h1>
-          <p className="text-slate-500 mt-0.5 text-sm">
+          <h1 className="text-2xl font-bold text-gray-900">Nuevo Estudiante</h1>
+          <p className="text-gray-500 mt-0.5 text-sm">
             Complete el formulario para registrar un nuevo estudiante
           </p>
         </div>
       </div>
 
-      <Card>
+      <Card className="max-w-2xl mx-auto">
         <CardHeader>
           <CardTitle className="text-lg">Información Personal</CardTitle>
           <CardDescription>Datos de identificación del estudiante</CardDescription>
@@ -192,25 +192,25 @@ export default function NewStudentPage() {
               {/* Fingerprint section */}
               <div className="space-y-3">
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-700">
+                  <h3 className="text-sm font-semibold text-gray-700">
                     Registro de Huellas Dactilares
                   </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <p className="text-xs text-gray-500 mt-0.5">
                     Requiere lector Digital Persona 4500
                   </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                  <Card className="border-dashed border-slate-300">
+                  <Card className="border-dashed border-gray-300">
                     <CardContent className="flex flex-col items-center justify-center p-5 gap-3">
-                      <div className="rounded-full bg-slate-100 p-3">
-                        <Fingerprint className="h-6 w-6 text-slate-400" />
+                      <div className="rounded-full bg-gray-100 p-3">
+                        <Fingerprint className="h-6 w-6 text-gray-400" />
                       </div>
                       <div className="text-center">
-                        <p className="text-sm font-medium text-slate-700">
+                        <p className="text-sm font-medium text-gray-700">
                           Índice Derecho
                         </p>
-                        <p className="text-xs text-slate-400 mt-0.5">No registrada</p>
+                        <p className="text-xs text-gray-400 mt-0.5">No registrada</p>
                       </div>
                       <div className="flex flex-col items-center gap-1">
                         <Button
@@ -232,16 +232,16 @@ export default function NewStudentPage() {
                     </CardContent>
                   </Card>
 
-                  <Card className="border-dashed border-slate-300">
+                  <Card className="border-dashed border-gray-300">
                     <CardContent className="flex flex-col items-center justify-center p-5 gap-3">
-                      <div className="rounded-full bg-slate-100 p-3">
-                        <Fingerprint className="h-6 w-6 text-slate-400" />
+                      <div className="rounded-full bg-gray-100 p-3">
+                        <Fingerprint className="h-6 w-6 text-gray-400" />
                       </div>
                       <div className="text-center">
-                        <p className="text-sm font-medium text-slate-700">
+                        <p className="text-sm font-medium text-gray-700">
                           Índice Izquierdo
                         </p>
-                        <p className="text-xs text-slate-400 mt-0.5">No registrada</p>
+                        <p className="text-xs text-gray-400 mt-0.5">No registrada</p>
                       </div>
                       <div className="flex flex-col items-center gap-1">
                         <Button

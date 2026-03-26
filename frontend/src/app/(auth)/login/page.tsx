@@ -143,11 +143,11 @@ export default function LoginPage() {
         </Form>
       </CardContent>
       <CardFooter className="flex justify-center">
-        <p className="text-base text-slate-600">
+        <p className="text-base text-gray-600">
           ¿No tiene cuenta?{' '}
           <Link
             href="/register"
-            className="font-medium text-slate-900 hover:underline"
+            className="font-medium text-gray-900 hover:underline"
           >
             Registrarse
           </Link>

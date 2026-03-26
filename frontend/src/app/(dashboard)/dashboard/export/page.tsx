@@ -24,7 +24,7 @@ export default function ExportPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-slate-500 mb-6">
+          <p className="text-sm text-gray-500 mb-6">
             Próximamente podrá exportar los registros de asistencia, estudiantes
             y cursos a archivos de Excel para su análisis y reporte.
           </p>

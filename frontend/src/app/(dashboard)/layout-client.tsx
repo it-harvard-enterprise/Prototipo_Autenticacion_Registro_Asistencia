@@ -20,7 +20,7 @@ export function DashboardLayoutClient({
   const [mobileOpen, setMobileOpen] = useState(false)
 
   return (
-    <div className="flex h-screen bg-slate-100 overflow-hidden">
+    <div className="flex h-screen bg-gray-100 overflow-hidden">
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex shrink-0">
         <Sidebar userName={userName} userEmail={userEmail} />
@@ -40,7 +40,7 @@ export function DashboardLayoutClient({
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Mobile header */}
-        <header className="md:hidden bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-3">
+        <header className="md:hidden bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3">
           <Button
             variant="ghost"
             size="icon"
@@ -50,7 +50,7 @@ export function DashboardLayoutClient({
             <Menu className="h-5 w-5" />
             <span className="sr-only">Abrir menú</span>
           </Button>
-          <h1 className="font-bold text-slate-900">SysAsistencia</h1>
+          <h1 className="font-bold text-gray-900">SysAsistencia</h1>
         </header>
 
         {/* Page content */}

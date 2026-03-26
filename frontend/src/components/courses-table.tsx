@@ -56,7 +56,7 @@ export function CoursesTable({ courses }: CoursesTableProps) {
 
   if (courses.length === 0) {
     return (
-      <div className="text-center py-12 text-slate-500">
+      <div className="text-center py-12 text-gray-500">
         <p className="text-lg font-medium">No hay cursos registrados</p>
         <p className="text-sm mt-1">
           Haga clic en &quot;Nuevo Curso&quot; para agregar uno.
@@ -70,7 +70,7 @@ export function CoursesTable({ courses }: CoursesTableProps) {
       <div className="rounded-md border bg-white overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="bg-slate-50">
+            <TableRow className="bg-gray-50">
               <TableHead className="font-semibold">Nombre</TableHead>
               <TableHead className="font-semibold">Descripción</TableHead>
               <TableHead className="font-semibold">Horario</TableHead>
@@ -79,16 +79,16 @@ export function CoursesTable({ courses }: CoursesTableProps) {
           </TableHeader>
           <TableBody>
             {courses.map((course) => (
-              <TableRow key={course.id} className="hover:bg-slate-50">
+              <TableRow key={course.id} className="hover:bg-gray-50">
                 <TableCell className="font-medium">{course.name}</TableCell>
-                <TableCell className="text-slate-600 max-w-xs truncate">
+                <TableCell className="text-gray-600 max-w-xs truncate">
                   {course.description ?? (
-                    <span className="text-slate-400 italic">Sin descripción</span>
+                    <span className="text-gray-400 italic">Sin descripción</span>
                   )}
                 </TableCell>
-                <TableCell className="text-slate-600">
+                <TableCell className="text-gray-600">
                   {course.schedule ?? (
-                    <span className="text-slate-400 italic">Sin horario</span>
+                    <span className="text-gray-400 italic">Sin horario</span>
                   )}
                 </TableCell>
                 <TableCell className="text-right">
@@ -96,7 +96,7 @@ export function CoursesTable({ courses }: CoursesTableProps) {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-slate-600 hover:text-slate-900"
+                      className="h-8 w-8 text-gray-600 hover:text-gray-900"
                       asChild
                     >
                       <Link href={`/dashboard/courses/${course.id}`}>
@@ -107,7 +107,7 @@ export function CoursesTable({ courses }: CoursesTableProps) {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-slate-600 hover:text-slate-900"
+                      className="h-8 w-8 text-gray-600 hover:text-gray-900"
                       asChild
                     >
                       <Link href={`/dashboard/courses/${course.id}/edit`}>

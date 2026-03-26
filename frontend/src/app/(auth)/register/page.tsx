@@ -221,11 +221,11 @@ export default function RegisterPage() {
         )}
       </CardContent>
       <CardFooter className="flex justify-center">
-        <p className="text-base text-slate-600">
+        <p className="text-base text-gray-600">
           ¿Ya tiene cuenta?{' '}
           <Link
             href="/login"
-            className="font-medium text-slate-900 hover:underline"
+            className="font-medium text-gray-900 hover:underline"
           >
             Iniciar sesión
           </Link>
