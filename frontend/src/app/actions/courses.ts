@@ -1,70 +1,89 @@
-'use server'
+"use server";
 
-import { createClient } from '@/lib/supabase/server'
-import { Course } from '@/lib/types'
+import { createClient } from "@/lib/supabase/server";
+import { Course } from "@/lib/types";
 
 export interface CourseFormData {
-  name: string
-  description?: string | null
-  schedule?: string | null
+  nombre_curso: string;
+  nivel_curso: string;
+  hora_inicio: string;
+  hora_fin: string;
+  salon?: string | null;
+  fecha_inicio: string;
+  fecha_fin: string;
 }
 
 export async function createCourse(
-  data: CourseFormData
+  data: CourseFormData,
 ): Promise<{ success: boolean; error?: string; data?: Course }> {
-  const supabase = await createClient()
+  const supabase = await createClient();
 
   const { data: course, error } = await supabase
-    .from('courses')
+    .from("cursos")
     .insert({
-      name: data.name,
-      description: data.description ?? null,
-      schedule: data.schedule ?? null,
+      nombre_curso: data.nombre_curso,
+      nivel_curso: data.nivel_curso,
+      hora_inicio: data.hora_inicio,
+      hora_fin: data.hora_fin,
+      salon: data.salon ?? null,
+      fecha_inicio: data.fecha_inicio,
+      fecha_fin: data.fecha_fin,
     })
     .select()
-    .single()
+    .single();
 
   if (error) {
-    return { success: false, error: error.message }
+    return { success: false, error: error.message };
   }
 
-  return { success: true, data: course as Course }
+  return { success: true, data: course as Course };
 }
 
 export async function updateCourse(
-  id: string,
-  data: Partial<CourseFormData>
+  idCurso: number,
+  data: Partial<CourseFormData>,
 ): Promise<{ success: boolean; error?: string; data?: Course }> {
-  const supabase = await createClient()
+  const supabase = await createClient();
 
   const { data: course, error } = await supabase
-    .from('courses')
+    .from("cursos")
     .update({
-      ...(data.name !== undefined && { name: data.name }),
-      ...(data.description !== undefined && { description: data.description }),
-      ...(data.schedule !== undefined && { schedule: data.schedule }),
+      ...(data.nombre_curso !== undefined && {
+        nombre_curso: data.nombre_curso,
+      }),
+      ...(data.nivel_curso !== undefined && { nivel_curso: data.nivel_curso }),
+      ...(data.hora_inicio !== undefined && { hora_inicio: data.hora_inicio }),
+      ...(data.hora_fin !== undefined && { hora_fin: data.hora_fin }),
+      ...(data.salon !== undefined && { salon: data.salon }),
+      ...(data.fecha_inicio !== undefined && {
+        fecha_inicio: data.fecha_inicio,
+      }),
+      ...(data.fecha_fin !== undefined && { fecha_fin: data.fecha_fin }),
     })
-    .eq('id', id)
+    .eq("id_curso", idCurso)
     .select()
-    .single()
+    .single();
 
   if (error) {
-    return { success: false, error: error.message }
+    return { success: false, error: error.message };
   }
 
-  return { success: true, data: course as Course }
+  return { success: true, data: course as Course };
 }
 
 export async function deleteCourse(
-  id: string
+  idCurso: number,
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = await createClient()
+  const supabase = await createClient();
 
-  const { error } = await supabase.from('courses').delete().eq('id', id)
+  const { error } = await supabase
+    .from("cursos")
+    .delete()
+    .eq("id_curso", idCurso);
 
   if (error) {
-    return { success: false, error: error.message }
+    return { success: false, error: error.message };
   }
 
-  return { success: true }
+  return { success: true };
 }
