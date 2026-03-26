@@ -47,7 +47,7 @@ export default async function StudentDetailPage({
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" asChild className="shrink-0">
           <Link href="/dashboard/students">
@@ -55,10 +55,10 @@ export default async function StudentDetailPage({
           </Link>
         </Button>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-slate-900">
+          <h1 className="text-2xl font-bold text-gray-900">
             {s.nombres} {s.apellidos}
           </h1>
-          <p className="text-slate-500 mt-0.5 text-sm">Cédula: {s.cedula}</p>
+          <p className="text-gray-500 mt-0.5 text-sm">Cédula: {s.cedula}</p>
         </div>
         <Button asChild>
           <Link href={`/dashboard/students/${s.id}/edit`}>
@@ -68,47 +68,47 @@ export default async function StudentDetailPage({
         </Button>
       </div>
 
-      <Card>
+      <Card className="max-w-2xl mx-auto">
         <CardHeader>
           <CardTitle className="text-lg">Información Personal</CardTitle>
         </CardHeader>
         <CardContent>
           <dl className="grid grid-cols-2 gap-x-6 gap-y-4">
             <div>
-              <dt className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Cédula
               </dt>
-              <dd className="mt-1 text-sm font-mono text-slate-900">{s.cedula}</dd>
+              <dd className="mt-1 text-sm font-mono text-gray-900">{s.cedula}</dd>
             </div>
             <div>
-              <dt className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Grado
               </dt>
-              <dd className="mt-1 text-sm text-slate-900">{s.grado}</dd>
+              <dd className="mt-1 text-sm text-gray-900">{s.grado}</dd>
             </div>
             <div>
-              <dt className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Nombres
               </dt>
-              <dd className="mt-1 text-sm text-slate-900">{s.nombres}</dd>
+              <dd className="mt-1 text-sm text-gray-900">{s.nombres}</dd>
             </div>
             <div>
-              <dt className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Apellidos
               </dt>
-              <dd className="mt-1 text-sm text-slate-900">{s.apellidos}</dd>
+              <dd className="mt-1 text-sm text-gray-900">{s.apellidos}</dd>
             </div>
             <div>
-              <dt className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Edad
               </dt>
-              <dd className="mt-1 text-sm text-slate-900">{s.edad} años</dd>
+              <dd className="mt-1 text-sm text-gray-900">{s.edad} años</dd>
             </div>
           </dl>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="max-w-2xl mx-auto">
         <CardHeader>
           <CardTitle className="text-lg">Huellas Dactilares</CardTitle>
           <CardDescription>
@@ -117,33 +117,33 @@ export default async function StudentDetailPage({
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-4">
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-50 border">
-              <Fingerprint className="h-5 w-5 text-slate-400" />
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 border">
+              <Fingerprint className="h-5 w-5 text-gray-400" />
               <div className="flex-1">
-                <p className="text-sm font-medium text-slate-700">Índice Derecho</p>
+                <p className="text-sm font-medium text-gray-700">Índice Derecho</p>
               </div>
               {s.fingerprint_right ? (
                 <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">
                   Registrada
                 </Badge>
               ) : (
-                <Badge variant="secondary" className="text-slate-500">
+                <Badge variant="secondary" className="text-gray-500">
                   No registrada
                 </Badge>
               )}
             </div>
 
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-50 border">
-              <Fingerprint className="h-5 w-5 text-slate-400" />
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 border">
+              <Fingerprint className="h-5 w-5 text-gray-400" />
               <div className="flex-1">
-                <p className="text-sm font-medium text-slate-700">Índice Izquierdo</p>
+                <p className="text-sm font-medium text-gray-700">Índice Izquierdo</p>
               </div>
               {s.fingerprint_left ? (
                 <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">
                   Registrada
                 </Badge>
               ) : (
-                <Badge variant="secondary" className="text-slate-500">
+                <Badge variant="secondary" className="text-gray-500">
                   No registrada
                 </Badge>
               )}
@@ -152,18 +152,18 @@ export default async function StudentDetailPage({
         </CardContent>
       </Card>
 
-      <Card className="bg-slate-50">
+      <Card className="bg-gray-50 max-w-2xl mx-auto">
         <CardContent className="pt-4">
           <dl className="grid grid-cols-2 gap-x-6 gap-y-2">
             <div>
-              <dt className="text-xs font-medium text-slate-500">Creado</dt>
-              <dd className="text-xs text-slate-600">{formatDate(s.created_at)}</dd>
+              <dt className="text-xs font-medium text-gray-500">Creado</dt>
+              <dd className="text-xs text-gray-600">{formatDate(s.created_at)}</dd>
             </div>
             <div>
-              <dt className="text-xs font-medium text-slate-500">
+              <dt className="text-xs font-medium text-gray-500">
                 Última actualización
               </dt>
-              <dd className="text-xs text-slate-600">{formatDate(s.updated_at)}</dd>
+              <dd className="text-xs text-gray-600">{formatDate(s.updated_at)}</dd>
             </div>
           </dl>
         </CardContent>

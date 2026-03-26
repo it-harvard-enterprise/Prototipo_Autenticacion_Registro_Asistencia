@@ -56,7 +56,7 @@ export function StudentsTable({ students }: StudentsTableProps) {
 
   if (students.length === 0) {
     return (
-      <div className="text-center py-12 text-slate-500">
+      <div className="text-center py-12 text-gray-500">
         <p className="text-lg font-medium">No hay estudiantes registrados</p>
         <p className="text-sm mt-1">
           Haga clic en &quot;Nuevo Estudiante&quot; para agregar uno.
@@ -70,7 +70,7 @@ export function StudentsTable({ students }: StudentsTableProps) {
       <div className="rounded-md border bg-white overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="bg-slate-50">
+            <TableRow className="bg-gray-50">
               <TableHead className="font-semibold">Cédula</TableHead>
               <TableHead className="font-semibold">Nombres</TableHead>
               <TableHead className="font-semibold">Apellidos</TableHead>
@@ -81,7 +81,7 @@ export function StudentsTable({ students }: StudentsTableProps) {
           </TableHeader>
           <TableBody>
             {students.map((student) => (
-              <TableRow key={student.id} className="hover:bg-slate-50">
+              <TableRow key={student.id} className="hover:bg-gray-50">
                 <TableCell className="font-mono text-sm">{student.cedula}</TableCell>
                 <TableCell>{student.nombres}</TableCell>
                 <TableCell>{student.apellidos}</TableCell>
@@ -92,7 +92,7 @@ export function StudentsTable({ students }: StudentsTableProps) {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-slate-600 hover:text-slate-900"
+                      className="h-8 w-8 text-gray-600 hover:text-gray-900"
                       asChild
                     >
                       <Link href={`/dashboard/students/${student.id}`}>
@@ -103,7 +103,7 @@ export function StudentsTable({ students }: StudentsTableProps) {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-slate-600 hover:text-slate-900"
+                      className="h-8 w-8 text-gray-600 hover:text-gray-900"
                       asChild
                     >
                       <Link href={`/dashboard/students/${student.id}/edit`}>

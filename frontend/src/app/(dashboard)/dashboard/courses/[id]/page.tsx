@@ -44,7 +44,7 @@ export default async function CourseDetailPage({
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" asChild className="shrink-0">
           <Link href="/dashboard/courses">
@@ -52,8 +52,8 @@ export default async function CourseDetailPage({
           </Link>
         </Button>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-slate-900">{c.name}</h1>
-          <p className="text-slate-500 mt-0.5 text-sm">Detalle del curso</p>
+          <h1 className="text-2xl font-bold text-gray-900">{c.name}</h1>
+          <p className="text-gray-500 mt-0.5 text-sm">Detalle del curso</p>
         </div>
         <Button asChild>
           <Link href={`/dashboard/courses/${c.id}/edit`}>
@@ -63,35 +63,35 @@ export default async function CourseDetailPage({
         </Button>
       </div>
 
-      <Card>
+      <Card className="max-w-2xl mx-auto">
         <CardHeader>
           <CardTitle className="text-lg">Información del Curso</CardTitle>
         </CardHeader>
         <CardContent>
           <dl className="space-y-4">
             <div>
-              <dt className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Nombre
               </dt>
-              <dd className="mt-1 text-sm text-slate-900 font-medium">{c.name}</dd>
+              <dd className="mt-1 text-sm text-gray-900 font-medium">{c.name}</dd>
             </div>
             <div>
-              <dt className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Descripción
               </dt>
-              <dd className="mt-1 text-sm text-slate-900">
+              <dd className="mt-1 text-sm text-gray-900">
                 {c.description ?? (
-                  <span className="text-slate-400 italic">Sin descripción</span>
+                  <span className="text-gray-400 italic">Sin descripción</span>
                 )}
               </dd>
             </div>
             <div>
-              <dt className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Horario
               </dt>
-              <dd className="mt-1 text-sm text-slate-900">
+              <dd className="mt-1 text-sm text-gray-900">
                 {c.schedule ?? (
-                  <span className="text-slate-400 italic">Sin horario asignado</span>
+                  <span className="text-gray-400 italic">Sin horario asignado</span>
                 )}
               </dd>
             </div>
@@ -99,18 +99,18 @@ export default async function CourseDetailPage({
         </CardContent>
       </Card>
 
-      <Card className="bg-slate-50">
+      <Card className="bg-gray-50 max-w-2xl mx-auto">
         <CardContent className="pt-4">
           <dl className="grid grid-cols-2 gap-x-6 gap-y-2">
             <div>
-              <dt className="text-xs font-medium text-slate-500">Creado</dt>
-              <dd className="text-xs text-slate-600">{formatDate(c.created_at)}</dd>
+              <dt className="text-xs font-medium text-gray-500">Creado</dt>
+              <dd className="text-xs text-gray-600">{formatDate(c.created_at)}</dd>
             </div>
             <div>
-              <dt className="text-xs font-medium text-slate-500">
+              <dt className="text-xs font-medium text-gray-500">
                 Última actualización
               </dt>
-              <dd className="text-xs text-slate-600">{formatDate(c.updated_at)}</dd>
+              <dd className="text-xs text-gray-600">{formatDate(c.updated_at)}</dd>
             </div>
           </dl>
         </CardContent>

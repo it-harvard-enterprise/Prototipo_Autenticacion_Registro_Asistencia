@@ -24,7 +24,7 @@ export default function AttendancePage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-slate-500 mb-6">
+          <p className="text-sm text-gray-500 mb-6">
             La integración con el lector de huellas dactilares Digital Persona
             4500 está en desarrollo. Pronto podrá registrar la asistencia de
             los estudiantes de forma biométrica.

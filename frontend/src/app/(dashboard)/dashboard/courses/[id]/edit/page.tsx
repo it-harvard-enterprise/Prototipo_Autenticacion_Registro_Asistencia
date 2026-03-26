@@ -111,7 +111,7 @@ export default function EditCoursePage() {
   if (isFetching) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
       </div>
     )
   }
@@ -119,7 +119,7 @@ export default function EditCoursePage() {
   if (fetchError) {
     return (
       <div className="text-center py-20">
-        <p className="text-slate-600">{fetchError}</p>
+        <p className="text-gray-600">{fetchError}</p>
         <Button asChild className="mt-4" variant="outline">
           <Link href="/dashboard/courses">Volver a Cursos</Link>
         </Button>
@@ -128,7 +128,7 @@ export default function EditCoursePage() {
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" asChild className="shrink-0">
           <Link href={`/dashboard/courses/${id}`}>
@@ -136,12 +136,12 @@ export default function EditCoursePage() {
           </Link>
         </Button>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Editar Curso</h1>
-          <p className="text-slate-500 mt-0.5 text-sm">{course?.name}</p>
+          <h1 className="text-2xl font-bold text-gray-900">Editar Curso</h1>
+          <p className="text-gray-500 mt-0.5 text-sm">{course?.name}</p>
         </div>
       </div>
 
-      <Card>
+      <Card className="max-w-2xl mx-auto">
         <CardHeader>
           <CardTitle className="text-lg">Información del Curso</CardTitle>
           <CardDescription>Modifique los datos del curso</CardDescription>

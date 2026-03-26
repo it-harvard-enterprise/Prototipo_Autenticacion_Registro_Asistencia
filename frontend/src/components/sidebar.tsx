@@ -88,17 +88,17 @@ export function Sidebar({ userEmail, userName, onClose }: SidebarProps) {
   }
 
   return (
-    <div className="flex flex-col h-full bg-slate-900 text-white w-64">
+    <div className="flex flex-col h-full bg-[#3d100f] text-white w-64">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-5 border-b border-slate-700">
+      <div className="flex items-center justify-between px-6 py-5 border-b border-[#6b1e1d]">
         <div>
           <h2 className="text-lg font-bold text-white">SysAsistencia</h2>
-          <p className="text-xs text-slate-400">Sistema de Asistencia</p>
+          <p className="text-xs text-[#d49392]">Sistema de Asistencia</p>
         </div>
         {onClose && (
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white transition-colors"
+            className="text-[#d49392] hover:text-white transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -115,14 +115,14 @@ export function Sidebar({ userEmail, userName, onClose }: SidebarProps) {
             return (
               <div
                 key={item.href}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 cursor-not-allowed select-none"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[#b07271] cursor-not-allowed select-none"
               >
                 <Icon className="h-5 w-5 shrink-0" />
                 <span className="text-sm font-medium flex-1">{item.label}</span>
                 {item.badge && (
                   <Badge
                     variant="secondary"
-                    className="text-xs bg-slate-700 text-slate-400 border-0"
+                    className="text-xs bg-[#6b1e1d] text-[#d49392] border-0"
                   >
                     {item.badge}
                   </Badge>
@@ -139,8 +139,8 @@ export function Sidebar({ userEmail, userName, onClose }: SidebarProps) {
               className={cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
                 active
-                  ? 'bg-slate-700 text-white'
-                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                  ? 'bg-[#6b1e1d] text-white'
+                  : 'text-[#dba8a7] hover:bg-[#521614] hover:text-white'
               )}
             >
               <Icon className="h-5 w-5 shrink-0" />
@@ -151,10 +151,10 @@ export function Sidebar({ userEmail, userName, onClose }: SidebarProps) {
       </nav>
 
       {/* User section */}
-      <div className="px-4 pb-4 border-t border-slate-700 pt-4">
+      <div className="px-4 pb-4 border-t border-[#6b1e1d] pt-4">
         <div className="flex items-center gap-3 px-3 py-2 mb-2">
           <Avatar className="h-9 w-9">
-            <AvatarFallback className="bg-slate-600 text-white text-sm font-semibold">
+            <AvatarFallback className="bg-[#8a2826] text-white text-sm font-semibold">
               {initials}
             </AvatarFallback>
           </Avatar>
@@ -163,14 +163,14 @@ export function Sidebar({ userEmail, userName, onClose }: SidebarProps) {
               <p className="text-sm font-medium text-white truncate">{userName}</p>
             )}
             {userEmail && (
-              <p className="text-xs text-slate-400 truncate">{userEmail}</p>
+              <p className="text-xs text-[#d49392] truncate">{userEmail}</p>
             )}
           </div>
         </div>
         <Button
           variant="ghost"
           size="sm"
-          className="w-full justify-start text-slate-300 hover:text-white hover:bg-slate-800"
+          className="w-full justify-start text-[#dba8a7] hover:text-white hover:bg-[#521614]"
           onClick={handleSignOut}
         >
           <LogOut className="mr-2 h-4 w-4" />
