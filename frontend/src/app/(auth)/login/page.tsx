@@ -1,16 +1,16 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { Loader2 } from 'lucide-react'
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Loader2 } from "lucide-react";
 
-import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { createClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
@@ -18,7 +18,7 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
+} from "@/components/ui/card";
 import {
   Form,
   FormControl,
@@ -26,50 +26,52 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from '@/components/ui/form'
+} from "@/components/ui/form";
 
 const loginSchema = z.object({
-  email: z.string().email('Ingrese un correo electrónico válido'),
-  password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
-})
+  email: z.string().email("Ingrese un correo electrónico válido"),
+  password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
+});
 
-type LoginFormValues = z.infer<typeof loginSchema>
+type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
-  const router = useRouter()
-  const [serverError, setServerError] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const router = useRouter();
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: '',
-      password: '',
+      email: "",
+      password: "",
     },
-  })
+  });
 
   async function onSubmit(values: LoginFormValues) {
-    setIsLoading(true)
-    setServerError(null)
+    setIsLoading(true);
+    setServerError(null);
 
-    const supabase = createClient()
+    const supabase = createClient();
     const { error } = await supabase.auth.signInWithPassword({
       email: values.email,
       password: values.password,
-    })
+    });
 
     if (error) {
       setServerError(
-        error.message === 'Invalid login credentials'
-          ? 'Correo electrónico o contraseña incorrectos'
-          : error.message
-      )
-      setIsLoading(false)
-      return
+        error.message === "Invalid login credentials"
+          ? "Correo electrónico o contraseña incorrectos"
+          : error.message === "Email not confirmed"
+            ? "Correo electrónico no confirmado"
+            : error.message,
+      );
+      setIsLoading(false);
+      return;
     }
 
-    router.push('/dashboard')
-    router.refresh()
+    router.push("/dashboard");
+    router.refresh();
   }
 
   return (
@@ -94,7 +96,9 @@ export default function LoginPage() {
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-base">Correo electrónico</FormLabel>
+                  <FormLabel className="text-base">
+                    Correo electrónico
+                  </FormLabel>
                   <FormControl>
                     <Input
                       type="email"
@@ -129,14 +133,18 @@ export default function LoginPage() {
               )}
             />
 
-            <Button type="submit" className="w-full h-11 text-base" disabled={isLoading}>
+            <Button
+              type="submit"
+              className="w-full h-11 text-base bg-[#b92f2d] hover:bg-[#982725] text-white"
+              disabled={isLoading}
+            >
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                   Iniciando sesión...
                 </>
               ) : (
-                'Iniciar sesión'
+                "Iniciar sesión"
               )}
             </Button>
           </form>
@@ -144,7 +152,7 @@ export default function LoginPage() {
       </CardContent>
       <CardFooter className="flex justify-center">
         <p className="text-base text-gray-600">
-          ¿No tiene cuenta?{' '}
+          ¿No tiene cuenta?{" "}
           <Link
             href="/register"
             className="font-medium text-gray-900 hover:underline"
@@ -154,5 +162,5 @@ export default function LoginPage() {
         </p>
       </CardFooter>
     </Card>
-  )
+  );
 }

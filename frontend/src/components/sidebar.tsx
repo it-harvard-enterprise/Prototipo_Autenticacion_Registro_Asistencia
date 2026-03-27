@@ -1,90 +1,96 @@
-'use client'
+"use client";
 
-import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Users,
   BookOpen,
+  Link2,
   ClipboardList,
   FileSpreadsheet,
   LogOut,
   X,
-} from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Separator } from '@/components/ui/separator'
-import { createClient } from '@/lib/supabase/client'
-import { toast } from 'sonner'
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Separator } from "@/components/ui/separator";
+import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
 
 interface SidebarProps {
-  userEmail?: string
-  userName?: string
-  onClose?: () => void
+  userEmail?: string;
+  userName?: string;
+  onClose?: () => void;
 }
 
 const navItems = [
   {
-    label: 'Dashboard',
-    href: '/dashboard',
+    label: "Dashboard",
+    href: "/dashboard",
     icon: LayoutDashboard,
     exact: true,
   },
   {
-    label: 'Estudiantes',
-    href: '/dashboard/students',
+    label: "Estudiantes",
+    href: "/dashboard/students",
     icon: Users,
   },
   {
-    label: 'Cursos',
-    href: '/dashboard/courses',
+    label: "Cursos",
+    href: "/dashboard/courses",
     icon: BookOpen,
   },
   {
-    label: 'Tomar Asistencia',
-    href: '/dashboard/attendance',
-    icon: ClipboardList,
-    disabled: true,
-    badge: 'Próximamente',
+    label: "Asociar Cursos con Estudiantes",
+    href: "/dashboard/course-student-association",
+    icon: Link2,
   },
   {
-    label: 'Exportar Excel',
-    href: '/dashboard/export',
+    label: "Tomar Asistencia",
+    href: "/dashboard/attendance",
+    icon: ClipboardList,
+    disabled: true,
+    badge: "Próximamente",
+  },
+  {
+    label: "Exportar Excel",
+    href: "/dashboard/export",
     icon: FileSpreadsheet,
     disabled: true,
-    badge: 'Próximamente',
+    badge: "Próximamente",
   },
-]
+];
 
 export function Sidebar({ userEmail, userName, onClose }: SidebarProps) {
-  const pathname = usePathname()
-  const router = useRouter()
+  const pathname = usePathname();
+  const router = useRouter();
 
   const initials = userName
     ? userName
-        .split(' ')
+        .split(" ")
         .map((n) => n[0])
-        .join('')
+        .join("")
         .toUpperCase()
         .slice(0, 2)
     : userEmail
-    ? userEmail[0].toUpperCase()
-    : 'U'
+      ? userEmail[0].toUpperCase()
+      : "U";
 
   async function handleSignOut() {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
   }
 
   function isActive(item: (typeof navItems)[0]) {
     if (item.exact) {
-      return pathname === item.href
+      return pathname === item.href;
     }
-    return pathname.startsWith(item.href)
+    return pathname.startsWith(item.href);
   }
 
   return (
@@ -108,8 +114,8 @@ export function Sidebar({ userEmail, userName, onClose }: SidebarProps) {
       {/* Navigation */}
       <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
-          const Icon = item.icon
-          const active = isActive(item)
+          const Icon = item.icon;
+          const active = isActive(item);
 
           if (item.disabled) {
             return (
@@ -128,7 +134,7 @@ export function Sidebar({ userEmail, userName, onClose }: SidebarProps) {
                   </Badge>
                 )}
               </div>
-            )
+            );
           }
 
           return (
@@ -137,16 +143,16 @@ export function Sidebar({ userEmail, userName, onClose }: SidebarProps) {
               href={item.href}
               onClick={onClose}
               className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
                 active
-                  ? 'bg-[#6b1e1d] text-white'
-                  : 'text-[#dba8a7] hover:bg-[#521614] hover:text-white'
+                  ? "bg-[#6b1e1d] text-white"
+                  : "text-[#dba8a7] hover:bg-[#521614] hover:text-white",
               )}
             >
               <Icon className="h-5 w-5 shrink-0" />
               <span>{item.label}</span>
             </Link>
-          )
+          );
         })}
       </nav>
 
@@ -160,7 +166,9 @@ export function Sidebar({ userEmail, userName, onClose }: SidebarProps) {
           </Avatar>
           <div className="flex-1 min-w-0">
             {userName && (
-              <p className="text-sm font-medium text-white truncate">{userName}</p>
+              <p className="text-sm font-medium text-white truncate">
+                {userName}
+              </p>
             )}
             {userEmail && (
               <p className="text-xs text-[#d49392] truncate">{userEmail}</p>
@@ -178,5 +186,5 @@ export function Sidebar({ userEmail, userName, onClose }: SidebarProps) {
         </Button>
       </div>
     </div>
-  )
+  );
 }

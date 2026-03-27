@@ -102,9 +102,6 @@ export default function NewCoursePage() {
         </Button>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Nuevo Curso</h1>
-          <p className="text-gray-500 mt-0.5 text-sm">
-            Formulario basado en db_schema.sql
-          </p>
         </div>
       </div>
 
@@ -112,7 +109,7 @@ export default function NewCoursePage() {
         <CardHeader>
           <CardTitle className="text-lg">Información del curso</CardTitle>
           <CardDescription>
-            Ingrese los datos requeridos del esquema de cursos
+            Ingrese los datos requeridos para crear un curso nuevo.
           </CardDescription>
         </CardHeader>
         <CardContent>
