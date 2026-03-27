@@ -6,13 +6,17 @@ import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import {
+  ArrowLeft,
+  CircleDollarSign,
+  Fingerprint,
+  Loader2,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { createStudent } from "@/app/actions/students";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
   CardContent,
@@ -28,6 +32,30 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+
+const currencyFormatter = new Intl.NumberFormat("es-CO", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+function parseCurrencyToNumber(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const normalized = trimmed
+    .replace(/\./g, "")
+    .replace(",", ".")
+    .replace(/[^\d.-]/g, "");
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatCurrencyInput(value: string): string {
+  const parsed = parseCurrencyToNumber(value);
+  if (parsed === null) return "";
+  return currencyFormatter.format(parsed);
+}
 
 const studentSchema = z.object({
   numero_identificacion: z
@@ -58,14 +86,14 @@ const studentSchema = z.object({
   valor_matricula: z
     .string()
     .optional()
-    .refine((val) => !val || (!Number.isNaN(Number(val)) && Number(val) >= 0), {
+    .refine((val) => !val || (parseCurrencyToNumber(val) ?? -1) >= 0, {
       message: "El valor de matrícula debe ser mayor o igual a 0",
     }),
   matricula_cancelada: z.boolean().optional(),
   valor_apoyo_semanal: z
     .string()
     .min(1, "El valor de apoyo semanal es requerido")
-    .refine((val) => !Number.isNaN(Number(val)) && Number(val) > 0, {
+    .refine((val) => (parseCurrencyToNumber(val) ?? 0) > 0, {
       message: "El valor de apoyo semanal debe ser mayor que 0",
     }),
   huella_indice_derecho: z.string().optional(),
@@ -122,10 +150,11 @@ export default function NewStudentPage() {
       fecha_inicio: values.fecha_inicio || null,
       fecha_matricula: values.fecha_matricula || null,
       valor_matricula: values.valor_matricula
-        ? Number(values.valor_matricula)
+        ? parseCurrencyToNumber(values.valor_matricula)
         : null,
       matricula_cancelada: values.matricula_cancelada ?? false,
-      valor_apoyo_semanal: Number(values.valor_apoyo_semanal),
+      valor_apoyo_semanal:
+        parseCurrencyToNumber(values.valor_apoyo_semanal) ?? 0,
       huella_indice_derecho: values.huella_indice_derecho || null,
       huella_indice_izquierdo: values.huella_indice_izquierdo || null,
       firma: values.firma || null,
@@ -140,6 +169,26 @@ export default function NewStudentPage() {
       setIsLoading(false);
     }
   }
+
+  function handleCaptureFingerprint(
+    side: "huella_indice_derecho" | "huella_indice_izquierdo",
+  ) {
+    alert("Capturando huella...");
+
+    const successfulCapture = Math.random() >= 0.5;
+
+    if (successfulCapture) {
+      const captureToken = `pending_capture_${side}_${Date.now()}`;
+      form.setValue(side, captureToken, { shouldDirty: true });
+      alert("Successful capture");
+      return;
+    }
+
+    alert("No fue posible capturar la huella. Intente nuevamente.");
+  }
+
+  const rightFingerprintValue = form.watch("huella_indice_derecho");
+  const leftFingerprintValue = form.watch("huella_indice_izquierdo");
 
   return (
     <div className="space-y-6">
@@ -363,7 +412,27 @@ export default function NewStudentPage() {
                     <FormItem>
                       <FormLabel>Valor matrícula</FormLabel>
                       <FormControl>
-                        <Input type="number" min={0} step="0.01" {...field} />
+                        <div className="relative">
+                          <CircleDollarSign className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                          <Input
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="Ej: 1.234.567,89"
+                            className="pl-10"
+                            value={field.value ?? ""}
+                            onChange={(event) =>
+                              field.onChange(event.target.value)
+                            }
+                            onBlur={() => {
+                              field.onChange(
+                                formatCurrencyInput(field.value ?? ""),
+                              );
+                              field.onBlur();
+                            }}
+                            name={field.name}
+                            ref={field.ref}
+                          />
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -376,7 +445,27 @@ export default function NewStudentPage() {
                     <FormItem>
                       <FormLabel>Valor apoyo semanal *</FormLabel>
                       <FormControl>
-                        <Input type="number" min={0} step="0.01" {...field} />
+                        <div className="relative">
+                          <CircleDollarSign className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                          <Input
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="Ej: 45.000,00"
+                            className="pl-10"
+                            value={field.value ?? ""}
+                            onChange={(event) =>
+                              field.onChange(event.target.value)
+                            }
+                            onBlur={() => {
+                              field.onChange(
+                                formatCurrencyInput(field.value ?? ""),
+                              );
+                              field.onBlur();
+                            }}
+                            name={field.name}
+                            ref={field.ref}
+                          />
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -406,48 +495,75 @@ export default function NewStudentPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="huella_indice_derecho"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Huella índice derecho</FormLabel>
-                      <FormControl>
-                        <Textarea rows={2} {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="huella_indice_izquierdo"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Huella índice izquierdo</FormLabel>
-                      <FormControl>
-                        <Textarea rows={2} {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+              <div className="space-y-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900">
+                    Captura de huellas
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Interfaz lista para integrar la lógica biométrica en una
+                    siguiente fase.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Card className="border-dashed border-gray-300">
+                    <CardContent className="pt-6 flex flex-col items-center text-center gap-3">
+                      <div className="rounded-full bg-[#b92f2d]/10 p-3">
+                        <Fingerprint className="h-7 w-7 text-[#b92f2d]" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          Huella índice derecho
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {rightFingerprintValue
+                            ? "Huella capturada"
+                            : "Sin captura"}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() =>
+                          handleCaptureFingerprint("huella_indice_derecho")
+                        }
+                      >
+                        Capturar huella
+                      </Button>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-dashed border-gray-300">
+                    <CardContent className="pt-6 flex flex-col items-center text-center gap-3">
+                      <div className="rounded-full bg-[#b92f2d]/10 p-3">
+                        <Fingerprint className="h-7 w-7 text-[#b92f2d]" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          Huella índice izquierdo
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {leftFingerprintValue
+                            ? "Huella capturada"
+                            : "Sin captura"}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() =>
+                          handleCaptureFingerprint("huella_indice_izquierdo")
+                        }
+                      >
+                        Capturar huella
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
               </div>
 
-              <FormField
-                control={form.control}
-                name="firma"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Firma</FormLabel>
-                    <FormControl>
-                      <Textarea rows={2} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {/* Campo firma oculto temporalmente */}
 
               <div className="flex justify-end gap-3 pt-2">
                 <Button
