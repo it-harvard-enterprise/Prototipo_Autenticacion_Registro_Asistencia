@@ -87,3 +87,92 @@ export async function deleteCourse(
 
   return { success: true };
 }
+
+export async function getCourseById(
+  idCurso: number,
+): Promise<{ success: boolean; error?: string; data?: Course }> {
+  const supabase = await createClient();
+
+  const { data: course, error } = await supabase
+    .from("cursos")
+    .select("*")
+    .eq("id_curso", idCurso)
+    .single();
+
+  if (error) {
+    return { success: false, error: "No se encontró el curso" };
+  }
+
+  return { success: true, data: course as Course };
+}
+
+export async function associateStudentsToCourse(
+  idCurso: number,
+  studentIds: string[],
+): Promise<{ success: boolean; error?: string; insertedCount?: number }> {
+  const supabase = await createClient();
+
+  const normalizedIds = Array.from(
+    new Set(studentIds.map((id) => id.trim()).filter(Boolean)),
+  );
+
+  if (normalizedIds.length === 0) {
+    return {
+      success: false,
+      error: "Debe ingresar al menos un numero_identificacion",
+    };
+  }
+
+  const { data: courseExists, error: courseError } = await supabase
+    .from("cursos")
+    .select("id_curso")
+    .eq("id_curso", idCurso)
+    .single();
+
+  if (courseError || !courseExists) {
+    return { success: false, error: "El id_curso no existe" };
+  }
+
+  const { data: students, error: studentsError } = await supabase
+    .from("estudiantes")
+    .select("numero_identificacion")
+    .in("numero_identificacion", normalizedIds);
+
+  if (studentsError) {
+    return { success: false, error: studentsError.message };
+  }
+
+  const foundIds = new Set(
+    (students ?? []).map((s) => s.numero_identificacion),
+  );
+  const missingIds = normalizedIds.filter((id) => !foundIds.has(id));
+
+  if (missingIds.length > 0) {
+    return {
+      success: false,
+      error: `No existen estos estudiantes: ${missingIds.join(", ")}`,
+    };
+  }
+
+  const payload = normalizedIds.map((numero_identificacion) => ({
+    numero_identificacion,
+    id_curso: idCurso,
+  }));
+
+  const { error: insertError } = await supabase
+    .from("cursos_x_estudiantes")
+    .insert(payload);
+
+  if (insertError) {
+    if (insertError.message.toLowerCase().includes("duplicate")) {
+      return {
+        success: false,
+        error:
+          "Una o más asociaciones ya existen. Verifique los estudiantes seleccionados.",
+      };
+    }
+    return { success: false, error: insertError.message };
+  }
+
+  return { success: true, insertedCount: payload.length };
+}
