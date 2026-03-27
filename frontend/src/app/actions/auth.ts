@@ -31,6 +31,8 @@ export async function signUp(
     password,
     options: {
       data: {
+        nombres: firstName,
+        apellidos: lastName,
         first_name: firstName,
         last_name: lastName,
       },

@@ -151,9 +151,6 @@ export default function NewStudentPage() {
         </Button>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Nuevo Estudiante</h1>
-          <p className="text-gray-500 mt-0.5 text-sm">
-            Formulario basado en db_schema.sql
-          </p>
         </div>
       </div>
 
@@ -161,7 +158,8 @@ export default function NewStudentPage() {
         <CardHeader>
           <CardTitle className="text-lg">Registro de estudiante</CardTitle>
           <CardDescription>
-            Complete los campos obligatorios y opcionales del esquema
+            Complete los campos obligatorios y opcionales para crear un
+            estudiante nuevo.
           </CardDescription>
         </CardHeader>
         <CardContent>
