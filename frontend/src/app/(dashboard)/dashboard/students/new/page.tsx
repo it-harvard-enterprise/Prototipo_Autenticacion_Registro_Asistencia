@@ -509,8 +509,20 @@ export default function NewStudentPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Card className="border-dashed border-gray-300">
                     <CardContent className="pt-6 flex flex-col items-center text-center gap-3">
-                      <div className="rounded-full bg-[#b92f2d]/10 p-3">
-                        <Fingerprint className="h-7 w-7 text-[#b92f2d]" />
+                      <div
+                        className={`rounded-full p-3 ${
+                          rightFingerprintValue
+                            ? "bg-green-500/10"
+                            : "bg-[#b92f2d]/10"
+                        }`}
+                      >
+                        <Fingerprint
+                          className={`h-7 w-7 ${
+                            rightFingerprintValue
+                              ? "text-green-600"
+                              : "text-[#b92f2d]"
+                          }`}
+                        />
                       </div>
                       <div>
                         <p className="text-sm font-medium text-gray-900">
@@ -529,15 +541,29 @@ export default function NewStudentPage() {
                           handleCaptureFingerprint("huella_indice_derecho")
                         }
                       >
-                        Capturar huella
+                        {rightFingerprintValue
+                          ? "Capturar Huella Otra vez"
+                          : "Capturar Huella"}
                       </Button>
                     </CardContent>
                   </Card>
 
                   <Card className="border-dashed border-gray-300">
                     <CardContent className="pt-6 flex flex-col items-center text-center gap-3">
-                      <div className="rounded-full bg-[#b92f2d]/10 p-3">
-                        <Fingerprint className="h-7 w-7 text-[#b92f2d]" />
+                      <div
+                        className={`rounded-full p-3 ${
+                          leftFingerprintValue
+                            ? "bg-green-500/10"
+                            : "bg-[#b92f2d]/10"
+                        }`}
+                      >
+                        <Fingerprint
+                          className={`h-7 w-7 ${
+                            leftFingerprintValue
+                              ? "text-green-600"
+                              : "text-[#b92f2d]"
+                          }`}
+                        />
                       </div>
                       <div>
                         <p className="text-sm font-medium text-gray-900">
@@ -556,7 +582,9 @@ export default function NewStudentPage() {
                           handleCaptureFingerprint("huella_indice_izquierdo")
                         }
                       >
-                        Capturar huella
+                        {leftFingerprintValue
+                          ? "Capturar Huella Otra vez"
+                          : "Capturar Huella"}
                       </Button>
                     </CardContent>
                   </Card>
