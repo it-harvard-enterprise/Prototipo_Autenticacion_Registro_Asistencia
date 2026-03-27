@@ -110,7 +110,7 @@ export default function RegisterPage() {
 
   return (
     <Card className="shadow-md p-2">
-      <CardHeader className="space-y-2">
+      <CardHeader className="space-y-2 pt-6">
         <CardTitle className="text-3xl font-semibold">Crear cuenta</CardTitle>
         <CardDescription className="text-base">
           Complete el formulario para registrarse en el sistema
