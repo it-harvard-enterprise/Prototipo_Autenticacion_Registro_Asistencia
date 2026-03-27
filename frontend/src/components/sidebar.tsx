@@ -52,8 +52,6 @@ const navItems = [
     label: "Tomar Asistencia",
     href: "/dashboard/attendance",
     icon: ClipboardList,
-    disabled: true,
-    badge: "Próximamente",
   },
   {
     label: "Exportar Excel",
