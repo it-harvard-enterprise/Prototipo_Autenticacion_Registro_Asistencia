@@ -224,7 +224,7 @@ func (a *app) enrollStudent(c *gin.Context) {
 	rows, status, err := a.insertStudent(c.Request.Context(), payload)
 	if err != nil {
 		if status == http.StatusConflict {
-			c.JSON(http.StatusConflict, gin.H{"error": "Ya existe un estudiante con ese numero_identificacion o no_matricula"})
+			c.JSON(http.StatusConflict, gin.H{"error": "Error: En la base datos ya existe un usuario con el mismo número de identificación."})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

@@ -40,6 +40,14 @@ export default async function CourseDetailPage({
     });
   };
 
+  const renderValue = (value?: string | null) => {
+    if (!value || value.trim() === "") {
+      return <span className="text-gray-400 italic">N/A</span>;
+    }
+
+    return value;
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -60,12 +68,20 @@ export default async function CourseDetailPage({
         </Button>
       </div>
 
-      <Card className="max-w-2xl mx-auto">
+      <Card className="max-w-3xl mx-auto">
         <CardHeader>
           <CardTitle className="text-lg">Información del Curso</CardTitle>
         </CardHeader>
         <CardContent>
-          <dl className="space-y-4">
+          <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+            <div>
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                ID del curso
+              </dt>
+              <dd className="mt-1 text-sm font-mono text-gray-900">
+                {c.id_curso}
+              </dd>
+            </div>
             <div>
               <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Nombre
@@ -82,48 +98,49 @@ export default async function CourseDetailPage({
             </div>
             <div>
               <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Horario
+                Hora de inicio
               </dt>
-              <dd className="mt-1 text-sm text-gray-900">
-                {`${c.hora_inicio} - ${c.hora_fin}`}
-              </dd>
+              <dd className="mt-1 text-sm text-gray-900">{c.hora_inicio}</dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Hora de fin
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900">{c.hora_fin}</dd>
             </div>
             <div>
               <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Salón
               </dt>
               <dd className="mt-1 text-sm text-gray-900">
-                {c.salon ?? (
-                  <span className="text-gray-400 italic">Sin salón</span>
-                )}
+                {renderValue(c.salon)}
               </dd>
             </div>
             <div>
               <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Fechas
+                Fecha de inicio
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900">{c.fecha_inicio}</dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Fecha de fin
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900">{c.fecha_fin}</dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Creado
               </dt>
               <dd className="mt-1 text-sm text-gray-900">
-                {`${c.fecha_inicio} a ${c.fecha_fin}`}
-              </dd>
-            </div>
-          </dl>
-        </CardContent>
-      </Card>
-
-      <Card className="bg-gray-50 max-w-2xl mx-auto">
-        <CardContent className="pt-4">
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-2">
-            <div>
-              <dt className="text-xs font-medium text-gray-500">Creado</dt>
-              <dd className="text-xs text-gray-600">
                 {formatDate(c.created_at)}
               </dd>
             </div>
             <div>
-              <dt className="text-xs font-medium text-gray-500">
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Última actualización
               </dt>
-              <dd className="text-xs text-gray-600">
+              <dd className="mt-1 text-sm text-gray-900">
                 {formatDate(c.updated_at)}
               </dd>
             </div>

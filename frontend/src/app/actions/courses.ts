@@ -54,11 +54,12 @@ export async function updateCourse(
       ...(data.nivel_curso !== undefined && { nivel_curso: data.nivel_curso }),
       ...(data.hora_inicio !== undefined && { hora_inicio: data.hora_inicio }),
       ...(data.hora_fin !== undefined && { hora_fin: data.hora_fin }),
-      ...(data.salon !== undefined && { salon: data.salon }),
+      ...(data.salon !== undefined && { salon: data.salon ?? null }),
       ...(data.fecha_inicio !== undefined && {
         fecha_inicio: data.fecha_inicio,
       }),
       ...(data.fecha_fin !== undefined && { fecha_fin: data.fecha_fin }),
+      updated_at: new Date().toISOString(),
     })
     .eq("id_curso", idCurso)
     .select()
