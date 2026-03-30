@@ -16,9 +16,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Separator } from "@/components/ui/separator";
 import { createClient } from "@/lib/supabase/client";
-import { toast } from "sonner";
 
 interface SidebarProps {
   userEmail?: string;
@@ -54,11 +52,9 @@ const navItems = [
     icon: ClipboardList,
   },
   {
-    label: "Exportar Excel",
+    label: "Exportar Lista de Asistencia a Excel",
     href: "/dashboard/export",
     icon: FileSpreadsheet,
-    disabled: true,
-    badge: "Próximamente",
   },
 ];
 

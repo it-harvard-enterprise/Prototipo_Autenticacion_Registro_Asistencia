@@ -30,7 +30,6 @@ export interface Student {
   fingerprint_left?: string | null;
   huella_indice_derecho: string | null;
   huella_indice_izquierdo: string | null;
-  firma: string | null;
   created_at: string;
   updated_at?: string;
 }
