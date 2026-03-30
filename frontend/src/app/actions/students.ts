@@ -22,45 +22,57 @@ export interface StudentFormData {
   valor_apoyo_semanal: number;
   huella_indice_derecho?: string | null;
   huella_indice_izquierdo?: string | null;
-  firma?: string | null;
 }
 
 export async function createStudent(
   data: StudentFormData,
 ): Promise<{ success: boolean; error?: string; data?: Student }> {
-  const supabase = await createClient();
-
-  const { data: student, error } = await supabase
-    .from("estudiantes")
-    .insert({
-      numero_identificacion: data.numero_identificacion,
-      no_matricula: data.no_matricula ?? null,
-      nombres: data.nombres,
-      apellidos: data.apellidos,
-      grado: data.grado,
-      telefono: data.telefono ?? null,
-      direccion: data.direccion ?? null,
-      barrio: data.barrio ?? null,
-      nombre_acudiente: data.nombre_acudiente ?? null,
-      telefono_acudiente: data.telefono_acudiente ?? null,
-      programa: data.programa ?? null,
-      fecha_inicio: data.fecha_inicio ?? null,
-      fecha_matricula: data.fecha_matricula ?? null,
-      valor_matricula: data.valor_matricula ?? null,
-      matricula_cancelada: data.matricula_cancelada ?? false,
-      valor_apoyo_semanal: data.valor_apoyo_semanal,
-      huella_indice_derecho: data.huella_indice_derecho ?? null,
-      huella_indice_izquierdo: data.huella_indice_izquierdo ?? null,
-      firma: data.firma ?? null,
-    })
-    .select()
-    .single();
-
-  if (error) {
-    return { success: false, error: error.message };
+  const backendUrl = process.env.BIOMETRIC_BACKEND_URL?.trim();
+  if (!backendUrl) {
+    return {
+      success: false,
+      error: "No se ha configurado BIOMETRIC_BACKEND_URL en el servidor",
+    };
   }
 
-  return { success: true, data: student as Student };
+  try {
+    const response = await fetch(`${backendUrl}/api/students/enroll`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+      cache: "no-store",
+    });
+
+    const rawText = await response.text();
+    const payload = rawText
+      ? (JSON.parse(rawText) as {
+          success?: boolean;
+          error?: string;
+          data?: Student;
+        })
+      : {};
+
+    if (!response.ok || payload.success === false) {
+      return {
+        success: false,
+        error:
+          payload.error ??
+          `Error al crear el estudiante en backend (${response.status})`,
+      };
+    }
+
+    return {
+      success: true,
+      data: payload.data,
+    };
+  } catch {
+    return {
+      success: false,
+      error: "No fue posible conectar con el backend biometrico",
+    };
+  }
 }
 
 export async function updateStudent(
@@ -111,9 +123,6 @@ export async function updateStudent(
       }),
       ...(data.huella_indice_izquierdo !== undefined && {
         huella_indice_izquierdo: data.huella_indice_izquierdo,
-      }),
-      ...(data.firma !== undefined && {
-        firma: data.firma,
       }),
     })
     .eq("numero_identificacion", numeroIdentificacion)
