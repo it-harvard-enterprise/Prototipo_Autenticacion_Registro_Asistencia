@@ -1,50 +1,51 @@
-import Link from 'next/link'
-import { notFound } from 'next/navigation'
-import { ArrowLeft, Pencil, Fingerprint } from 'lucide-react'
-import { createClient } from '@/lib/supabase/server'
-import { Student } from '@/lib/types'
-import { Button } from '@/components/ui/button'
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { ArrowLeft, Pencil, Fingerprint } from "lucide-react";
+import { createClient } from "@/lib/supabase/server";
+import { Student } from "@/lib/types";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 interface StudentDetailPageProps {
-  params: Promise<{ id: string }>
+  params: Promise<{ id: string }>;
 }
 
 export default async function StudentDetailPage({
   params,
 }: StudentDetailPageProps) {
-  const { id } = await params
-  const supabase = await createClient()
+  const { id } = await params;
+  const supabase = await createClient();
 
   const { data: student, error } = await supabase
-    .from('students')
-    .select('*')
-    .eq('id', id)
-    .single()
+    .from("estudiantes")
+    .select("*")
+    .eq("numero_identificacion", id)
+    .single();
 
   if (error || !student) {
-    notFound()
+    notFound();
   }
 
-  const s = student as Student
+  const s = student as Student;
 
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('es-ES', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  }
+  const formatDate = (dateStr?: string | null) => {
+    if (!dateStr) return "N/A";
+
+    return new Date(dateStr).toLocaleDateString("es-ES", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -58,10 +59,12 @@ export default async function StudentDetailPage({
           <h1 className="text-2xl font-bold text-gray-900">
             {s.nombres} {s.apellidos}
           </h1>
-          <p className="text-gray-500 mt-0.5 text-sm">Cédula: {s.cedula}</p>
+          <p className="text-gray-500 mt-0.5 text-sm">
+            Identificación: {s.numero_identificacion}
+          </p>
         </div>
         <Button asChild>
-          <Link href={`/dashboard/students/${s.id}/edit`}>
+          <Link href={`/dashboard/students/${s.numero_identificacion}/edit`}>
             <Pencil className="mr-2 h-4 w-4" />
             Editar
           </Link>
@@ -76,9 +79,19 @@ export default async function StudentDetailPage({
           <dl className="grid grid-cols-2 gap-x-6 gap-y-4">
             <div>
               <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Cédula
+                Identificación
               </dt>
-              <dd className="mt-1 text-sm font-mono text-gray-900">{s.cedula}</dd>
+              <dd className="mt-1 text-sm font-mono text-gray-900">
+                {s.numero_identificacion}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                No. matrícula
+              </dt>
+              <dd className="mt-1 text-sm font-mono text-gray-900">
+                {s.no_matricula ?? "N/A"}
+              </dd>
             </div>
             <div>
               <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -98,12 +111,6 @@ export default async function StudentDetailPage({
               </dt>
               <dd className="mt-1 text-sm text-gray-900">{s.apellidos}</dd>
             </div>
-            <div>
-              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Edad
-              </dt>
-              <dd className="mt-1 text-sm text-gray-900">{s.edad} años</dd>
-            </div>
           </dl>
         </CardContent>
       </Card>
@@ -120,9 +127,11 @@ export default async function StudentDetailPage({
             <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 border">
               <Fingerprint className="h-5 w-5 text-gray-400" />
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-700">Índice Derecho</p>
+                <p className="text-sm font-medium text-gray-700">
+                  Índice Derecho
+                </p>
               </div>
-              {s.fingerprint_right ? (
+              {s.huella_indice_derecho ? (
                 <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">
                   Registrada
                 </Badge>
@@ -136,9 +145,11 @@ export default async function StudentDetailPage({
             <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 border">
               <Fingerprint className="h-5 w-5 text-gray-400" />
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-700">Índice Izquierdo</p>
+                <p className="text-sm font-medium text-gray-700">
+                  Índice Izquierdo
+                </p>
               </div>
-              {s.fingerprint_left ? (
+              {s.huella_indice_izquierdo ? (
                 <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">
                   Registrada
                 </Badge>
@@ -157,17 +168,21 @@ export default async function StudentDetailPage({
           <dl className="grid grid-cols-2 gap-x-6 gap-y-2">
             <div>
               <dt className="text-xs font-medium text-gray-500">Creado</dt>
-              <dd className="text-xs text-gray-600">{formatDate(s.created_at)}</dd>
+              <dd className="text-xs text-gray-600">
+                {formatDate(s.created_at)}
+              </dd>
             </div>
             <div>
               <dt className="text-xs font-medium text-gray-500">
                 Última actualización
               </dt>
-              <dd className="text-xs text-gray-600">{formatDate(s.updated_at)}</dd>
+              <dd className="text-xs text-gray-600">
+                {formatDate(s.updated_at)}
+              </dd>
             </div>
           </dl>
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

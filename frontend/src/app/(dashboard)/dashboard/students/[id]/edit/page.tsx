@@ -72,7 +72,6 @@ const studentSchema = z.object({
     }),
   huella_indice_derecho: z.string().optional(),
   huella_indice_izquierdo: z.string().optional(),
-  firma: z.string().optional(),
 });
 
 type StudentFormValues = z.input<typeof studentSchema>;
@@ -108,7 +107,6 @@ export default function EditStudentPage() {
       valor_apoyo_semanal: "",
       huella_indice_derecho: "",
       huella_indice_izquierdo: "",
-      firma: "",
     },
   });
 
@@ -149,7 +147,6 @@ export default function EditStudentPage() {
         valor_apoyo_semanal: String(s.valor_apoyo_semanal),
         huella_indice_derecho: s.huella_indice_derecho ?? "",
         huella_indice_izquierdo: s.huella_indice_izquierdo ?? "",
-        firma: s.firma ?? "",
       });
       setIsFetching(false);
     }
@@ -181,7 +178,6 @@ export default function EditStudentPage() {
       valor_apoyo_semanal: Number(values.valor_apoyo_semanal),
       huella_indice_derecho: values.huella_indice_derecho || null,
       huella_indice_izquierdo: values.huella_indice_izquierdo || null,
-      firma: values.firma || null,
     });
 
     if (result.success) {
@@ -507,21 +503,6 @@ export default function EditStudentPage() {
                   )}
                 />
               </div>
-
-              <FormField
-                control={form.control}
-                name="firma"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Firma</FormLabel>
-                    <FormControl>
-                      <Textarea rows={2} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
               <div className="flex justify-end gap-3 pt-2">
                 <Button
                   type="button"

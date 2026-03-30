@@ -1,27 +1,28 @@
-import type { Metadata } from 'next'
-import { Inter, JetBrains_Mono } from 'next/font/google'
-import './globals.css'
-import { Toaster } from '@/components/ui/sonner'
+import type { Metadata } from "next";
+import { Inter, JetBrains_Mono } from "next/font/google";
+import Script from "next/script";
+import "./globals.css";
+import { Toaster } from "@/components/ui/sonner";
 
 const inter = Inter({
-  variable: '--font-inter',
-  subsets: ['latin'],
-})
+  variable: "--font-inter",
+  subsets: ["latin"],
+});
 
 const jetbrainsMono = JetBrains_Mono({
-  variable: '--font-mono',
-  subsets: ['latin'],
-})
+  variable: "--font-mono",
+  subsets: ["latin"],
+});
 
 export const metadata: Metadata = {
-  title: 'SysAsistencia',
-  description: 'Sistema de autenticación y registro de asistencia',
-}
+  title: "SysAsistencia",
+  description: "Sistema de autenticación y registro de asistencia",
+};
 
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode
+  children: React.ReactNode;
 }>) {
   return (
     <html
@@ -29,9 +30,16 @@ export default function RootLayout({
       className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <Script
+          src="/websdk.client.bundle.min.js"
+          strategy="afterInteractive"
+        />
+        <Script src="/websdk.compat.js" strategy="afterInteractive" />
+        <Script src="/dp.core.bundle.js" strategy="afterInteractive" />
+        <Script src="/dp.devices.bundle.js" strategy="afterInteractive" />
         {children}
         <Toaster richColors position="top-right" />
       </body>
     </html>
-  )
+  );
 }
