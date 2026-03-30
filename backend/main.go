@@ -48,6 +48,7 @@ func (n *noopTransparency) Accept(string, string, []byte) error {
 }
 
 type studentEnrollRequest struct {
+	TipoIdentificacion   string   `json:"tipo_identificacion"`
 	NumeroIdentificacion string   `json:"numero_identificacion"`
 	NoMatricula          *string  `json:"no_matricula"`
 	Nombres              string   `json:"nombres"`
@@ -157,11 +158,27 @@ func (a *app) enrollStudent(c *gin.Context) {
 	}
 
 	req.NumeroIdentificacion = strings.TrimSpace(req.NumeroIdentificacion)
+	req.TipoIdentificacion = strings.TrimSpace(req.TipoIdentificacion)
 	req.Nombres = strings.TrimSpace(req.Nombres)
 	req.Apellidos = strings.TrimSpace(req.Apellidos)
 
-	if req.NumeroIdentificacion == "" || req.Nombres == "" || req.Apellidos == "" || req.Grado < 1 || req.Grado > 11 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "numero_identificacion, nombres, apellidos y grado validos son requeridos"})
+	validIdentificationTypes := map[string]struct{}{
+		"CC": {},
+		"TI": {},
+		"CE": {},
+		"RCN": {},
+		"PASAPORTE": {},
+		"PAS": {},
+		"PPT": {},
+	}
+
+	if req.TipoIdentificacion == "" || req.NumeroIdentificacion == "" || req.Nombres == "" || req.Apellidos == "" || req.Grado < 1 || req.Grado > 11 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "tipo_identificacion, numero_identificacion, nombres, apellidos y grado validos son requeridos"})
+		return
+	}
+
+	if _, ok := validIdentificationTypes[req.TipoIdentificacion]; !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "tipo_identificacion no valido"})
 		return
 	}
 
@@ -183,6 +200,7 @@ func (a *app) enrollStudent(c *gin.Context) {
 	}
 
 	payload := map[string]any{
+		"tipo_identificacion":     req.TipoIdentificacion,
 		"numero_identificacion":   req.NumeroIdentificacion,
 		"no_matricula":            normalizeOptional(req.NoMatricula),
 		"nombres":                 req.Nombres,
