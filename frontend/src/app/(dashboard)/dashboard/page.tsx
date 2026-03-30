@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
+import Image from "next/image";
 import { Users, BookOpen, ClipboardList, FileSpreadsheet } from "lucide-react";
 import {
   Card,
@@ -148,6 +149,17 @@ export default async function DashboardPage() {
             </Button>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="flex justify-center pt-2">
+        <Image
+          src="/logos/Logo_Nuevo.png"
+          alt="Logo Harvard Enterprise"
+          width={350}
+          height={370}
+          className="h-[370px] w-[350px]"
+          priority
+        />
       </div>
     </div>
   );
