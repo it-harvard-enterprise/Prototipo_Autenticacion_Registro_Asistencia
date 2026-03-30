@@ -18,7 +18,6 @@ import {
 import { Student } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
   CardContent,
@@ -77,14 +76,6 @@ const studentSchema = z.object({
     .refine((val) => !Number.isNaN(Number(val)) && Number(val) > 0, {
       message: "El valor de apoyo semanal debe ser mayor que 0",
     }),
-  huella_indice_derecho: z
-    .string()
-    .trim()
-    .min(1, "La huella indice derecha es obligatoria"),
-  huella_indice_izquierdo: z
-    .string()
-    .trim()
-    .min(1, "La huella indice izquierda es obligatoria"),
 });
 
 type StudentFormValues = z.input<typeof studentSchema>;
@@ -119,8 +110,6 @@ export default function EditStudentPage() {
       valor_matricula: "",
       matricula_cancelada: false,
       valor_apoyo_semanal: "",
-      huella_indice_derecho: "",
-      huella_indice_izquierdo: "",
     },
   });
 
@@ -141,8 +130,14 @@ export default function EditStudentPage() {
 
       const s = data as Student;
       setStudent(s);
+      const tipoIdentificacion = IDENTIFICATION_TYPE_VALUES.includes(
+        s.tipo_identificacion as (typeof IDENTIFICATION_TYPE_VALUES)[number],
+      )
+        ? (s.tipo_identificacion as StudentFormValues["tipo_identificacion"])
+        : "CC";
+
       form.reset({
-        tipo_identificacion: s.tipo_identificacion ?? "CC",
+        tipo_identificacion: tipoIdentificacion,
         numero_identificacion: s.numero_identificacion,
         no_matricula: s.no_matricula ?? "",
         nombres: s.nombres,
@@ -160,8 +155,6 @@ export default function EditStudentPage() {
           s.valor_matricula !== null ? String(s.valor_matricula) : "",
         matricula_cancelada: s.matricula_cancelada,
         valor_apoyo_semanal: String(s.valor_apoyo_semanal),
-        huella_indice_derecho: s.huella_indice_derecho ?? "",
-        huella_indice_izquierdo: s.huella_indice_izquierdo ?? "",
       });
       setIsFetching(false);
     }
@@ -170,49 +163,43 @@ export default function EditStudentPage() {
   }, [id, form]);
 
   async function onSubmit(values: StudentFormValues) {
-    const rightFingerprint = values.huella_indice_derecho?.trim() ?? "";
-    const leftFingerprint = values.huella_indice_izquierdo?.trim() ?? "";
-    if (!rightFingerprint || !leftFingerprint) {
-      toast.error(
-        "Debe registrar la huella indice derecha e izquierda antes de guardar",
-      );
-      return;
-    }
-
     setIsLoading(true);
 
-    const result = await updateStudent(id, {
-      tipo_identificacion: values.tipo_identificacion,
-      numero_identificacion: values.numero_identificacion,
-      no_matricula: values.no_matricula || null,
-      nombres: values.nombres,
-      apellidos: values.apellidos,
-      grado: Number(values.grado),
-      telefono: values.telefono || null,
-      direccion: values.direccion || null,
-      barrio: values.barrio || null,
-      nombre_acudiente: values.nombre_acudiente || null,
-      telefono_acudiente: values.telefono_acudiente || null,
-      programa: values.programa || null,
-      fecha_inicio: values.fecha_inicio || null,
-      fecha_matricula: values.fecha_matricula || null,
-      valor_matricula: values.valor_matricula
-        ? Number(values.valor_matricula)
-        : null,
-      matricula_cancelada: values.matricula_cancelada ?? false,
-      valor_apoyo_semanal: Number(values.valor_apoyo_semanal),
-      huella_indice_derecho: rightFingerprint,
-      huella_indice_izquierdo: leftFingerprint,
-    });
+    try {
+      const result = await updateStudent(id, {
+        tipo_identificacion: values.tipo_identificacion,
+        numero_identificacion: values.numero_identificacion,
+        no_matricula: values.no_matricula || null,
+        nombres: values.nombres,
+        apellidos: values.apellidos,
+        grado: Number(values.grado),
+        telefono: values.telefono || null,
+        direccion: values.direccion || null,
+        barrio: values.barrio || null,
+        nombre_acudiente: values.nombre_acudiente || null,
+        telefono_acudiente: values.telefono_acudiente || null,
+        programa: values.programa || null,
+        fecha_inicio: values.fecha_inicio || null,
+        fecha_matricula: values.fecha_matricula || null,
+        valor_matricula: values.valor_matricula
+          ? Number(values.valor_matricula)
+          : null,
+        matricula_cancelada: values.matricula_cancelada ?? false,
+        valor_apoyo_semanal: Number(values.valor_apoyo_semanal),
+      });
 
-    if (result.success) {
+      if (!result.success) {
+        toast.error(result.error ?? "Error al actualizar el estudiante");
+        return;
+      }
+
       const nextId =
         result.data?.numero_identificacion ?? values.numero_identificacion;
       toast.success("Estudiante actualizado correctamente");
-      router.push(`/dashboard/students/${nextId}`);
-      router.refresh();
-    } else {
-      toast.error(result.error ?? "Error al actualizar el estudiante");
+      router.replace(`/dashboard/students/${nextId}`);
+    } catch {
+      toast.error("Error inesperado al actualizar el estudiante");
+    } finally {
       setIsLoading(false);
     }
   }
@@ -235,12 +222,6 @@ export default function EditStudentPage() {
       </div>
     );
   }
-
-  const rightFingerprintValue = form.watch("huella_indice_derecho");
-  const leftFingerprintValue = form.watch("huella_indice_izquierdo");
-  const hasBothFingerprints =
-    rightFingerprintValue.trim().length > 0 &&
-    leftFingerprintValue.trim().length > 0;
 
   return (
     <div className="space-y-6">
@@ -532,34 +513,6 @@ export default function EditStudentPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="huella_indice_derecho"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Huella índice derecho</FormLabel>
-                      <FormControl>
-                        <Textarea rows={2} {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="huella_indice_izquierdo"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Huella índice izquierdo</FormLabel>
-                      <FormControl>
-                        <Textarea rows={2} {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
               <div className="flex justify-end gap-3 pt-2">
                 <Button
                   type="button"
@@ -569,10 +522,7 @@ export default function EditStudentPage() {
                 >
                   <Link href={`/dashboard/students/${id}`}>Cancelar</Link>
                 </Button>
-                <Button
-                  type="submit"
-                  disabled={isLoading || !hasBothFingerprints}
-                >
+                <Button type="submit" disabled={isLoading}>
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />

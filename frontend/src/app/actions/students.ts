@@ -128,6 +128,7 @@ export async function updateStudent(
       ...(data.huella_indice_izquierdo !== undefined && {
         huella_indice_izquierdo: data.huella_indice_izquierdo,
       }),
+      updated_at: new Date().toISOString(),
     })
     .eq("numero_identificacion", numeroIdentificacion)
     .select()
