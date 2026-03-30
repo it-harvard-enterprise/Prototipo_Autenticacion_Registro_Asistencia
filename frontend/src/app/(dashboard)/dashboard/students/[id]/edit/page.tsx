@@ -11,6 +11,10 @@ import { toast } from "sonner";
 
 import { createClient } from "@/lib/supabase/client";
 import { updateStudent } from "@/app/actions/students";
+import {
+  IDENTIFICATION_TYPE_OPTIONS,
+  IDENTIFICATION_TYPE_VALUES,
+} from "@/lib/identification-types";
 import { Student } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +36,9 @@ import {
 } from "@/components/ui/form";
 
 const studentSchema = z.object({
+  tipo_identificacion: z.enum(IDENTIFICATION_TYPE_VALUES, {
+    message: "Debe seleccionar un tipo de identificacion",
+  }),
   numero_identificacion: z
     .string()
     .min(1, "La identificación es requerida")
@@ -70,8 +77,14 @@ const studentSchema = z.object({
     .refine((val) => !Number.isNaN(Number(val)) && Number(val) > 0, {
       message: "El valor de apoyo semanal debe ser mayor que 0",
     }),
-  huella_indice_derecho: z.string().optional(),
-  huella_indice_izquierdo: z.string().optional(),
+  huella_indice_derecho: z
+    .string()
+    .trim()
+    .min(1, "La huella indice derecha es obligatoria"),
+  huella_indice_izquierdo: z
+    .string()
+    .trim()
+    .min(1, "La huella indice izquierda es obligatoria"),
 });
 
 type StudentFormValues = z.input<typeof studentSchema>;
@@ -89,6 +102,7 @@ export default function EditStudentPage() {
   const form = useForm<StudentFormValues>({
     resolver: zodResolver(studentSchema),
     defaultValues: {
+      tipo_identificacion: "CC",
       numero_identificacion: "",
       no_matricula: "",
       nombres: "",
@@ -128,6 +142,7 @@ export default function EditStudentPage() {
       const s = data as Student;
       setStudent(s);
       form.reset({
+        tipo_identificacion: s.tipo_identificacion ?? "CC",
         numero_identificacion: s.numero_identificacion,
         no_matricula: s.no_matricula ?? "",
         nombres: s.nombres,
@@ -155,9 +170,19 @@ export default function EditStudentPage() {
   }, [id, form]);
 
   async function onSubmit(values: StudentFormValues) {
+    const rightFingerprint = values.huella_indice_derecho?.trim() ?? "";
+    const leftFingerprint = values.huella_indice_izquierdo?.trim() ?? "";
+    if (!rightFingerprint || !leftFingerprint) {
+      toast.error(
+        "Debe registrar la huella indice derecha e izquierda antes de guardar",
+      );
+      return;
+    }
+
     setIsLoading(true);
 
     const result = await updateStudent(id, {
+      tipo_identificacion: values.tipo_identificacion,
       numero_identificacion: values.numero_identificacion,
       no_matricula: values.no_matricula || null,
       nombres: values.nombres,
@@ -176,8 +201,8 @@ export default function EditStudentPage() {
         : null,
       matricula_cancelada: values.matricula_cancelada ?? false,
       valor_apoyo_semanal: Number(values.valor_apoyo_semanal),
-      huella_indice_derecho: values.huella_indice_derecho || null,
-      huella_indice_izquierdo: values.huella_indice_izquierdo || null,
+      huella_indice_derecho: rightFingerprint,
+      huella_indice_izquierdo: leftFingerprint,
     });
 
     if (result.success) {
@@ -211,6 +236,12 @@ export default function EditStudentPage() {
     );
   }
 
+  const rightFingerprintValue = form.watch("huella_indice_derecho");
+  const leftFingerprintValue = form.watch("huella_indice_izquierdo");
+  const hasBothFingerprints =
+    rightFingerprintValue.trim().length > 0 &&
+    leftFingerprintValue.trim().length > 0;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -238,6 +269,32 @@ export default function EditStudentPage() {
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="tipo_identificacion"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tipo de identificación *</FormLabel>
+                      <FormControl>
+                        <select
+                          value={field.value}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
+                          name={field.name}
+                          ref={field.ref}
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        >
+                          {IDENTIFICATION_TYPE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <FormField
                   control={form.control}
                   name="numero_identificacion"
@@ -512,7 +569,10 @@ export default function EditStudentPage() {
                 >
                   <Link href={`/dashboard/students/${id}`}>Cancelar</Link>
                 </Button>
-                <Button type="submit" disabled={isLoading}>
+                <Button
+                  type="submit"
+                  disabled={isLoading || !hasBothFingerprints}
+                >
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />

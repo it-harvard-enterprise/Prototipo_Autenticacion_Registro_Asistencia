@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Student } from "@/lib/types";
 
 export interface StudentFormData {
+  tipo_identificacion: string;
   numero_identificacion: string;
   no_matricula?: string | null;
   nombres: string;
@@ -84,6 +85,9 @@ export async function updateStudent(
   const { data: student, error } = await supabase
     .from("estudiantes")
     .update({
+      ...(data.tipo_identificacion !== undefined && {
+        tipo_identificacion: data.tipo_identificacion,
+      }),
       ...(data.numero_identificacion !== undefined && {
         numero_identificacion: data.numero_identificacion,
       }),

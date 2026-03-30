@@ -9,6 +9,7 @@ export interface Profile {
 export interface Student {
   id?: string;
   cedula?: string;
+  tipo_identificacion: string | null;
   numero_identificacion: string;
   no_matricula: string | null;
   nombres: string;
