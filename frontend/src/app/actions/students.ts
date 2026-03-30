@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { ensureApprovedAdmin } from "@/lib/auth/approved-admin";
 import { Student } from "@/lib/types";
 
 export interface StudentFormData {
@@ -28,6 +29,11 @@ export interface StudentFormData {
 export async function createStudent(
   data: StudentFormData,
 ): Promise<{ success: boolean; error?: string; data?: Student }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
   const backendUrl = process.env.BIOMETRIC_BACKEND_URL?.trim();
   if (!backendUrl) {
     return {
@@ -80,6 +86,11 @@ export async function updateStudent(
   numeroIdentificacion: string,
   data: Partial<StudentFormData>,
 ): Promise<{ success: boolean; error?: string; data?: Student }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
   const supabase = await createClient();
 
   const { data: student, error } = await supabase
@@ -144,6 +155,11 @@ export async function updateStudent(
 export async function deleteStudent(
   numeroIdentificacion: string,
 ): Promise<{ success: boolean; error?: string }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
   const supabase = await createClient();
 
   const { error } = await supabase

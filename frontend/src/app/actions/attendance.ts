@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { ensureApprovedAdmin } from "@/lib/auth/approved-admin";
 
 type Saldo = "cancelado" | "debe" | null;
 type MetodoPago =
@@ -76,6 +77,15 @@ export async function identifyStudentByFingerprintForAttendance(params: {
   idCurso: number;
   fingerprintTemplate: string;
 }): Promise<FingerprintAttendanceMatch> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return {
+      success: false,
+      matched: false,
+      error: approval.error,
+    };
+  }
+
   const backendUrl = process.env.BIOMETRIC_BACKEND_URL?.trim();
 
   if (!backendUrl) {
@@ -149,6 +159,11 @@ export async function getCourseOptions(): Promise<{
   error?: string;
   data?: CourseOption[];
 }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -171,6 +186,11 @@ export async function getAttendanceRosterByCourseAndDate(
   error?: string;
   data?: AttendanceStudentRow[];
 }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
   const supabase = await createClient();
 
   const { startIso, endIso } = getUtcDayBounds(date);
@@ -246,6 +266,11 @@ export async function saveAttendanceForCourseAndDate(params: {
   date: string;
   rows: AttendanceSaveRow[];
 }): Promise<{ success: boolean; error?: string; savedCount?: number }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
   const supabase = await createClient();
 
   const normalizedRows = params.rows
@@ -372,6 +397,11 @@ export async function getAttendanceExportByCourseAndDate(
   error?: string;
   data?: AttendanceExportRow[];
 }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
   const supabase = await createClient();
   const { startIso, endIso } = getUtcDayBounds(date);
 

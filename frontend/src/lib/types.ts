@@ -1,10 +1,13 @@
-export interface Profile {
+export interface Administrador {
   id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
+  nombres: string;
+  apellidos: string;
+  role: string;
+  aprobado: boolean;
   created_at: string;
 }
+
+export type Profile = Administrador;
 
 export interface Student {
   id?: string;

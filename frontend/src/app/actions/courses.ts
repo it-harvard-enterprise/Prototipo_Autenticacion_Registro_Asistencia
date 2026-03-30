@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { ensureApprovedAdmin } from "@/lib/auth/approved-admin";
 import { Course } from "@/lib/types";
 
 export interface CourseFormData {
@@ -16,6 +17,11 @@ export interface CourseFormData {
 export async function createCourse(
   data: CourseFormData,
 ): Promise<{ success: boolean; error?: string; data?: Course }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
   const supabase = await createClient();
 
   const { data: course, error } = await supabase
@@ -43,6 +49,11 @@ export async function updateCourse(
   idCurso: number,
   data: Partial<CourseFormData>,
 ): Promise<{ success: boolean; error?: string; data?: Course }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
   const supabase = await createClient();
 
   const { data: course, error } = await supabase
@@ -75,6 +86,11 @@ export async function updateCourse(
 export async function deleteCourse(
   idCurso: number,
 ): Promise<{ success: boolean; error?: string }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
   const supabase = await createClient();
 
   const { error } = await supabase
@@ -92,6 +108,11 @@ export async function deleteCourse(
 export async function getCourseById(
   idCurso: number,
 ): Promise<{ success: boolean; error?: string; data?: Course }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
   const supabase = await createClient();
 
   const { data: course, error } = await supabase
@@ -111,6 +132,11 @@ export async function associateStudentsToCourse(
   idCurso: number,
   studentIds: string[],
 ): Promise<{ success: boolean; error?: string; insertedCount?: number }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
   const supabase = await createClient();
 
   const normalizedIds = Array.from(
@@ -182,6 +208,11 @@ export async function dissociateStudentsFromCourse(
   idCurso: number,
   studentIds: string[],
 ): Promise<{ success: boolean; error?: string; removedCount?: number }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
   const supabase = await createClient();
 
   const normalizedIds = Array.from(
@@ -244,6 +275,11 @@ type LinkedStudentRow = {
 export async function getStudentsByCourseId(
   idCurso: number,
 ): Promise<{ success: boolean; error?: string; data?: LinkedStudentRow[] }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
   const supabase = await createClient();
 
   const { data, error } = await supabase
