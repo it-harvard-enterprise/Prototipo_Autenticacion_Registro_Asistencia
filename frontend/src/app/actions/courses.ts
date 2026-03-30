@@ -177,3 +177,99 @@ export async function associateStudentsToCourse(
 
   return { success: true, insertedCount: payload.length };
 }
+
+export async function dissociateStudentsFromCourse(
+  idCurso: number,
+  studentIds: string[],
+): Promise<{ success: boolean; error?: string; removedCount?: number }> {
+  const supabase = await createClient();
+
+  const normalizedIds = Array.from(
+    new Set(studentIds.map((id) => id.trim()).filter(Boolean)),
+  );
+
+  if (normalizedIds.length === 0) {
+    return {
+      success: false,
+      error: "Debe ingresar al menos un numero_identificacion",
+    };
+  }
+
+  const { data: existingRows, error: existingError } = await supabase
+    .from("cursos_x_estudiantes")
+    .select("numero_identificacion")
+    .eq("id_curso", idCurso)
+    .in("numero_identificacion", normalizedIds);
+
+  if (existingError) {
+    return { success: false, error: existingError.message };
+  }
+
+  const existingSet = new Set(
+    (existingRows ?? []).map((row) => row.numero_identificacion),
+  );
+  const missingIds = normalizedIds.filter((id) => !existingSet.has(id));
+
+  if (missingIds.length > 0) {
+    return {
+      success: false,
+      error:
+        "No existe vinculo para estos estudiantes en el curso: " +
+        missingIds.join(", "),
+    };
+  }
+
+  const { error: deleteError } = await supabase
+    .from("cursos_x_estudiantes")
+    .delete()
+    .eq("id_curso", idCurso)
+    .in("numero_identificacion", normalizedIds);
+
+  if (deleteError) {
+    return { success: false, error: deleteError.message };
+  }
+
+  return { success: true, removedCount: normalizedIds.length };
+}
+
+type LinkedStudentRow = {
+  numero_identificacion: string;
+  nombres: string;
+  apellidos: string;
+  no_matricula: string | null;
+  grado: number;
+  tipo_identificacion: string | null;
+};
+
+export async function getStudentsByCourseId(
+  idCurso: number,
+): Promise<{ success: boolean; error?: string; data?: LinkedStudentRow[] }> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("cursos_x_estudiantes")
+    .select(
+      "numero_identificacion, estudiantes (numero_identificacion, nombres, apellidos, no_matricula, grado, tipo_identificacion)",
+    )
+    .eq("id_curso", idCurso);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  const normalizedData = (
+    (data ?? []) as Array<{
+      estudiantes: LinkedStudentRow | LinkedStudentRow[] | null;
+    }>
+  )
+    .map((row) => {
+      if (Array.isArray(row.estudiantes)) {
+        return row.estudiantes[0] ?? null;
+      }
+      return row.estudiantes;
+    })
+    .filter((student): student is LinkedStudentRow => Boolean(student))
+    .sort((a, b) => a.apellidos.localeCompare(b.apellidos));
+
+  return { success: true, data: normalizedData };
+}

@@ -36,6 +36,7 @@ export interface AttendanceExportRow {
   id: number;
   id_curso: number;
   nombre_curso: string;
+  tipo_identificacion: string | null;
   numero_identificacion: string;
   nombres: string;
   apellidos: string;
@@ -377,7 +378,7 @@ export async function getAttendanceExportByCourseAndDate(
   const { data, error } = await supabase
     .from("registro_asistencia")
     .select(
-      "id, id_curso, numero_identificacion, fecha, asistio, saldo, metodo_pago, estudiantes(nombres, apellidos), cursos(nombre_curso)",
+      "id, id_curso, numero_identificacion, fecha, asistio, saldo, metodo_pago, estudiantes(tipo_identificacion, nombres, apellidos), cursos(nombre_curso)",
     )
     .eq("id_curso", idCurso)
     .gte("fecha", startIso)
@@ -398,6 +399,7 @@ export async function getAttendanceExportByCourseAndDate(
       id: row.id,
       id_curso: row.id_curso,
       nombre_curso: course?.nombre_curso ?? "",
+      tipo_identificacion: student?.tipo_identificacion ?? null,
       numero_identificacion: row.numero_identificacion,
       nombres: student?.nombres ?? "",
       apellidos: student?.apellidos ?? "",
