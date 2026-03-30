@@ -86,11 +86,11 @@ export default function RegisterPage() {
     }
 
     if (data.user) {
-      await supabase.from("profiles").upsert({
+      await supabase.from("administrador").upsert({
         id: data.user.id,
-        first_name: values.firstName,
-        last_name: values.lastName,
-        email: values.email,
+        nombres: values.firstName,
+        apellidos: values.lastName,
+        aprobado: false,
       });
 
       // If user is immediately logged in (email confirmation disabled)
