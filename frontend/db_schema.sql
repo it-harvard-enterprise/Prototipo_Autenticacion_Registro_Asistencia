@@ -90,7 +90,6 @@ CREATE TABLE public.estudiantes (
     valor_apoyo_semanal         NUMERIC(12, 2)  NOT NULL,
     huella_indice_derecho       TEXT,
     huella_indice_izquierdo     TEXT,
-    firma                       TEXT,
     created_at                  TIMESTAMPTZ     NOT NULL DEFAULT NOW()
 );
 

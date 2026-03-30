@@ -15,6 +15,7 @@ import {
 import { toast } from "sonner";
 
 import { createStudent } from "@/app/actions/students";
+import { useDigitalPersonaFingerprintReader } from "@/lib/biometrics/digitalpersona";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -98,7 +99,6 @@ const studentSchema = z.object({
     }),
   huella_indice_derecho: z.string().optional(),
   huella_indice_izquierdo: z.string().optional(),
-  firma: z.string().optional(),
 });
 
 type StudentFormValues = z.input<typeof studentSchema>;
@@ -106,6 +106,18 @@ type StudentFormValues = z.input<typeof studentSchema>;
 export default function NewStudentPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [capturingSide, setCapturingSide] = useState<
+    "huella_indice_derecho" | "huella_indice_izquierdo" | null
+  >(null);
+
+  const {
+    ready: readerReady,
+    isCapturing,
+    deviceStatus,
+    captureStatus,
+    lastQuality,
+    capture,
+  } = useDigitalPersonaFingerprintReader();
 
   const form = useForm<StudentFormValues>({
     resolver: zodResolver(studentSchema),
@@ -128,7 +140,6 @@ export default function NewStudentPage() {
       valor_apoyo_semanal: "",
       huella_indice_derecho: "",
       huella_indice_izquierdo: "",
-      firma: "",
     },
   });
 
@@ -157,34 +168,45 @@ export default function NewStudentPage() {
         parseCurrencyToNumber(values.valor_apoyo_semanal) ?? 0,
       huella_indice_derecho: values.huella_indice_derecho || null,
       huella_indice_izquierdo: values.huella_indice_izquierdo || null,
-      firma: values.firma || null,
     });
 
     if (result.success) {
       toast.success("Estudiante creado correctamente");
-      router.push("/dashboard/students");
-      router.refresh();
+      router.replace("/dashboard/students");
     } else {
       toast.error(result.error ?? "Error al crear el estudiante");
       setIsLoading(false);
     }
   }
 
-  function handleCaptureFingerprint(
+  async function handleCaptureFingerprint(
     side: "huella_indice_derecho" | "huella_indice_izquierdo",
   ) {
-    alert("Capturando huella...");
-
-    const successfulCapture = Math.random() >= 0.5;
-
-    if (successfulCapture) {
-      const captureToken = `pending_capture_${side}_${Date.now()}`;
-      form.setValue(side, captureToken, { shouldDirty: true });
-      alert("Successful capture");
+    if (!readerReady) {
+      toast.error(
+        "El lector no esta listo. Verifique la conexion y el servicio de DigitalPersona.",
+      );
       return;
     }
 
-    alert("No fue posible capturar la huella. Intente nuevamente.");
+    setCapturingSide(side);
+    const mode =
+      side === "huella_indice_derecho" ? "enroll-right" : "enroll-left";
+    const sample = await capture(mode);
+    setCapturingSide(null);
+
+    if (!sample) {
+      toast.error("No fue posible capturar la huella. Intente nuevamente.");
+      return;
+    }
+
+    form.setValue(side, sample, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+
+    toast.success("Huella capturada correctamente");
   }
 
   const rightFingerprintValue = form.watch("huella_indice_derecho");
@@ -501,9 +523,40 @@ export default function NewStudentPage() {
                     Captura de huellas
                   </h3>
                   <p className="text-xs text-gray-500 mt-1">
-                    Interfaz lista para integrar la lógica biométrica en una
-                    siguiente fase.
+                    Captura en vivo con DigitalPersona U.are.U 4500 en formato
+                    PNG base64 para procesamiento en backend.
                   </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="rounded-md border p-3 bg-white">
+                    <p className="text-[11px] uppercase tracking-wide text-gray-500">
+                      Lector
+                    </p>
+                    <p
+                      className={`text-sm mt-1 ${
+                        readerReady ? "text-green-700" : "text-[#982725]"
+                      }`}
+                    >
+                      {deviceStatus}
+                    </p>
+                  </div>
+                  <div className="rounded-md border p-3 bg-white">
+                    <p className="text-[11px] uppercase tracking-wide text-gray-500">
+                      Estado de captura
+                    </p>
+                    <p className="text-sm mt-1 text-gray-700">
+                      {captureStatus}
+                    </p>
+                  </div>
+                  <div className="rounded-md border p-3 bg-white">
+                    <p className="text-[11px] uppercase tracking-wide text-gray-500">
+                      Calidad
+                    </p>
+                    <p className="text-sm mt-1 text-gray-700">
+                      {typeof lastQuality === "number" ? lastQuality : "N/A"}
+                    </p>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -540,10 +593,18 @@ export default function NewStudentPage() {
                         onClick={() =>
                           handleCaptureFingerprint("huella_indice_derecho")
                         }
+                        disabled={
+                          isLoading ||
+                          isCapturing ||
+                          capturingSide === "huella_indice_izquierdo"
+                        }
                       >
-                        {rightFingerprintValue
-                          ? "Capturar Huella Otra vez"
-                          : "Capturar Huella"}
+                        {isCapturing &&
+                        capturingSide === "huella_indice_derecho"
+                          ? "Capturando..."
+                          : rightFingerprintValue
+                            ? "Capturar Huella Otra vez"
+                            : "Capturar Huella"}
                       </Button>
                     </CardContent>
                   </Card>
@@ -581,18 +642,23 @@ export default function NewStudentPage() {
                         onClick={() =>
                           handleCaptureFingerprint("huella_indice_izquierdo")
                         }
+                        disabled={
+                          isLoading ||
+                          isCapturing ||
+                          capturingSide === "huella_indice_derecho"
+                        }
                       >
-                        {leftFingerprintValue
-                          ? "Capturar Huella Otra vez"
-                          : "Capturar Huella"}
+                        {isCapturing &&
+                        capturingSide === "huella_indice_izquierdo"
+                          ? "Capturando..."
+                          : leftFingerprintValue
+                            ? "Capturar Huella Otra vez"
+                            : "Capturar Huella"}
                       </Button>
                     </CardContent>
                   </Card>
                 </div>
               </div>
-
-              {/* Campo firma oculto temporalmente */}
-
               <div className="flex justify-end gap-3 pt-2">
                 <Button
                   type="button"

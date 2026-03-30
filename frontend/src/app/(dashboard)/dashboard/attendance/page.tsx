@@ -15,6 +15,7 @@ import {
   type AttendanceStudentRow,
   type CourseOption,
 } from "@/app/actions/attendance";
+import { useDigitalPersonaFingerprintReader } from "@/lib/biometrics/digitalpersona";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -75,13 +76,20 @@ export default function AttendancePage() {
   const [isLoadingCourses, setIsLoadingCourses] = useState(true);
   const [isLoadingRoster, setIsLoadingRoster] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [fingerprintPayload, setFingerprintPayload] = useState("");
   const [isCapturingFingerprint, setIsCapturingFingerprint] = useState(false);
   const [lastFingerprintMatch, setLastFingerprintMatch] = useState<{
     numero_identificacion: string;
     confidence?: number;
     source?: "backend" | "local";
   } | null>(null);
+
+  const {
+    ready: readerReady,
+    deviceStatus,
+    captureStatus,
+    lastQuality,
+    capture,
+  } = useDigitalPersonaFingerprintReader();
 
   const form = useForm<AttendanceFormValues>({
     resolver: zodResolver(attendanceSchema),
@@ -161,11 +169,20 @@ export default function AttendancePage() {
       return;
     }
 
+    if (!readerReady) {
+      toast.error(
+        "El lector no esta listo. Verifique la conexion y el servicio de DigitalPersona.",
+      );
+      return;
+    }
+
     const idCurso = Number(parsed.data.idCurso);
-    const template = fingerprintPayload.trim();
+    setIsCapturingFingerprint(true);
+    const template = (await capture("attendance"))?.trim() ?? "";
+    setIsCapturingFingerprint(false);
 
     if (!template) {
-      toast.error("Ingrese la respuesta de huella para validar asistencia");
+      toast.error("No fue posible capturar la huella para validar asistencia");
       return;
     }
 
@@ -180,12 +197,10 @@ export default function AttendancePage() {
       return;
     }
 
-    setIsCapturingFingerprint(true);
     const result = await identifyStudentByFingerprintForAttendance({
       idCurso,
       fingerprintTemplate: template,
     });
-    setIsCapturingFingerprint(false);
 
     if (!result.success) {
       toast.error(result.error ?? "No fue posible validar la huella");
@@ -220,7 +235,6 @@ export default function AttendancePage() {
       confidence: result.confidence,
       source: result.source,
     });
-    setFingerprintPayload("");
 
     toast.success(
       `Asistencia marcada por huella: ${matchedStudent.apellidos}, ${matchedStudent.nombres}`,
@@ -404,38 +418,57 @@ export default function AttendancePage() {
                     Asistencia por huella
                   </CardTitle>
                   <CardDescription>
-                    Capture huella y envíe la respuesta del backend para marcar
-                    automáticamente al estudiante como presente.
+                    Captura en vivo con DigitalPersona U.are.U 4500 para
+                    autenticacion biometrica y marcado automatico de asistencia.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
-                    <div>
-                      <FormLabel>Respuesta/Payload de huella *</FormLabel>
-                      <Input
-                        value={fingerprintPayload}
-                        onChange={(event) =>
-                          setFingerprintPayload(event.target.value)
-                        }
-                        placeholder="Template o token de huella devuelto por backend"
-                      />
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="rounded-md border p-3 bg-white">
+                      <p className="text-[11px] uppercase tracking-wide text-gray-500">
+                        Lector
+                      </p>
+                      <p
+                        className={`text-sm mt-1 ${
+                          readerReady ? "text-green-700" : "text-[#982725]"
+                        }`}
+                      >
+                        {deviceStatus}
+                      </p>
                     </div>
-                    <Button
-                      type="button"
-                      onClick={handleCaptureFingerprintAttendance}
-                      disabled={isCapturingFingerprint || isLoadingRoster}
-                      className="bg-[#b92f2d] hover:bg-[#982725] text-white"
-                    >
-                      {isCapturingFingerprint ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Validando...
-                        </>
-                      ) : (
-                        "Capturar y Marcar"
-                      )}
-                    </Button>
+                    <div className="rounded-md border p-3 bg-white">
+                      <p className="text-[11px] uppercase tracking-wide text-gray-500">
+                        Estado de captura
+                      </p>
+                      <p className="text-sm mt-1 text-gray-700">
+                        {captureStatus}
+                      </p>
+                    </div>
+                    <div className="rounded-md border p-3 bg-white">
+                      <p className="text-[11px] uppercase tracking-wide text-gray-500">
+                        Calidad
+                      </p>
+                      <p className="text-sm mt-1 text-gray-700">
+                        {typeof lastQuality === "number" ? lastQuality : "N/A"}
+                      </p>
+                    </div>
                   </div>
+
+                  <Button
+                    type="button"
+                    onClick={handleCaptureFingerprintAttendance}
+                    disabled={isCapturingFingerprint || isLoadingRoster}
+                    className="bg-[#b92f2d] hover:bg-[#982725] text-white"
+                  >
+                    {isCapturingFingerprint ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Capturando y validando...
+                      </>
+                    ) : (
+                      "Capturar y Marcar"
+                    )}
+                  </Button>
 
                   {lastFingerprintMatch && (
                     <p className="text-xs text-[#982725]">

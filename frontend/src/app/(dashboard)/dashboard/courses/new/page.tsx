@@ -84,8 +84,7 @@ export default function NewCoursePage() {
 
     if (result.success) {
       toast.success("Curso creado correctamente");
-      router.push("/dashboard/courses");
-      router.refresh();
+      router.replace("/dashboard/courses");
     } else {
       toast.error(result.error ?? "Error al crear el curso");
       setIsLoading(false);

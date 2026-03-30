@@ -32,6 +32,19 @@ export interface AttendanceSaveRow {
   metodo_pago: MetodoPago;
 }
 
+export interface AttendanceExportRow {
+  id: number;
+  id_curso: number;
+  nombre_curso: string;
+  numero_identificacion: string;
+  nombres: string;
+  apellidos: string;
+  fecha: string;
+  asistio: boolean;
+  saldo: Saldo;
+  metodo_pago: MetodoPago;
+}
+
 interface FingerprintBackendResponse {
   success: boolean;
   numero_identificacion?: string;
@@ -58,121 +71,76 @@ function getUtcDayBounds(date: string) {
   };
 }
 
-async function identifyWithLocalFallback(params: {
-  idCurso: number;
-  fingerprintTemplate: string;
-}): Promise<FingerprintAttendanceMatch> {
-  const supabase = await createClient();
-
-  const template = params.fingerprintTemplate.trim();
-  if (!template) {
-    return {
-      success: false,
-      matched: false,
-      error: "Debe enviar la huella para validar asistencia",
-    };
-  }
-
-  const { data, error } = await supabase
-    .from("cursos_x_estudiantes")
-    .select(
-      "numero_identificacion, estudiantes(huella_indice_derecho, huella_indice_izquierdo)",
-    )
-    .eq("id_curso", params.idCurso);
-
-  if (error) {
-    return { success: false, matched: false, error: error.message };
-  }
-
-  for (const row of data ?? []) {
-    const student = Array.isArray(row.estudiantes)
-      ? row.estudiantes[0]
-      : row.estudiantes;
-    const right = student?.huella_indice_derecho?.trim();
-    const left = student?.huella_indice_izquierdo?.trim();
-
-    if (template === right || template === left) {
-      return {
-        success: true,
-        matched: true,
-        numero_identificacion: row.numero_identificacion,
-        source: "local",
-      };
-    }
-  }
-
-  return {
-    success: true,
-    matched: false,
-    source: "local",
-    error: "No se encontró coincidencia de huella para este curso",
-  };
-}
-
 export async function identifyStudentByFingerprintForAttendance(params: {
   idCurso: number;
   fingerprintTemplate: string;
 }): Promise<FingerprintAttendanceMatch> {
   const backendUrl = process.env.BIOMETRIC_BACKEND_URL?.trim();
 
-  if (backendUrl) {
-    try {
-      const response = await fetch(`${backendUrl}/attendance/identify`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id_curso: params.idCurso,
-          fingerprint_template: params.fingerprintTemplate,
-        }),
-        cache: "no-store",
-      });
+  if (!backendUrl) {
+    return {
+      success: false,
+      matched: false,
+      error: "No se ha configurado BIOMETRIC_BACKEND_URL para validar huellas",
+    };
+  }
 
-      if (!response.ok) {
-        return {
-          success: false,
-          matched: false,
-          error: `Error del backend biométrico: ${response.status}`,
-        };
-      }
+  try {
+    const response = await fetch(`${backendUrl}/api/attendance/identify`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        id_curso: params.idCurso,
+        fingerprint_template: params.fingerprintTemplate,
+      }),
+      cache: "no-store",
+    });
 
-      const payload = (await response.json()) as FingerprintBackendResponse;
-      if (!payload.success) {
-        return {
-          success: false,
-          matched: false,
-          source: "backend",
-          error: payload.error ?? "No fue posible validar la huella",
-        };
-      }
-
-      if (!payload.numero_identificacion) {
-        return {
-          success: true,
-          matched: false,
-          source: "backend",
-          error: "No hubo coincidencia de huella",
-        };
-      }
-
-      return {
-        success: true,
-        matched: true,
-        numero_identificacion: payload.numero_identificacion,
-        confidence: payload.confidence,
-        source: "backend",
-      };
-    } catch {
+    if (!response.ok) {
       return {
         success: false,
         matched: false,
-        error: "No fue posible conectar con el backend biométrico configurado",
+        source: "backend",
+        error: `Error del backend biometrico: ${response.status}`,
       };
     }
-  }
 
-  return identifyWithLocalFallback(params);
+    const payload = (await response.json()) as FingerprintBackendResponse;
+    if (!payload.success) {
+      return {
+        success: false,
+        matched: false,
+        source: "backend",
+        error: payload.error ?? "No fue posible validar la huella",
+      };
+    }
+
+    if (!payload.numero_identificacion) {
+      return {
+        success: true,
+        matched: false,
+        source: "backend",
+        confidence: payload.confidence,
+        error: "No hubo coincidencia de huella",
+      };
+    }
+
+    return {
+      success: true,
+      matched: true,
+      numero_identificacion: payload.numero_identificacion,
+      confidence: payload.confidence,
+      source: "backend",
+    };
+  } catch {
+    return {
+      success: false,
+      matched: false,
+      error: "No fue posible conectar con el backend biometrico configurado",
+    };
+  }
 }
 
 export async function getCourseOptions(): Promise<{
@@ -377,4 +345,52 @@ export async function saveAttendanceForCourseAndDate(params: {
   }
 
   return { success: true, savedCount: normalizedRows.length };
+}
+
+export async function getAttendanceExportByCourseAndDate(
+  idCurso: number,
+  date: string,
+): Promise<{
+  success: boolean;
+  error?: string;
+  data?: AttendanceExportRow[];
+}> {
+  const supabase = await createClient();
+  const { startIso, endIso } = getUtcDayBounds(date);
+
+  const { data, error } = await supabase
+    .from("registro_asistencia")
+    .select(
+      "id, id_curso, numero_identificacion, fecha, asistio, saldo, metodo_pago, estudiantes(nombres, apellidos), cursos(nombre_curso)",
+    )
+    .eq("id_curso", idCurso)
+    .gte("fecha", startIso)
+    .lt("fecha", endIso)
+    .order("numero_identificacion", { ascending: true });
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  const rows: AttendanceExportRow[] = (data ?? []).map((row) => {
+    const student = Array.isArray(row.estudiantes)
+      ? row.estudiantes[0]
+      : row.estudiantes;
+    const course = Array.isArray(row.cursos) ? row.cursos[0] : row.cursos;
+
+    return {
+      id: row.id,
+      id_curso: row.id_curso,
+      nombre_curso: course?.nombre_curso ?? "",
+      numero_identificacion: row.numero_identificacion,
+      nombres: student?.nombres ?? "",
+      apellidos: student?.apellidos ?? "",
+      fecha: row.fecha,
+      asistio: row.asistio,
+      saldo: row.saldo as Saldo,
+      metodo_pago: row.metodo_pago as MetodoPago,
+    };
+  });
+
+  return { success: true, data: rows };
 }
