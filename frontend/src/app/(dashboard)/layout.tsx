@@ -1,39 +1,43 @@
-import { Menu } from 'lucide-react'
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
-import { DashboardLayoutClient } from './layout-client'
+import type { Metadata } from "next";
+import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import { DashboardLayoutClient } from "./layout-client";
+
+export const metadata: Metadata = {
+  title: "SysAsistencia - Dashboard",
+};
 
 export default async function DashboardLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
-  const supabase = await createClient()
+  const supabase = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect('/login')
+    redirect("/login");
   }
 
   const { data: profile } = await supabase
-    .from('profiles')
-    .select('first_name, last_name, email')
-    .eq('id', user.id)
-    .single()
+    .from("profiles")
+    .select("first_name, last_name, email")
+    .eq("id", user.id)
+    .single();
 
   const userName = profile
     ? `${profile.first_name} ${profile.last_name}`
     : user.user_metadata?.first_name
-    ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
-    : undefined
+      ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
+      : undefined;
 
-  const userEmail = profile?.email ?? user.email
+  const userEmail = profile?.email ?? user.email;
 
   return (
     <DashboardLayoutClient userName={userName} userEmail={userEmail}>
       {children}
     </DashboardLayoutClient>
-  )
+  );
 }
