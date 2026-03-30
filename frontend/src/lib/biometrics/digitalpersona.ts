@@ -1,6 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  createElement,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 export type FingerCaptureMode = "enroll-right" | "enroll-left" | "attendance";
 
@@ -18,7 +26,7 @@ interface FingerprintErrorPayload {
 }
 
 interface FingerprintReaderApi {
-  on(event: string, handler: (payload: unknown) => void): void;
+  on(event: string, handler: (payload: any) => void): void;
   off(): void;
   enumerateDevices(): Promise<unknown[]>;
   startAcquisition(sampleFormat: unknown): Promise<void>;
@@ -40,6 +48,9 @@ interface UseFingerprintReaderResult {
   lastQuality: number | null;
   capture: (mode: FingerCaptureMode) => Promise<string | null>;
 }
+
+const FingerprintReaderContext =
+  createContext<UseFingerprintReaderResult | null>(null);
 
 function extractPngSample(event: FingerprintEventPayload): string {
   const firstSample = event?.samples?.[0];
@@ -64,7 +75,12 @@ function extractPngSample(event: FingerprintEventPayload): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-export function useDigitalPersonaFingerprintReader(): UseFingerprintReaderResult {
+function useDigitalPersonaFingerprintReaderState(): UseFingerprintReaderResult {
+  const INIT_RETRY_MIN_DELAY_MS = 1000;
+  const INIT_RETRY_MAX_DELAY_MS = 8000;
+  const RECONNECT_MIN_DELAY_MS = 1500;
+  const RECONNECT_MAX_DELAY_MS = 10000;
+
   const [ready, setReady] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [deviceStatus, setDeviceStatus] = useState("Inicializando lector...");
@@ -77,26 +93,149 @@ export function useDigitalPersonaFingerprintReader(): UseFingerprintReaderResult
   const pendingResolveRef = useRef<((value: string | null) => void) | null>(
     null,
   );
+  const initRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initRetryDelayRef = useRef(INIT_RETRY_MIN_DELAY_MS);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectDelayRef = useRef(RECONNECT_MIN_DELAY_MS);
+
+  const clearPendingCapture = (reason?: string) => {
+    if (reason) {
+      setCaptureStatus(reason);
+    }
+
+    pendingResolveRef.current?.(null);
+    pendingResolveRef.current = null;
+    currentModeRef.current = null;
+    setIsCapturing(false);
+  };
 
   useEffect(() => {
     let isUnmounted = false;
     let reader: FingerprintReaderApi | null = null;
 
+    const clearInitRetryTimer = () => {
+      if (initRetryTimerRef.current) {
+        clearTimeout(initRetryTimerRef.current);
+        initRetryTimerRef.current = null;
+      }
+    };
+
+    const clearReconnectTimer = () => {
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+    };
+
+    const scheduleInitializeRetry = () => {
+      if (isUnmounted || initRetryTimerRef.current) {
+        return;
+      }
+
+      const delay = initRetryDelayRef.current;
+      initRetryTimerRef.current = setTimeout(() => {
+        initRetryTimerRef.current = null;
+        void initialize();
+      }, delay);
+    };
+
+    const runDeviceCheck = async (currentReader: FingerprintReaderApi) => {
+      const devices = await currentReader.enumerateDevices();
+
+      if (!devices || devices.length === 0) {
+        setReady(false);
+        setDeviceStatus("No se detecto lector de huellas");
+        return false;
+      }
+
+      setReady(true);
+      setDeviceStatus(`Lector listo (${devices.length} detectado/s)`);
+      reconnectDelayRef.current = RECONNECT_MIN_DELAY_MS;
+      return true;
+    };
+
+    const scheduleReconnect = () => {
+      if (isUnmounted || reconnectTimerRef.current) {
+        return;
+      }
+
+      const delay = reconnectDelayRef.current;
+      reconnectTimerRef.current = setTimeout(async () => {
+        reconnectTimerRef.current = null;
+        const activeReader = readerRef.current;
+
+        if (isUnmounted) {
+          return;
+        }
+
+        if (!activeReader) {
+          setReady(false);
+          setDeviceStatus("Reconectando lector...");
+          scheduleInitializeRetry();
+          return;
+        }
+
+        try {
+          const found = await runDeviceCheck(activeReader);
+          if (!found) {
+            reconnectDelayRef.current = Math.min(
+              reconnectDelayRef.current * 2,
+              RECONNECT_MAX_DELAY_MS,
+            );
+            scheduleReconnect();
+          }
+        } catch {
+          reconnectDelayRef.current = Math.min(
+            reconnectDelayRef.current * 2,
+            RECONNECT_MAX_DELAY_MS,
+          );
+          setReady(false);
+          setDeviceStatus("Reconectando lector...");
+          scheduleReconnect();
+        }
+      }, delay);
+    };
+
     const initialize = async () => {
       try {
+        const existingReader = readerRef.current;
+        if (existingReader) {
+          await runDeviceCheck(existingReader);
+          return;
+        }
+
         if (!globalThis.WebSdk?.WebChannelClient) {
-          throw new Error(
-            "Runtime WebSdk no encontrado. Verifique los scripts en public/.",
+          setReady(false);
+          setDeviceStatus("Esperando runtime WebSdk...");
+          setCaptureStatus(
+            "Inicializando runtime del lector. Reintentando automaticamente...",
           );
+          initRetryDelayRef.current = Math.min(
+            initRetryDelayRef.current * 2,
+            INIT_RETRY_MAX_DELAY_MS,
+          );
+          scheduleInitializeRetry();
+          return;
         }
 
         const sdk =
           (globalThis.dp?.devices as FingerprintSdk | undefined) ?? {};
         if (!sdk.FingerprintReader || !sdk.SampleFormat?.PngImage) {
-          throw new Error(
-            "Bundles de DigitalPersona no disponibles. Cargue dp.core.bundle.js y dp.devices.bundle.js.",
+          setReady(false);
+          setDeviceStatus("Esperando modulos de DigitalPersona...");
+          setCaptureStatus(
+            "Cargando bundles de DigitalPersona. Reintentando automaticamente...",
           );
+          initRetryDelayRef.current = Math.min(
+            initRetryDelayRef.current * 2,
+            INIT_RETRY_MAX_DELAY_MS,
+          );
+          scheduleInitializeRetry();
+          return;
         }
+
+        clearInitRetryTimer();
+        initRetryDelayRef.current = INIT_RETRY_MIN_DELAY_MS;
 
         reader = new sdk.FingerprintReader();
         if (isUnmounted) return;
@@ -105,12 +244,26 @@ export function useDigitalPersonaFingerprintReader(): UseFingerprintReaderResult
         sampleFormatRef.current = sdk.SampleFormat.PngImage;
 
         reader.on("DeviceConnected", () => {
+          const connectedReader = reader;
+          if (!connectedReader) return;
+
           setDeviceStatus("Lector conectado");
+          reconnectDelayRef.current = RECONNECT_MIN_DELAY_MS;
+          clearReconnectTimer();
+          void runDeviceCheck(connectedReader).catch(() => {
+            setReady(false);
+            setDeviceStatus("Reconectando lector...");
+            scheduleReconnect();
+          });
         });
 
         reader.on("DeviceDisconnected", () => {
+          setReady(false);
           setDeviceStatus("Lector desconectado");
-          setIsCapturing(false);
+          clearPendingCapture(
+            "Lector desconectado. Vuelva a conectar el dispositivo.",
+          );
+          scheduleReconnect();
         });
 
         reader.on("AcquisitionStarted", () => {
@@ -137,9 +290,12 @@ export function useDigitalPersonaFingerprintReader(): UseFingerprintReaderResult
         });
 
         reader.on("CommunicationFailed", () => {
+          setReady(false);
           setCaptureStatus(
             "Fallo de comunicacion con el lector. Verifique el servicio local de DigitalPersona.",
           );
+          setDeviceStatus("Reconectando lector...");
+          scheduleReconnect();
         });
 
         reader.on("SamplesAcquired", async (event: FingerprintEventPayload) => {
@@ -165,27 +321,52 @@ export function useDigitalPersonaFingerprintReader(): UseFingerprintReaderResult
           }
         });
 
-        const devices = await reader.enumerateDevices();
-        if (!devices || devices.length === 0) {
-          setDeviceStatus("No se detecto lector de huellas");
-        } else {
-          setDeviceStatus(`Lector listo (${devices.length} detectado/s)`);
-        }
-
-        setReady(true);
+        await runDeviceCheck(reader);
       } catch (error) {
         setReady(false);
         setDeviceStatus("No se pudo inicializar el lector");
         setCaptureStatus(
           error instanceof Error ? error.message : "Error de inicializacion",
         );
+        initRetryDelayRef.current = Math.min(
+          initRetryDelayRef.current * 2,
+          INIT_RETRY_MAX_DELAY_MS,
+        );
+        scheduleInitializeRetry();
       }
     };
 
+    const checkOnWindowFocus = () => {
+      const activeReader = readerRef.current;
+      if (isUnmounted) return;
+
+      if (!activeReader) {
+        void initialize();
+        return;
+      }
+
+      void runDeviceCheck(activeReader).catch(() => {
+        setReady(false);
+        setDeviceStatus("Reconectando lector...");
+        scheduleReconnect();
+      });
+    };
+
+    const checkOnVisibility = () => {
+      if (document.visibilityState !== "visible") return;
+      checkOnWindowFocus();
+    };
+
     initialize();
+    window.addEventListener("focus", checkOnWindowFocus);
+    document.addEventListener("visibilitychange", checkOnVisibility);
 
     return () => {
       isUnmounted = true;
+      clearInitRetryTimer();
+      clearReconnectTimer();
+      window.removeEventListener("focus", checkOnWindowFocus);
+      document.removeEventListener("visibilitychange", checkOnVisibility);
       const cleanup = async () => {
         try {
           await reader?.stopAcquisition();
@@ -242,4 +423,29 @@ export function useDigitalPersonaFingerprintReader(): UseFingerprintReaderResult
     lastQuality,
     capture,
   };
+}
+
+export function DigitalPersonaFingerprintProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const reader = useDigitalPersonaFingerprintReaderState();
+
+  return createElement(FingerprintReaderContext.Provider, {
+    value: reader,
+    children,
+  });
+}
+
+export function useDigitalPersonaFingerprintReader(): UseFingerprintReaderResult {
+  const context = useContext(FingerprintReaderContext);
+
+  if (!context) {
+    throw new Error(
+      "useDigitalPersonaFingerprintReader debe usarse dentro de DigitalPersonaFingerprintProvider.",
+    );
+  }
+
+  return context;
 }
