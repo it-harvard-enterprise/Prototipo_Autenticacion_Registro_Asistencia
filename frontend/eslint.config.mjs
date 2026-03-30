@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "public/websdk.client.bundle.min.js",
+    "public/websdk.compat.js",
+    "public/dp.core.bundle.js",
+    "public/dp.devices.bundle.js",
   ]),
 ]);
 

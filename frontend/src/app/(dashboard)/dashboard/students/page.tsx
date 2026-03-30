@@ -1,17 +1,17 @@
-import Link from 'next/link'
-import { Plus } from 'lucide-react'
-import { createClient } from '@/lib/supabase/server'
-import { Button } from '@/components/ui/button'
-import { StudentsTable } from '@/components/students-table'
-import { Student } from '@/lib/types'
+import Link from "next/link";
+import { Plus } from "lucide-react";
+import { createClient } from "@/lib/supabase/server";
+import { Button } from "@/components/ui/button";
+import { StudentsTable } from "@/components/students-table";
+import { Student } from "@/lib/types";
 
 export default async function StudentsPage() {
-  const supabase = await createClient()
+  const supabase = await createClient();
 
   const { data: students, error } = await supabase
-    .from('students')
-    .select('*')
-    .order('apellidos', { ascending: true })
+    .from("estudiantes")
+    .select("*")
+    .order("apellidos", { ascending: true });
 
   return (
     <div className="space-y-6">
@@ -40,5 +40,5 @@ export default async function StudentsPage() {
         <StudentsTable students={(students ?? []) as Student[]} />
       )}
     </div>
-  )
+  );
 }
