@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ClipboardList, Fingerprint, Loader2 } from "lucide-react";
 import { useForm } from "react-hook-form";
@@ -76,6 +76,8 @@ export default function AttendancePage() {
   const [isLoadingCourses, setIsLoadingCourses] = useState(true);
   const [isLoadingRoster, setIsLoadingRoster] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const [hasLoadedRoster, setHasLoadedRoster] = useState(false);
   const [isCapturingFingerprint, setIsCapturingFingerprint] = useState(false);
   const [lastFingerprintMatch, setLastFingerprintMatch] = useState<{
     numero_identificacion: string;
@@ -107,6 +109,36 @@ export default function AttendancePage() {
       ""
     );
   }, [courses, form]);
+
+  const autosaveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+
+  async function persistAttendanceRowsInBackground(
+    values: AttendanceFormValues,
+    rowsToPersist: AttendanceStudentRow[],
+  ) {
+    if (rowsToPersist.length === 0) return;
+
+    setIsAutoSaving(true);
+    const result = await saveAttendanceForCourseAndDate({
+      idCurso: Number(values.idCurso),
+      date: values.fecha,
+      rows: rowsToPersist.map((student) => ({
+        numero_identificacion: student.numero_identificacion,
+        asistio: student.asistio,
+        saldo: student.saldo as SaldoValue,
+        metodo_pago: student.metodo_pago as MetodoPagoValue,
+      })),
+    });
+    setIsAutoSaving(false);
+
+    if (!result.success) {
+      toast.error(
+        result.error ?? "No fue posible guardar el progreso de asistencia",
+      );
+    }
+  }
 
   useEffect(() => {
     async function fetchCourses() {
@@ -158,7 +190,9 @@ export default function AttendancePage() {
 
     const rows = result.data ?? [];
     setStudents(rows);
+    setHasLoadedRoster(true);
     toast.success("Lista de asistencia cargada");
+
     return rows;
   }
 
@@ -222,13 +256,7 @@ export default function AttendancePage() {
       return;
     }
 
-    setStudents((prev) =>
-      prev.map((student) =>
-        student.numero_identificacion === matchedId
-          ? { ...student, asistio: true }
-          : student,
-      ),
-    );
+    updateStudentAttendance(matchedId, { asistio: true });
 
     setLastFingerprintMatch({
       numero_identificacion: matchedId,
@@ -264,6 +292,28 @@ export default function AttendancePage() {
       }),
     );
   }
+
+  useEffect(() => {
+    if (!hasLoadedRoster || students.length === 0) return;
+
+    const parsed = attendanceSchema.safeParse(form.getValues());
+    if (!parsed.success) return;
+
+    if (autosaveDebounceRef.current) {
+      clearTimeout(autosaveDebounceRef.current);
+    }
+
+    autosaveDebounceRef.current = setTimeout(() => {
+      void persistAttendanceRowsInBackground(parsed.data, students);
+    }, 450);
+
+    return () => {
+      if (autosaveDebounceRef.current) {
+        clearTimeout(autosaveDebounceRef.current);
+        autosaveDebounceRef.current = null;
+      }
+    };
+  }, [hasLoadedRoster, students, form]);
 
   async function onSubmit(values: AttendanceFormValues) {
     if (students.length === 0) {
@@ -411,6 +461,12 @@ export default function AttendancePage() {
                 </div>
               )}
 
+              {isAutoSaving && (
+                <p className="text-xs text-gray-500">
+                  Guardando progreso automaticamente...
+                </p>
+              )}
+
               <Card className="border-dashed border-[#b92f2d]/30 bg-[#b92f2d]/5">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base text-[#982725] flex items-center gap-2">
@@ -547,8 +603,8 @@ export default function AttendancePage() {
                               }
                             >
                               <option value="">Seleccione</option>
-                              <option value="cancelado">cancelado</option>
-                              <option value="debe">debe</option>
+                              <option value="cancelado">Cancelado</option>
+                              <option value="debe">Debe</option>
                             </select>
                           </TableCell>
                           <TableCell>
@@ -576,13 +632,13 @@ export default function AttendancePage() {
                               }
                             >
                               <option value="">Seleccione</option>
-                              <option value="efectivo">efectivo</option>
+                              <option value="efectivo">Efectivo</option>
                               <option value="transferencia">
-                                transferencia
+                                Transferencia
                               </option>
-                              <option value="nequi">nequi</option>
-                              <option value="daviplata">daviplata</option>
-                              <option value="otro">otro</option>
+                              <option value="nequi">Nequi</option>
+                              <option value="daviplata">Daviplata</option>
+                              <option value="otro">Otro</option>
                             </select>
                           </TableCell>
                         </TableRow>

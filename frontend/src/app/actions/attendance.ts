@@ -248,33 +248,49 @@ export async function saveAttendanceForCourseAndDate(params: {
   const supabase = await createClient();
 
   const normalizedRows = params.rows
-    .map((row) => ({
-      numero_identificacion: row.numero_identificacion.trim(),
-      asistio: row.asistio,
-      saldo: row.asistio ? row.saldo : null,
-      metodo_pago:
-        row.asistio && row.saldo === "cancelado" ? row.metodo_pago : null,
-    }))
+    .map((row) => {
+      const numero_identificacion = row.numero_identificacion.trim();
+
+      if (!row.asistio) {
+        return {
+          numero_identificacion,
+          asistio: false,
+          saldo: null as Saldo,
+          metodo_pago: null as MetodoPago,
+        };
+      }
+
+      // For autosave, keep DB-valid intermediate states while the user completes fields.
+      if (row.saldo === "debe") {
+        return {
+          numero_identificacion,
+          asistio: true,
+          saldo: "debe" as Saldo,
+          metodo_pago: null as MetodoPago,
+        };
+      }
+
+      if (row.saldo === "cancelado" && row.metodo_pago) {
+        return {
+          numero_identificacion,
+          asistio: true,
+          saldo: "cancelado" as Saldo,
+          metodo_pago: row.metodo_pago,
+        };
+      }
+
+      // If saldo is still incomplete (or cancelado without metodo), persist as pending.
+      return {
+        numero_identificacion,
+        asistio: true,
+        saldo: null as Saldo,
+        metodo_pago: null as MetodoPago,
+      };
+    })
     .filter((row) => row.numero_identificacion);
 
   if (normalizedRows.length === 0) {
     return { success: false, error: "No hay estudiantes para registrar" };
-  }
-
-  for (const row of normalizedRows) {
-    if (!row.asistio) continue;
-    if (!row.saldo) {
-      return {
-        success: false,
-        error: `Debe seleccionar saldo para ${row.numero_identificacion}`,
-      };
-    }
-    if (row.saldo === "cancelado" && !row.metodo_pago) {
-      return {
-        success: false,
-        error: `Debe seleccionar metodo de pago para ${row.numero_identificacion}`,
-      };
-    }
   }
 
   const { startIso, endIso } = getUtcDayBounds(params.date);

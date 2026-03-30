@@ -71,6 +71,7 @@ export function CoursesTable({ courses }: CoursesTableProps) {
         <Table>
           <TableHeader>
             <TableRow className="bg-gray-50">
+              <TableHead className="font-semibold">ID Curso</TableHead>
               <TableHead className="font-semibold">Nombre</TableHead>
               <TableHead className="font-semibold">Nivel</TableHead>
               <TableHead className="font-semibold">Horario</TableHead>
@@ -83,6 +84,9 @@ export function CoursesTable({ courses }: CoursesTableProps) {
           <TableBody>
             {courses.map((course) => (
               <TableRow key={course.id_curso} className="hover:bg-gray-50">
+                <TableCell className="font-mono text-sm text-gray-700">
+                  {course.id_curso}
+                </TableCell>
                 <TableCell className="font-medium">
                   {course.nombre_curso}
                 </TableCell>
