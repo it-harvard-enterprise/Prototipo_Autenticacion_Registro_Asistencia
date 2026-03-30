@@ -94,7 +94,8 @@ export function Sidebar({ userEmail, userName, onClose }: SidebarProps) {
         <div>
           <h2 className="text-lg font-bold text-white">SysAsistencia</h2>
           <p className="text-xs text-[#d49392]">
-            Sistema de Creación de Estudiantes, Cursos y Registro de Asistencia.
+            Sistema de Creación de Estudiantes, Cursos y Registro de Asistencia
+            de Hardvard Enterprise.
           </p>
         </div>
         {onClose && (
