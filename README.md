@@ -6,6 +6,8 @@ Repository to host the source code associated with an in-house development of a 
 
 This repository contains backend and frontend code. To avoid a 404 deployment on Vercel, the project must build from the frontend directory.
 
+The repository also includes a root `vercel.json` that forces Vercel to build the Next.js app from `frontend/package.json` to prevent monorepo root mis-detection.
+
 ### Vercel setup
 
 1. Import the repository in Vercel (or open Project Settings if already imported).
@@ -16,6 +18,14 @@ This repository contains backend and frontend code. To avoid a 404 deployment on
    - Build Command: `npm run build`
 5. Set all required environment variables (see list below) in **Project Settings > Environment Variables**.
 6. Redeploy after saving settings.
+
+### If you still see Vercel `NOT_FOUND`
+
+1. Open the deployment URL from the latest successful deployment in Vercel and test it directly.
+2. Confirm your custom domain is assigned to this same Vercel project and points to the latest production deployment.
+3. In **Project Settings > General**, verify **Root Directory** is `frontend`.
+4. In **Project Settings > Build & Development Settings**, clear any custom **Output Directory** value.
+5. Trigger a new production deployment after confirming the settings.
 
 ### Required frontend environment variables (Vercel)
 
