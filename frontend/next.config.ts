@@ -8,6 +8,7 @@ const webSdkAliasPath = path.resolve(
 );
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   turbopack: {
     root: projectRoot,
     resolveAlias: {

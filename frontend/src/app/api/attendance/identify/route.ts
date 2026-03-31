@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { ensureApprovedAdmin } from "@/lib/auth/approved-admin";
+import {
+  biometricBackendConfigHint,
+  resolveBiometricBackendBaseUrl,
+} from "@/lib/biometric-backend";
 
 type FingerprintBackendResponse = {
   success: boolean;
@@ -55,14 +59,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const backendUrl = process.env.BIOMETRIC_BACKEND_URL?.trim();
+  const backendUrl = resolveBiometricBackendBaseUrl();
   if (!backendUrl) {
     return NextResponse.json(
       {
         success: false,
         matched: false,
-        error:
-          "No se ha configurado BIOMETRIC_BACKEND_URL para validar huellas",
+        error: `No se ha configurado la URL del backend biometrico. ${biometricBackendConfigHint()}`,
       },
       { status: 500 },
     );
@@ -88,6 +91,7 @@ export async function POST(request: NextRequest) {
         fingerprint_template: fingerprintTemplate,
       }),
       cache: "no-store",
+      signal: AbortSignal.timeout(15000),
     });
 
     const payload = (await response
@@ -142,7 +146,7 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         matched: false,
-        error: "No fue posible conectar con el backend biometrico configurado",
+        error: `No fue posible conectar con el backend biometrico configurado (${backendUrl}).`,
       },
       { status: 502 },
     );

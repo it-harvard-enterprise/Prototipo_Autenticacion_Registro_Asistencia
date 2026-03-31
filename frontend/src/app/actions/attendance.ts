@@ -2,6 +2,10 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { ensureApprovedAdmin } from "@/lib/auth/approved-admin";
+import {
+  biometricBackendConfigHint,
+  resolveBiometricBackendBaseUrl,
+} from "@/lib/biometric-backend";
 
 type Saldo = "cancelado" | "debe" | null;
 type MetodoPago =
@@ -86,13 +90,13 @@ export async function identifyStudentByFingerprintForAttendance(params: {
     };
   }
 
-  const backendUrl = process.env.BIOMETRIC_BACKEND_URL?.trim();
+  const backendUrl = resolveBiometricBackendBaseUrl();
 
   if (!backendUrl) {
     return {
       success: false,
       matched: false,
-      error: "No se ha configurado BIOMETRIC_BACKEND_URL para validar huellas",
+      error: `No se ha configurado la URL del backend biometrico. ${biometricBackendConfigHint()}`,
     };
   }
 
@@ -118,6 +122,7 @@ export async function identifyStudentByFingerprintForAttendance(params: {
         fingerprint_template: params.fingerprintTemplate,
       }),
       cache: "no-store",
+      signal: AbortSignal.timeout(15000),
     });
 
     if (!response.ok) {
@@ -160,7 +165,7 @@ export async function identifyStudentByFingerprintForAttendance(params: {
     return {
       success: false,
       matched: false,
-      error: "No fue posible conectar con el backend biometrico configurado",
+      error: `No fue posible conectar con el backend biometrico configurado (${backendUrl})`,
     };
   }
 }

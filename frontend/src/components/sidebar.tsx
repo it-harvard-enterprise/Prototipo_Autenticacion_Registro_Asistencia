@@ -24,7 +24,16 @@ interface SidebarProps {
   onClose?: () => void;
 }
 
-const navItems = [
+type NavItem = {
+  label: string;
+  href: string;
+  icon: typeof LayoutDashboard;
+  exact?: boolean;
+  disabled?: boolean;
+  badge?: string;
+};
+
+const navItems: NavItem[] = [
   {
     label: "Dashboard",
     href: "/dashboard",
@@ -80,7 +89,7 @@ export function Sidebar({ userEmail, userName, onClose }: SidebarProps) {
     router.refresh();
   }
 
-  function isActive(item: (typeof navItems)[0]) {
+  function isActive(item: NavItem) {
     if (item.exact) {
       return pathname === item.href;
     }

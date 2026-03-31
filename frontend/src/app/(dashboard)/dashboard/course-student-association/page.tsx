@@ -172,27 +172,37 @@ export default function CourseStudentAssociationPage() {
     }
 
     setIsAssociating(true);
-    const result =
-      values.operation === "link"
-        ? await associateStudentsToCourse(Number(values.idCurso), ids)
-        : await dissociateStudentsFromCourse(Number(values.idCurso), ids);
-    setIsAssociating(false);
-
-    if (!result.success) {
-      toast.error(
-        result.error ??
-          (values.operation === "link"
-            ? "No fue posible asociar estudiantes al curso"
-            : "No fue posible desvincular estudiantes del curso"),
-      );
-      return;
-    }
-
     if (values.operation === "link") {
+      const result = await associateStudentsToCourse(
+        Number(values.idCurso),
+        ids,
+      );
+      setIsAssociating(false);
+
+      if (!result.success) {
+        toast.error(
+          result.error ?? "No fue posible asociar estudiantes al curso",
+        );
+        return;
+      }
+
       toast.success(
         `Asociación completada: ${result.insertedCount ?? ids.length} estudiante(s) vinculados`,
       );
     } else {
+      const result = await dissociateStudentsFromCourse(
+        Number(values.idCurso),
+        ids,
+      );
+      setIsAssociating(false);
+
+      if (!result.success) {
+        toast.error(
+          result.error ?? "No fue posible desvincular estudiantes del curso",
+        );
+        return;
+      }
+
       toast.success(
         `Desvinculación completada: ${result.removedCount ?? ids.length} estudiante(s) desvinculados`,
       );

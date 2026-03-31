@@ -1,4 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
+import {
+  biometricBackendConfigHint,
+  resolveBiometricBackendBaseUrl,
+} from "@/lib/biometric-backend";
 
 const noStoreHeaders: Record<string, string> = {
   "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
@@ -14,12 +18,12 @@ function withCors(headers: Headers): Headers {
 }
 
 function backendHealthUrl(): string | null {
-  const backendUrl = process.env.BIOMETRIC_BACKEND_URL?.trim();
+  const backendUrl = resolveBiometricBackendBaseUrl();
   if (!backendUrl) {
     return null;
   }
 
-  return `${backendUrl.replace(/\/$/, "")}/health`;
+  return `${backendUrl}/health`;
 }
 
 async function resolveBackendStatus(): Promise<{
@@ -30,7 +34,7 @@ async function resolveBackendStatus(): Promise<{
   if (!healthUrl) {
     return {
       status: "unknown",
-      detail: "BIOMETRIC_BACKEND_URL not configured",
+      detail: biometricBackendConfigHint(),
     };
   }
 

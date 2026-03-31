@@ -2,6 +2,10 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { ensureApprovedAdmin } from "@/lib/auth/approved-admin";
+import {
+  biometricBackendConfigHint,
+  resolveBiometricBackendBaseUrl,
+} from "@/lib/biometric-backend";
 import { Student } from "@/lib/types";
 
 export interface StudentFormData {
@@ -34,11 +38,11 @@ export async function createStudent(
     return { success: false, error: approval.error };
   }
 
-  const backendUrl = process.env.BIOMETRIC_BACKEND_URL?.trim();
+  const backendUrl = resolveBiometricBackendBaseUrl();
   if (!backendUrl) {
     return {
       success: false,
-      error: "No se ha configurado BIOMETRIC_BACKEND_URL en el servidor",
+      error: `No se ha configurado la URL del backend biometrico. ${biometricBackendConfigHint()}`,
     };
   }
 
@@ -61,6 +65,7 @@ export async function createStudent(
       },
       body: JSON.stringify(data),
       cache: "no-store",
+      signal: AbortSignal.timeout(15000),
     });
 
     const rawText = await response.text();
@@ -88,7 +93,7 @@ export async function createStudent(
   } catch {
     return {
       success: false,
-      error: "No fue posible conectar con el backend biometrico",
+      error: `No fue posible conectar con el backend biometrico (${backendUrl})`,
     };
   }
 }
