@@ -111,23 +111,27 @@ export default function EditCoursePage() {
 
   async function onSubmit(values: CourseFormValues) {
     setIsLoading(true);
+    try {
+      const result = await updateCourse(Number(id), {
+        nombre_curso: values.nombre_curso,
+        nivel_curso: values.nivel_curso,
+        hora_inicio: values.hora_inicio,
+        hora_fin: values.hora_fin,
+        salon: values.salon || null,
+        fecha_inicio: values.fecha_inicio,
+        fecha_fin: values.fecha_fin,
+      });
 
-    const result = await updateCourse(Number(id), {
-      nombre_curso: values.nombre_curso,
-      nivel_curso: values.nivel_curso,
-      hora_inicio: values.hora_inicio,
-      hora_fin: values.hora_fin,
-      salon: values.salon || null,
-      fecha_inicio: values.fecha_inicio,
-      fecha_fin: values.fecha_fin,
-    });
+      if (!result.success) {
+        toast.error(result.error ?? "Error al actualizar el curso");
+        return;
+      }
 
-    if (result.success) {
       toast.success("Curso actualizado correctamente");
-      router.push(`/dashboard/courses/${id}`);
-      router.refresh();
-    } else {
-      toast.error(result.error ?? "Error al actualizar el curso");
+      router.replace(`/dashboard/courses/${id}`);
+    } catch {
+      toast.error("Error inesperado al actualizar el curso");
+    } finally {
       setIsLoading(false);
     }
   }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
+import { DetailLookup } from "@/components/detail-lookup";
 import { StudentsTable } from "@/components/students-table";
 import { Student } from "@/lib/types";
 
@@ -29,6 +30,8 @@ export default async function StudentsPage() {
           </Link>
         </Button>
       </div>
+
+      <DetailLookup type="student" />
 
       {error ? (
         <div className="rounded-md bg-red-50 border border-red-200 p-4">

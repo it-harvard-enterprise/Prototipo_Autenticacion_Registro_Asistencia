@@ -24,7 +24,16 @@ interface SidebarProps {
   onClose?: () => void;
 }
 
-const navItems = [
+type NavItem = {
+  label: string;
+  href: string;
+  icon: typeof LayoutDashboard;
+  exact?: boolean;
+  disabled?: boolean;
+  badge?: string;
+};
+
+const navItems: NavItem[] = [
   {
     label: "Dashboard",
     href: "/dashboard",
@@ -80,7 +89,7 @@ export function Sidebar({ userEmail, userName, onClose }: SidebarProps) {
     router.refresh();
   }
 
-  function isActive(item: (typeof navItems)[0]) {
+  function isActive(item: NavItem) {
     if (item.exact) {
       return pathname === item.href;
     }
@@ -93,7 +102,10 @@ export function Sidebar({ userEmail, userName, onClose }: SidebarProps) {
       <div className="flex items-center justify-between px-6 py-5 border-b border-[#6b1e1d]">
         <div>
           <h2 className="text-lg font-bold text-white">SysAsistencia</h2>
-          <p className="text-xs text-[#d49392]">Sistema de Asistencia</p>
+          <p className="text-xs text-[#d49392]">
+            Sistema de Creación de Estudiantes, Cursos y Registro de Asistencia
+            de Hardvard Enterprise.
+          </p>
         </div>
         {onClose && (
           <button

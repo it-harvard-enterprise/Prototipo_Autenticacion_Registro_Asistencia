@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -33,11 +34,12 @@ const (
 )
 
 type app struct {
-	supabaseURL string
-	serviceKey  string
-	threshold   float64
-	httpClient  *http.Client
-	logger      *sourceafis.DefaultTransparencyLogger
+	supabaseURL       string
+	serviceKey        string
+	frontendHealthURL string
+	threshold         float64
+	httpClient        *http.Client
+	logger            *sourceafis.DefaultTransparencyLogger
 }
 
 type noopTransparency struct{}
@@ -48,24 +50,25 @@ func (n *noopTransparency) Accept(string, string, []byte) error {
 }
 
 type studentEnrollRequest struct {
-	NumeroIdentificacion string   `json:"numero_identificacion"`
-	NoMatricula          *string  `json:"no_matricula"`
-	Nombres              string   `json:"nombres"`
-	Apellidos            string   `json:"apellidos"`
-	Grado                int      `json:"grado"`
-	Telefono             *string  `json:"telefono"`
-	Direccion            *string  `json:"direccion"`
-	Barrio               *string  `json:"barrio"`
-	NombreAcudiente      *string  `json:"nombre_acudiente"`
-	TelefonoAcudiente    *string  `json:"telefono_acudiente"`
-	Programa             *string  `json:"programa"`
-	FechaInicio          *string  `json:"fecha_inicio"`
-	FechaMatricula       *string  `json:"fecha_matricula"`
-	ValorMatricula       *float64 `json:"valor_matricula"`
-	MatriculaCancelada   bool     `json:"matricula_cancelada"`
-	ValorApoyoSemanal    float64  `json:"valor_apoyo_semanal"`
-	HuellaIndiceDerecho  *string  `json:"huella_indice_derecho"`
-	HuellaIndiceIzquierdo *string `json:"huella_indice_izquierdo"`
+	TipoIdentificacion    string   `json:"tipo_identificacion"`
+	NumeroIdentificacion  string   `json:"numero_identificacion"`
+	NoMatricula           *string  `json:"no_matricula"`
+	Nombres               string   `json:"nombres"`
+	Apellidos             string   `json:"apellidos"`
+	Grado                 int      `json:"grado"`
+	Telefono              *string  `json:"telefono"`
+	Direccion             *string  `json:"direccion"`
+	Barrio                *string  `json:"barrio"`
+	NombreAcudiente       *string  `json:"nombre_acudiente"`
+	TelefonoAcudiente     *string  `json:"telefono_acudiente"`
+	Programa              *string  `json:"programa"`
+	FechaInicio           *string  `json:"fecha_inicio"`
+	FechaMatricula        *string  `json:"fecha_matricula"`
+	ValorMatricula        *float64 `json:"valor_matricula"`
+	MatriculaCancelada    bool     `json:"matricula_cancelada"`
+	ValorApoyoSemanal     float64  `json:"valor_apoyo_semanal"`
+	HuellaIndiceDerecho   *string  `json:"huella_indice_derecho"`
+	HuellaIndiceIzquierdo *string  `json:"huella_indice_izquierdo"`
 }
 
 type attendanceIdentifyRequest struct {
@@ -74,12 +77,12 @@ type attendanceIdentifyRequest struct {
 }
 
 type studentRecord struct {
-	NumeroIdentificacion string  `json:"numero_identificacion"`
-	Nombres              string  `json:"nombres"`
-	Apellidos            string  `json:"apellidos"`
-	HuellaIndiceDerecho  *string `json:"huella_indice_derecho,omitempty"`
+	NumeroIdentificacion  string  `json:"numero_identificacion"`
+	Nombres               string  `json:"nombres"`
+	Apellidos             string  `json:"apellidos"`
+	HuellaIndiceDerecho   *string `json:"huella_indice_derecho,omitempty"`
 	HuellaIndiceIzquierdo *string `json:"huella_indice_izquierdo,omitempty"`
-	CreatedAt            string  `json:"created_at,omitempty"`
+	CreatedAt             string  `json:"created_at,omitempty"`
 }
 
 type enrollmentRow struct {
@@ -117,9 +120,10 @@ func main() {
 	}
 
 	api := &app{
-		supabaseURL: strings.TrimSuffix(supabaseURL, "/"),
-		serviceKey:  serviceKey,
-		threshold:   threshold,
+		supabaseURL:       strings.TrimSuffix(supabaseURL, "/"),
+		serviceKey:        serviceKey,
+		frontendHealthURL: strings.TrimSpace(os.Getenv("FRONTEND_HEALTH_URL")),
+		threshold:         threshold,
 		httpClient: &http.Client{
 			Timeout: 25 * time.Second,
 		},
@@ -127,8 +131,56 @@ func main() {
 	}
 
 	router := gin.Default()
-	router.Use(corsMiddleware(strings.TrimSpace(os.Getenv("FRONTEND_ORIGIN"))))
+	if err := router.SetTrustedProxies(nil); err != nil {
+		log.Fatalf("failed to configure trusted proxies: %v", err)
+	}
+	frontendOrigin := strings.TrimSpace(os.Getenv("FRONTEND_ORIGIN"))
+	backendAccessKey := strings.TrimSpace(os.Getenv("BIOMETRIC_BACKEND_ACCESS_KEY"))
+	router.Use(corsMiddleware(frontendOrigin))
+	router.Use(frontendOnlyMiddleware(frontendOrigin, backendAccessKey))
 
+	router.GET("/health", func(c *gin.Context) {
+		backendStatus := "ok"
+		frontendStatus, frontendDetail := api.checkFrontendHealth(c.Request.Context())
+		overallStatus := "ok"
+		if frontendStatus != "ok" {
+			overallStatus = "degraded"
+		}
+
+		c.Header("X-Health-Backend", backendStatus)
+		c.Header("X-Health-Frontend", frontendStatus)
+		c.Header("X-Health-Frontend-Detail", frontendDetail)
+		c.Header("X-Health-Overall", overallStatus)
+		statusCode := http.StatusOK
+		if overallStatus != "ok" {
+			statusCode = http.StatusServiceUnavailable
+		}
+
+		c.JSON(statusCode, gin.H{
+			"backend":         backendStatus,
+			"frontend":        frontendStatus,
+			"frontend_detail": frontendDetail,
+			"overall":         overallStatus,
+		})
+	})
+	router.HEAD("/health", func(c *gin.Context) {
+		backendStatus := "ok"
+		frontendStatus, frontendDetail := api.checkFrontendHealth(c.Request.Context())
+		overallStatus := "ok"
+		if frontendStatus != "ok" {
+			overallStatus = "degraded"
+		}
+
+		c.Header("X-Health-Backend", backendStatus)
+		c.Header("X-Health-Frontend", frontendStatus)
+		c.Header("X-Health-Frontend-Detail", frontendDetail)
+		c.Header("X-Health-Overall", overallStatus)
+		if overallStatus == "ok" {
+			c.Status(http.StatusOK)
+			return
+		}
+		c.Status(http.StatusServiceUnavailable)
+	})
 	router.GET("/api/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"ok": true, "threshold": api.threshold})
 	})
@@ -157,11 +209,27 @@ func (a *app) enrollStudent(c *gin.Context) {
 	}
 
 	req.NumeroIdentificacion = strings.TrimSpace(req.NumeroIdentificacion)
+	req.TipoIdentificacion = strings.TrimSpace(req.TipoIdentificacion)
 	req.Nombres = strings.TrimSpace(req.Nombres)
 	req.Apellidos = strings.TrimSpace(req.Apellidos)
 
-	if req.NumeroIdentificacion == "" || req.Nombres == "" || req.Apellidos == "" || req.Grado < 1 || req.Grado > 11 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "numero_identificacion, nombres, apellidos y grado validos son requeridos"})
+	validIdentificationTypes := map[string]struct{}{
+		"CC":        {},
+		"TI":        {},
+		"CE":        {},
+		"RCN":       {},
+		"PASAPORTE": {},
+		"PAS":       {},
+		"PPT":       {},
+	}
+
+	if req.TipoIdentificacion == "" || req.NumeroIdentificacion == "" || req.Nombres == "" || req.Apellidos == "" || req.Grado < 1 || req.Grado > 11 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "tipo_identificacion, numero_identificacion, nombres, apellidos y grado validos son requeridos"})
+		return
+	}
+
+	if _, ok := validIdentificationTypes[req.TipoIdentificacion]; !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "tipo_identificacion no valido"})
 		return
 	}
 
@@ -183,6 +251,7 @@ func (a *app) enrollStudent(c *gin.Context) {
 	}
 
 	payload := map[string]any{
+		"tipo_identificacion":     req.TipoIdentificacion,
 		"numero_identificacion":   req.NumeroIdentificacion,
 		"no_matricula":            normalizeOptional(req.NoMatricula),
 		"nombres":                 req.Nombres,
@@ -206,7 +275,7 @@ func (a *app) enrollStudent(c *gin.Context) {
 	rows, status, err := a.insertStudent(c.Request.Context(), payload)
 	if err != nil {
 		if status == http.StatusConflict {
-			c.JSON(http.StatusConflict, gin.H{"error": "Ya existe un estudiante con ese numero_identificacion o no_matricula"})
+			c.JSON(http.StatusConflict, gin.H{"error": "Error: En la base datos ya existe un usuario con el mismo número de identificación."})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -488,7 +557,7 @@ func corsMiddleware(originList string) gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 		origin := c.GetHeader("Origin")
-		if c.Request.URL.Path == "/api/health" {
+		if c.Request.URL.Path == "/api/health" || c.Request.URL.Path == "/health" {
 			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		} else {
 			originAllowed := len(allowed) == 0 || allowed[origin] || (allowAnyLoopbackOrigin && isLoopbackOrigin(origin))
@@ -498,8 +567,8 @@ func corsMiddleware(originList string) gin.HandlerFunc {
 			}
 		}
 
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, apikey")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, apikey, X-Backend-Access-Key, X-Frontend-Origin")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, POST, OPTIONS")
 
 		if c.Request.Method == http.MethodOptions {
 			c.AbortWithStatus(http.StatusNoContent)
@@ -507,6 +576,91 @@ func corsMiddleware(originList string) gin.HandlerFunc {
 		}
 
 		c.Next()
+	}
+}
+
+func frontendOnlyMiddleware(originList string, sharedKey string) gin.HandlerFunc {
+	allowed := map[string]bool{}
+	allowAnyLoopbackOrigin := false
+
+	for _, origin := range strings.Split(originList, ",") {
+		origin = strings.TrimSpace(origin)
+		if origin == "" {
+			continue
+		}
+
+		allowed[origin] = true
+		if strings.Contains(origin, "localhost") {
+			allowed[strings.Replace(origin, "localhost", "127.0.0.1", 1)] = true
+			allowAnyLoopbackOrigin = true
+		}
+		if strings.Contains(origin, "127.0.0.1") {
+			allowed[strings.Replace(origin, "127.0.0.1", "localhost", 1)] = true
+			allowAnyLoopbackOrigin = true
+		}
+	}
+
+	isLoopbackOrigin := func(origin string) bool {
+		u, err := url.Parse(origin)
+		if err != nil {
+			return false
+		}
+		host := strings.Split(u.Host, ":")[0]
+		return host == "localhost" || host == "127.0.0.1"
+	}
+
+	isAllowedOrigin := func(origin string) bool {
+		if origin == "" {
+			return false
+		}
+		if len(allowed) == 0 {
+			return true
+		}
+		return allowed[origin] || (allowAnyLoopbackOrigin && isLoopbackOrigin(origin))
+	}
+
+	originFromReferer := func(referer string) string {
+		u, err := url.Parse(strings.TrimSpace(referer))
+		if err != nil || u.Scheme == "" || u.Host == "" {
+			return ""
+		}
+		return u.Scheme + "://" + u.Host
+	}
+
+	return func(c *gin.Context) {
+		path := c.Request.URL.Path
+		if path == "/health" || path == "/api/health" || !strings.HasPrefix(path, "/api/") {
+			c.Next()
+			return
+		}
+
+		providedKey := strings.TrimSpace(c.GetHeader("X-Backend-Access-Key"))
+		if sharedKey != "" && providedKey != "" && subtle.ConstantTimeCompare([]byte(providedKey), []byte(sharedKey)) == 1 {
+			c.Next()
+			return
+		}
+
+		origin := strings.TrimSpace(c.GetHeader("Origin"))
+		if isAllowedOrigin(origin) {
+			c.Next()
+			return
+		}
+
+		forwardedOrigin := strings.TrimSpace(c.GetHeader("X-Frontend-Origin"))
+		if isAllowedOrigin(forwardedOrigin) {
+			c.Next()
+			return
+		}
+
+		refererOrigin := originFromReferer(c.GetHeader("Referer"))
+		if isAllowedOrigin(refererOrigin) {
+			c.Next()
+			return
+		}
+
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"error": "Forbidden: endpoint accesible solo desde el frontend autorizado",
+		})
 	}
 }
 
@@ -528,8 +682,8 @@ func (a *app) insertStudent(ctx context.Context, payload map[string]any) ([]stud
 }
 
 func (a *app) listEnrolledStudentsWithTemplates(ctx context.Context, idCurso int) ([]struct {
-	NumeroIdentificacion string
-	HuellaIndiceDerecho  *string
+	NumeroIdentificacion  string
+	HuellaIndiceDerecho   *string
 	HuellaIndiceIzquierdo *string
 }, error) {
 	query := url.Values{}
@@ -547,8 +701,8 @@ func (a *app) listEnrolledStudentsWithTemplates(ctx context.Context, idCurso int
 	}
 
 	templatesByStudent := make([]struct {
-		NumeroIdentificacion string
-		HuellaIndiceDerecho  *string
+		NumeroIdentificacion  string
+		HuellaIndiceDerecho   *string
 		HuellaIndiceIzquierdo *string
 	}, 0, len(rows))
 
@@ -559,12 +713,12 @@ func (a *app) listEnrolledStudentsWithTemplates(ctx context.Context, idCurso int
 		}
 
 		templatesByStudent = append(templatesByStudent, struct {
-			NumeroIdentificacion string
-			HuellaIndiceDerecho  *string
+			NumeroIdentificacion  string
+			HuellaIndiceDerecho   *string
 			HuellaIndiceIzquierdo *string
 		}{
-			NumeroIdentificacion: row.NumeroIdentificacion,
-			HuellaIndiceDerecho:  student.HuellaIndiceDerecho,
+			NumeroIdentificacion:  row.NumeroIdentificacion,
+			HuellaIndiceDerecho:   student.HuellaIndiceDerecho,
 			HuellaIndiceIzquierdo: student.HuellaIndiceIzquierdo,
 		})
 	}
@@ -645,4 +799,32 @@ func (a *app) callSupabase(ctx context.Context, method, path string, query url.V
 	}
 
 	return nil, resp.StatusCode, fmt.Errorf("supabase request failed with status %d", resp.StatusCode)
+}
+
+func (a *app) checkFrontendHealth(ctx context.Context) (string, string) {
+	base := strings.TrimSpace(a.frontendHealthURL)
+	if base == "" {
+		return "unknown", "FRONTEND_HEALTH_URL not configured"
+	}
+
+	requestURL := strings.TrimSuffix(base, "/") + "/health?scope=frontend"
+	checkCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(checkCtx, http.MethodHead, requestURL, nil)
+	if err != nil {
+		return "down", "invalid FRONTEND_HEALTH_URL"
+	}
+
+	resp, err := a.httpClient.Do(req)
+	if err != nil {
+		return "down", "unreachable"
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return "ok", fmt.Sprintf("status:%d", resp.StatusCode)
+	}
+
+	return "down", fmt.Sprintf("status:%d", resp.StatusCode)
 }

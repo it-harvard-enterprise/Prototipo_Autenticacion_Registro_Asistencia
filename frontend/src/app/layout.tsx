@@ -15,8 +15,31 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SysAsistencia",
+  title: "SysAsistencia - HE",
   description: "Sistema de autenticación y registro de asistencia",
+  icons: {
+    icon: [
+      { url: "/fav_icons/favicon.ico" },
+      {
+        url: "/fav_icons/favicon-16x16.png",
+        sizes: "16x16",
+        type: "image/png",
+      },
+      {
+        url: "/fav_icons/favicon-32x32.png",
+        sizes: "32x32",
+        type: "image/png",
+      },
+    ],
+    apple: [
+      {
+        url: "/fav_icons/apple-touch-icon.png",
+        sizes: "180x180",
+        type: "image/png",
+      },
+    ],
+  },
+  manifest: "/fav_icons/site.webmanifest",
 };
 
 export default function RootLayout({

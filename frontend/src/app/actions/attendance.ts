@@ -1,6 +1,11 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { ensureApprovedAdmin } from "@/lib/auth/approved-admin";
+import {
+  biometricBackendConfigHint,
+  resolveBiometricBackendBaseUrl,
+} from "@/lib/biometric-backend";
 
 type Saldo = "cancelado" | "debe" | null;
 type MetodoPago =
@@ -36,6 +41,7 @@ export interface AttendanceExportRow {
   id: number;
   id_curso: number;
   nombre_curso: string;
+  tipo_identificacion: string | null;
   numero_identificacion: string;
   nombres: string;
   apellidos: string;
@@ -75,27 +81,48 @@ export async function identifyStudentByFingerprintForAttendance(params: {
   idCurso: number;
   fingerprintTemplate: string;
 }): Promise<FingerprintAttendanceMatch> {
-  const backendUrl = process.env.BIOMETRIC_BACKEND_URL?.trim();
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return {
+      success: false,
+      matched: false,
+      error: approval.error,
+    };
+  }
+
+  const backendUrl = resolveBiometricBackendBaseUrl();
 
   if (!backendUrl) {
     return {
       success: false,
       matched: false,
-      error: "No se ha configurado BIOMETRIC_BACKEND_URL para validar huellas",
+      error: `No se ha configurado la URL del backend biometrico. ${biometricBackendConfigHint()}`,
     };
   }
+
+  const backendAccessKey = process.env.BIOMETRIC_BACKEND_ACCESS_KEY?.trim();
+  const frontendOrigin =
+    process.env.FRONTEND_ORIGIN?.split(",")[0]?.trim() ||
+    "http://localhost:3000";
 
   try {
     const response = await fetch(`${backendUrl}/api/attendance/identify`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "X-Frontend-Origin": frontendOrigin,
+        ...(backendAccessKey
+          ? {
+              "X-Backend-Access-Key": backendAccessKey,
+            }
+          : {}),
       },
       body: JSON.stringify({
         id_curso: params.idCurso,
         fingerprint_template: params.fingerprintTemplate,
       }),
       cache: "no-store",
+      signal: AbortSignal.timeout(15000),
     });
 
     if (!response.ok) {
@@ -138,7 +165,7 @@ export async function identifyStudentByFingerprintForAttendance(params: {
     return {
       success: false,
       matched: false,
-      error: "No fue posible conectar con el backend biometrico configurado",
+      error: `No fue posible conectar con el backend biometrico configurado (${backendUrl})`,
     };
   }
 }
@@ -148,6 +175,11 @@ export async function getCourseOptions(): Promise<{
   error?: string;
   data?: CourseOption[];
 }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -170,6 +202,11 @@ export async function getAttendanceRosterByCourseAndDate(
   error?: string;
   data?: AttendanceStudentRow[];
 }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
   const supabase = await createClient();
 
   const { startIso, endIso } = getUtcDayBounds(date);
@@ -245,36 +282,57 @@ export async function saveAttendanceForCourseAndDate(params: {
   date: string;
   rows: AttendanceSaveRow[];
 }): Promise<{ success: boolean; error?: string; savedCount?: number }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
   const supabase = await createClient();
 
   const normalizedRows = params.rows
-    .map((row) => ({
-      numero_identificacion: row.numero_identificacion.trim(),
-      asistio: row.asistio,
-      saldo: row.asistio ? row.saldo : null,
-      metodo_pago:
-        row.asistio && row.saldo === "cancelado" ? row.metodo_pago : null,
-    }))
+    .map((row) => {
+      const numero_identificacion = row.numero_identificacion.trim();
+
+      if (!row.asistio) {
+        return {
+          numero_identificacion,
+          asistio: false,
+          saldo: null as Saldo,
+          metodo_pago: null as MetodoPago,
+        };
+      }
+
+      // For autosave, keep DB-valid intermediate states while the user completes fields.
+      if (row.saldo === "debe") {
+        return {
+          numero_identificacion,
+          asistio: true,
+          saldo: "debe" as Saldo,
+          metodo_pago: null as MetodoPago,
+        };
+      }
+
+      if (row.saldo === "cancelado" && row.metodo_pago) {
+        return {
+          numero_identificacion,
+          asistio: true,
+          saldo: "cancelado" as Saldo,
+          metodo_pago: row.metodo_pago,
+        };
+      }
+
+      // If saldo is still incomplete (or cancelado without metodo), persist as pending.
+      return {
+        numero_identificacion,
+        asistio: true,
+        saldo: null as Saldo,
+        metodo_pago: null as MetodoPago,
+      };
+    })
     .filter((row) => row.numero_identificacion);
 
   if (normalizedRows.length === 0) {
     return { success: false, error: "No hay estudiantes para registrar" };
-  }
-
-  for (const row of normalizedRows) {
-    if (!row.asistio) continue;
-    if (!row.saldo) {
-      return {
-        success: false,
-        error: `Debe seleccionar saldo para ${row.numero_identificacion}`,
-      };
-    }
-    if (row.saldo === "cancelado" && !row.metodo_pago) {
-      return {
-        success: false,
-        error: `Debe seleccionar metodo de pago para ${row.numero_identificacion}`,
-      };
-    }
   }
 
   const { startIso, endIso } = getUtcDayBounds(params.date);
@@ -355,13 +413,18 @@ export async function getAttendanceExportByCourseAndDate(
   error?: string;
   data?: AttendanceExportRow[];
 }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
   const supabase = await createClient();
   const { startIso, endIso } = getUtcDayBounds(date);
 
   const { data, error } = await supabase
     .from("registro_asistencia")
     .select(
-      "id, id_curso, numero_identificacion, fecha, asistio, saldo, metodo_pago, estudiantes(nombres, apellidos), cursos(nombre_curso)",
+      "id, id_curso, numero_identificacion, fecha, asistio, saldo, metodo_pago, estudiantes(tipo_identificacion, nombres, apellidos), cursos(nombre_curso)",
     )
     .eq("id_curso", idCurso)
     .gte("fecha", startIso)
@@ -382,6 +445,7 @@ export async function getAttendanceExportByCourseAndDate(
       id: row.id,
       id_curso: row.id_curso,
       nombre_curso: course?.nombre_curso ?? "",
+      tipo_identificacion: student?.tipo_identificacion ?? null,
       numero_identificacion: row.numero_identificacion,
       nombres: student?.nombres ?? "",
       apellidos: student?.apellidos ?? "",

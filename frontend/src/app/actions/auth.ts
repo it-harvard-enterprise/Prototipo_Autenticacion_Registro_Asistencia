@@ -44,11 +44,11 @@ export async function signUp(
   }
 
   if (data.user) {
-    await supabase.from("profiles").upsert({
+    await supabase.from("administrador").upsert({
       id: data.user.id,
-      first_name: firstName,
-      last_name: lastName,
-      email,
+      nombres: firstName,
+      apellidos: lastName,
+      aprobado: false,
     });
   }
 

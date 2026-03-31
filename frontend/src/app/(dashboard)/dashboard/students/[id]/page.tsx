@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Pencil, Fingerprint } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { IDENTIFICATION_TYPE_OPTIONS } from "@/lib/identification-types";
 import { Student } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,6 +48,30 @@ export default async function StudentDetailPage({
     });
   };
 
+  const formatCurrency = (value?: number | null) => {
+    if (value === null || value === undefined) return "N/A";
+    return new Intl.NumberFormat("es-CO", {
+      style: "currency",
+      currency: "COP",
+      minimumFractionDigits: 2,
+    }).format(value);
+  };
+
+  const identificationTypeLabel =
+    IDENTIFICATION_TYPE_OPTIONS.find(
+      (option) => option.value === s.tipo_identificacion,
+    )?.label ??
+    s.tipo_identificacion ??
+    "N/A";
+
+  const renderValue = (value?: string | null) => {
+    if (!value || value.trim() === "") {
+      return <span className="text-gray-400 italic">N/A</span>;
+    }
+
+    return value;
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -71,12 +96,20 @@ export default async function StudentDetailPage({
         </Button>
       </div>
 
-      <Card className="max-w-2xl mx-auto">
+      <Card className="max-w-4xl mx-auto">
         <CardHeader>
-          <CardTitle className="text-lg">Información Personal</CardTitle>
+          <CardTitle className="text-lg">Información del Estudiante</CardTitle>
         </CardHeader>
         <CardContent>
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-4">
+          <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+            <div>
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Tipo de identificación
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900">
+                {identificationTypeLabel}
+              </dd>
+            </div>
             <div>
               <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Identificación
@@ -90,14 +123,8 @@ export default async function StudentDetailPage({
                 No. matrícula
               </dt>
               <dd className="mt-1 text-sm font-mono text-gray-900">
-                {s.no_matricula ?? "N/A"}
+                {renderValue(s.no_matricula)}
               </dd>
-            </div>
-            <div>
-              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Grado
-              </dt>
-              <dd className="mt-1 text-sm text-gray-900">{s.grado}</dd>
             </div>
             <div>
               <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -111,11 +138,105 @@ export default async function StudentDetailPage({
               </dt>
               <dd className="mt-1 text-sm text-gray-900">{s.apellidos}</dd>
             </div>
+            <div>
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Grado
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900">{s.grado}</dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Teléfono
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900">
+                {renderValue(s.telefono)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Dirección
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900">
+                {renderValue(s.direccion)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Barrio
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900">
+                {renderValue(s.barrio)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Programa
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900">
+                {renderValue(s.programa)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Nombre del acudiente
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900">
+                {renderValue(s.nombre_acudiente)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Teléfono del acudiente
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900">
+                {renderValue(s.telefono_acudiente)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Fecha de inicio
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900">
+                {formatDate(s.fecha_inicio)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Fecha de matrícula
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900">
+                {formatDate(s.fecha_matricula)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Valor matrícula
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900">
+                {formatCurrency(s.valor_matricula)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Matrícula cancelada
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900">
+                {s.matricula_cancelada ? "Sí" : "No"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Valor apoyo semanal
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900">
+                {formatCurrency(s.valor_apoyo_semanal)}
+              </dd>
+            </div>
           </dl>
         </CardContent>
       </Card>
 
-      <Card className="max-w-2xl mx-auto">
+      <Card className="max-w-4xl mx-auto">
         <CardHeader>
           <CardTitle className="text-lg">Huellas Dactilares</CardTitle>
           <CardDescription>
@@ -163,7 +284,7 @@ export default async function StudentDetailPage({
         </CardContent>
       </Card>
 
-      <Card className="bg-gray-50 max-w-2xl mx-auto">
+      <Card className="bg-gray-50 max-w-4xl mx-auto">
         <CardContent className="pt-4">
           <dl className="grid grid-cols-2 gap-x-6 gap-y-2">
             <div>

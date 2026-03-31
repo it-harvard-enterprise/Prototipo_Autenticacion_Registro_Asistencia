@@ -86,11 +86,11 @@ export default function RegisterPage() {
     }
 
     if (data.user) {
-      await supabase.from("profiles").upsert({
+      await supabase.from("administrador").upsert({
         id: data.user.id,
-        first_name: values.firstName,
-        last_name: values.lastName,
-        email: values.email,
+        nombres: values.firstName,
+        apellidos: values.lastName,
+        aprobado: false,
       });
 
       // If user is immediately logged in (email confirmation disabled)
@@ -110,7 +110,7 @@ export default function RegisterPage() {
 
   return (
     <Card className="shadow-md p-2">
-      <CardHeader className="space-y-2">
+      <CardHeader className="space-y-2 pt-6">
         <CardTitle className="text-3xl font-semibold">Crear cuenta</CardTitle>
         <CardDescription className="text-base">
           Complete el formulario para registrarse en el sistema

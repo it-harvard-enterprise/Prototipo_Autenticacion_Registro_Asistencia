@@ -76,7 +76,7 @@ export default function LoginPage() {
 
   return (
     <Card className="shadow-md p-2">
-      <CardHeader className="space-y-2">
+      <CardHeader className="space-y-2 pt-6">
         <CardTitle className="text-3xl font-semibold">Iniciar sesión</CardTitle>
         <CardDescription className="text-base">
           Ingrese sus credenciales para acceder al sistema
@@ -152,7 +152,7 @@ export default function LoginPage() {
       </CardContent>
       <CardFooter className="flex justify-center">
         <p className="text-base text-gray-600">
-          ¿No tiene cuenta?{" "}
+          ¿No tiene cuenta de administrador?{" "}
           <Link
             href="/register"
             className="font-medium text-gray-900 hover:underline"

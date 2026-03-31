@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { ensureApprovedAdmin } from "@/lib/auth/approved-admin";
 import { Course } from "@/lib/types";
 
 export interface CourseFormData {
@@ -16,6 +17,11 @@ export interface CourseFormData {
 export async function createCourse(
   data: CourseFormData,
 ): Promise<{ success: boolean; error?: string; data?: Course }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
   const supabase = await createClient();
 
   const { data: course, error } = await supabase
@@ -43,6 +49,11 @@ export async function updateCourse(
   idCurso: number,
   data: Partial<CourseFormData>,
 ): Promise<{ success: boolean; error?: string; data?: Course }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
   const supabase = await createClient();
 
   const { data: course, error } = await supabase
@@ -54,11 +65,12 @@ export async function updateCourse(
       ...(data.nivel_curso !== undefined && { nivel_curso: data.nivel_curso }),
       ...(data.hora_inicio !== undefined && { hora_inicio: data.hora_inicio }),
       ...(data.hora_fin !== undefined && { hora_fin: data.hora_fin }),
-      ...(data.salon !== undefined && { salon: data.salon }),
+      ...(data.salon !== undefined && { salon: data.salon ?? null }),
       ...(data.fecha_inicio !== undefined && {
         fecha_inicio: data.fecha_inicio,
       }),
       ...(data.fecha_fin !== undefined && { fecha_fin: data.fecha_fin }),
+      updated_at: new Date().toISOString(),
     })
     .eq("id_curso", idCurso)
     .select()
@@ -74,6 +86,11 @@ export async function updateCourse(
 export async function deleteCourse(
   idCurso: number,
 ): Promise<{ success: boolean; error?: string }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
   const supabase = await createClient();
 
   const { error } = await supabase
@@ -91,6 +108,11 @@ export async function deleteCourse(
 export async function getCourseById(
   idCurso: number,
 ): Promise<{ success: boolean; error?: string; data?: Course }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
   const supabase = await createClient();
 
   const { data: course, error } = await supabase
@@ -110,6 +132,11 @@ export async function associateStudentsToCourse(
   idCurso: number,
   studentIds: string[],
 ): Promise<{ success: boolean; error?: string; insertedCount?: number }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
   const supabase = await createClient();
 
   const normalizedIds = Array.from(
@@ -175,4 +202,110 @@ export async function associateStudentsToCourse(
   }
 
   return { success: true, insertedCount: payload.length };
+}
+
+export async function dissociateStudentsFromCourse(
+  idCurso: number,
+  studentIds: string[],
+): Promise<{ success: boolean; error?: string; removedCount?: number }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
+  const supabase = await createClient();
+
+  const normalizedIds = Array.from(
+    new Set(studentIds.map((id) => id.trim()).filter(Boolean)),
+  );
+
+  if (normalizedIds.length === 0) {
+    return {
+      success: false,
+      error: "Debe ingresar al menos un numero_identificacion",
+    };
+  }
+
+  const { data: existingRows, error: existingError } = await supabase
+    .from("cursos_x_estudiantes")
+    .select("numero_identificacion")
+    .eq("id_curso", idCurso)
+    .in("numero_identificacion", normalizedIds);
+
+  if (existingError) {
+    return { success: false, error: existingError.message };
+  }
+
+  const existingSet = new Set(
+    (existingRows ?? []).map((row) => row.numero_identificacion),
+  );
+  const missingIds = normalizedIds.filter((id) => !existingSet.has(id));
+
+  if (missingIds.length > 0) {
+    return {
+      success: false,
+      error:
+        "No existe vinculo para estos estudiantes en el curso: " +
+        missingIds.join(", "),
+    };
+  }
+
+  const { error: deleteError } = await supabase
+    .from("cursos_x_estudiantes")
+    .delete()
+    .eq("id_curso", idCurso)
+    .in("numero_identificacion", normalizedIds);
+
+  if (deleteError) {
+    return { success: false, error: deleteError.message };
+  }
+
+  return { success: true, removedCount: normalizedIds.length };
+}
+
+type LinkedStudentRow = {
+  numero_identificacion: string;
+  nombres: string;
+  apellidos: string;
+  no_matricula: string | null;
+  grado: number;
+  tipo_identificacion: string | null;
+};
+
+export async function getStudentsByCourseId(
+  idCurso: number,
+): Promise<{ success: boolean; error?: string; data?: LinkedStudentRow[] }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("cursos_x_estudiantes")
+    .select(
+      "numero_identificacion, estudiantes (numero_identificacion, nombres, apellidos, no_matricula, grado, tipo_identificacion)",
+    )
+    .eq("id_curso", idCurso);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  const normalizedData = (
+    (data ?? []) as Array<{
+      estudiantes: LinkedStudentRow | LinkedStudentRow[] | null;
+    }>
+  )
+    .map((row) => {
+      if (Array.isArray(row.estudiantes)) {
+        return row.estudiantes[0] ?? null;
+      }
+      return row.estudiantes;
+    })
+    .filter((student): student is LinkedStudentRow => Boolean(student))
+    .sort((a, b) => a.apellidos.localeCompare(b.apellidos));
+
+  return { success: true, data: normalizedData };
 }
