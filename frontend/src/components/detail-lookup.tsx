@@ -35,8 +35,8 @@ export function DetailLookup({ type }: DetailLookupProps) {
 
   const label =
     type === "course"
-      ? "Ver detalle por ID del curso"
-      : "Ver detalle por número de identificación";
+      ? "Buscar curso por ID del curso"
+      : "Buscar estudiante por número de identificación";
 
   const navigate = async () => {
     if (!isValid) return;

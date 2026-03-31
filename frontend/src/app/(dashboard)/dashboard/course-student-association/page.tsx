@@ -308,10 +308,10 @@ export default function CourseStudentAssociationPage() {
                     <CardTitle className="text-lg">
                       Estudiantes del curso
                     </CardTitle>
-                    <CardDescription>
+                    {/* <CardDescription>
                       Puede desvincular estudiantes individualmente desde esta
                       lista.
-                    </CardDescription>
+                    </CardDescription> */}
                   </CardHeader>
                   <CardContent>
                     {isLoadingLinkedStudents ? (

@@ -10,9 +10,9 @@ import { toast } from "sonner";
 import {
   getAttendanceRosterByCourseAndDate,
   getCourseOptions,
-  identifyStudentByFingerprintForAttendance,
   saveAttendanceForCourseAndDate,
   type AttendanceStudentRow,
+  type FingerprintAttendanceMatch,
   type CourseOption,
 } from "@/app/actions/attendance";
 import { useDigitalPersonaFingerprintReader } from "@/lib/biometrics/digitalpersona";
@@ -231,10 +231,19 @@ export default function AttendancePage() {
       return;
     }
 
-    const result = await identifyStudentByFingerprintForAttendance({
-      idCurso,
-      fingerprintTemplate: template,
+    const identifyResponse = await fetch("/api/attendance/identify", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        idCurso,
+        fingerprintTemplate: template,
+      }),
     });
+
+    const result =
+      (await identifyResponse.json()) as FingerprintAttendanceMatch;
 
     if (!result.success) {
       toast.error(result.error ?? "No fue posible validar la huella");
@@ -474,8 +483,9 @@ export default function AttendancePage() {
                     Asistencia por huella
                   </CardTitle>
                   <CardDescription>
-                    Captura en vivo con DigitalPersona U.are.U 4500 para
-                    autenticacion biometrica y marcado automatico de asistencia.
+                    Captura de huellas digitales con el sensor DigitalPersona
+                    U.are.U 4500 para autenticacion biometrica y marcado
+                    automatico de asistencia.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -500,14 +510,14 @@ export default function AttendancePage() {
                         {captureStatus}
                       </p>
                     </div>
-                    <div className="rounded-md border p-3 bg-white">
+                    {/* <div className="rounded-md border p-3 bg-white">
                       <p className="text-[11px] uppercase tracking-wide text-gray-500">
                         Calidad
                       </p>
                       <p className="text-sm mt-1 text-gray-700">
                         {typeof lastQuality === "number" ? lastQuality : "N/A"}
                       </p>
-                    </div>
+                    </div> */}
                   </div>
 
                   <Button
@@ -544,9 +554,9 @@ export default function AttendancePage() {
                   <TableHeader>
                     <TableRow className="bg-gray-50">
                       <TableHead>Estudiante</TableHead>
-                      <TableHead>Asistio</TableHead>
+                      <TableHead>Asistencia</TableHead>
                       <TableHead>Saldo</TableHead>
-                      <TableHead>Metodo de pago</TableHead>
+                      <TableHead>Método de pago</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>

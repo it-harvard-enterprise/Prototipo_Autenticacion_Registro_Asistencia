@@ -96,11 +96,22 @@ export async function identifyStudentByFingerprintForAttendance(params: {
     };
   }
 
+  const backendAccessKey = process.env.BIOMETRIC_BACKEND_ACCESS_KEY?.trim();
+  const frontendOrigin =
+    process.env.FRONTEND_ORIGIN?.split(",")[0]?.trim() ||
+    "http://localhost:3000";
+
   try {
     const response = await fetch(`${backendUrl}/api/attendance/identify`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "X-Frontend-Origin": frontendOrigin,
+        ...(backendAccessKey
+          ? {
+              "X-Backend-Access-Key": backendAccessKey,
+            }
+          : {}),
       },
       body: JSON.stringify({
         id_curso: params.idCurso,

@@ -61,7 +61,7 @@ export default async function DashboardPage() {
         </h1>
         <p className="text-gray-500 mt-1">
           Resumen general del sistema. Utilizando esta herramienta podrá
-          gestionar estudiantes, cursos, asociar estudiantes a uno o muchos
+          gestionar estudiantes, cursos, asociar estudiantes a uno (o muchos)
           cursos, y realizar registros de asistencia utilizando huellas. Además,
           podrá exportar la lista de asistencia a Excel para su análisis y
           seguimiento.
