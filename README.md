@@ -2,6 +2,32 @@
 
 Repository to host the source code associated with an in-house development of a solution to authenticate and track the attendance of students of a language school.
 
+## Deploy frontend on Vercel
+
+This repository contains backend and frontend code. To avoid a 404 deployment on Vercel, the project must build from the frontend directory.
+
+### Vercel setup
+
+1. Import the repository in Vercel (or open Project Settings if already imported).
+2. In **General > Root Directory**, set `frontend`.
+3. Confirm **Framework Preset** is `Next.js`.
+4. Keep default commands unless you have custom needs:
+   - Install Command: `npm ci`
+   - Build Command: `npm run build`
+5. Set all required environment variables (see list below) in **Project Settings > Environment Variables**.
+6. Redeploy after saving settings.
+
+### Required frontend environment variables (Vercel)
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `BIOMETRIC_BACKEND_URL` (public backend base URL, for example: `https://your-backend.onrender.com`)
+- `FRONTEND_ORIGIN` (your Vercel frontend URL, for example: `https://your-project.vercel.app`)
+- `BIOMETRIC_BACKEND_ACCESS_KEY` (optional, only if backend key mode is enabled)
+
+For Vercel, keep `BIOMETRIC_BACKEND_INTERNAL_URL` empty unless you intentionally route to a private internal network.
+
 ## Deploy frontend on Render (Docker)
 
 The frontend includes a production-safe Docker image at `frontend/Dockerfile`.
