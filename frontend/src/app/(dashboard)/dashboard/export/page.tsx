@@ -58,6 +58,11 @@ function toExcelIdentificationValue(value: string): string | number {
   return trimmed;
 }
 
+function toDisplayLabel(value: string | null): string {
+  if (!value) return "";
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
 export default function ExportPage() {
   const [courses, setCourses] = useState<CourseOption[]>([]);
   const [rows, setRows] = useState<AttendanceExportRow[]>([]);
@@ -167,8 +172,8 @@ export default function ExportPage() {
           apellidos: row.apellidos,
           fecha: toLocalDate(row.fecha),
           asistio: row.asistio ? "Sí" : "No",
-          saldo: row.saldo ?? "",
-          metodo_pago: row.metodo_pago ?? "",
+          saldo: toDisplayLabel(row.saldo),
+          metodo_pago: toDisplayLabel(row.metodo_pago),
         });
       }
 
@@ -346,8 +351,10 @@ export default function ExportPage() {
                         </p>
                       </TableCell>
                       <TableCell>{row.asistio ? "Sí" : "No"}</TableCell>
-                      <TableCell>{row.saldo ?? "-"}</TableCell>
-                      <TableCell>{row.metodo_pago ?? "-"}</TableCell>
+                      <TableCell>{toDisplayLabel(row.saldo) || "-"}</TableCell>
+                      <TableCell>
+                        {toDisplayLabel(row.metodo_pago) || "-"}
+                      </TableCell>
                       <TableCell>{toLocalDate(row.fecha)}</TableCell>
                     </TableRow>
                   ))

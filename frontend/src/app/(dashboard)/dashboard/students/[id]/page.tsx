@@ -178,6 +178,14 @@ export default async function StudentDetailPage({
             </div>
             <div>
               <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Coordinador académico
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900">
+                {renderValue(s.coordinador_academico)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Nombre del acudiente
               </dt>
               <dd className="mt-1 text-sm text-gray-900">
@@ -218,10 +226,13 @@ export default async function StudentDetailPage({
             </div>
             <div>
               <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Matrícula cancelada
+                Medio de pago matrícula
               </dt>
               <dd className="mt-1 text-sm text-gray-900">
-                {s.matricula_cancelada ? "Sí" : "No"}
+                {s.medio_pago_matricula
+                  ? s.medio_pago_matricula.charAt(0).toUpperCase() +
+                    s.medio_pago_matricula.slice(1)
+                  : "N/A"}
               </dd>
             </div>
             <div>

@@ -15,6 +15,11 @@ import {
   IDENTIFICATION_TYPE_OPTIONS,
   IDENTIFICATION_TYPE_VALUES,
 } from "@/lib/identification-types";
+import {
+  PAYMENT_METHOD_OPTIONS,
+  STUDENT_COORDINATOR_OPTIONS,
+  STUDENT_GRADE_OPTIONS,
+} from "@/lib/student-options";
 import { Student } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,31 +50,44 @@ const studentSchema = z.object({
   no_matricula: z.string().max(20).optional(),
   nombres: z.string().min(2, "Los nombres son requeridos").max(100),
   apellidos: z.string().min(2, "Los apellidos son requeridos").max(100),
-  grado: z
+  grado: z.enum(STUDENT_GRADE_OPTIONS, {
+    message: "Debe seleccionar un grado válido",
+  }),
+  telefono: z.string().min(1, "El teléfono es requerido").max(20),
+  direccion: z.string().min(1, "La dirección es requerida").max(200),
+  barrio: z.string().min(1, "El barrio es requerido").max(100),
+  nombre_acudiente: z
     .string()
-    .min(1, "El grado es requerido")
-    .refine(
-      (val) =>
-        Number.isInteger(Number(val)) && Number(val) >= 1 && Number(val) <= 11,
-      {
-        message: "El grado debe estar entre 1 y 11",
-      },
-    ),
-  telefono: z.string().max(20).optional(),
-  direccion: z.string().max(200).optional(),
-  barrio: z.string().max(100).optional(),
-  nombre_acudiente: z.string().max(200).optional(),
-  telefono_acudiente: z.string().max(20).optional(),
-  programa: z.string().max(100).optional(),
-  fecha_inicio: z.string().optional(),
-  fecha_matricula: z.string().optional(),
+    .min(1, "El nombre del acudiente es requerido")
+    .max(200),
+  telefono_acudiente: z
+    .string()
+    .min(1, "El teléfono del acudiente es requerido")
+    .max(20),
+  coordinador_academico: z.enum(STUDENT_COORDINATOR_OPTIONS, {
+    message: "Debe seleccionar un coordinador académico",
+  }),
+  programa: z.string().min(1, "El programa es requerido").max(100),
+  fecha_inicio: z.string().min(1, "La fecha de inicio es requerida"),
+  fecha_matricula: z.string().min(1, "La fecha de matrícula es requerida"),
   valor_matricula: z
     .string()
-    .optional()
-    .refine((val) => !val || (!Number.isNaN(Number(val)) && Number(val) >= 0), {
+    .min(1, "El valor de matrícula es requerido")
+    .refine((val) => !Number.isNaN(Number(val)) && Number(val) >= 0, {
       message: "El valor de matrícula debe ser mayor o igual a 0",
     }),
-  matricula_cancelada: z.boolean().optional(),
+  medio_pago_matricula: z.enum(
+    PAYMENT_METHOD_OPTIONS.map((item) => item.value) as [
+      "efectivo",
+      "transferencia",
+      "nequi",
+      "daviplata",
+      "otro",
+    ],
+    {
+      message: "Debe seleccionar el medio de pago de matrícula",
+    },
+  ),
   valor_apoyo_semanal: z
     .string()
     .min(1, "El valor de apoyo semanal es requerido")
@@ -93,22 +111,23 @@ export default function EditStudentPage() {
   const form = useForm<StudentFormValues>({
     resolver: zodResolver(studentSchema),
     defaultValues: {
-      tipo_identificacion: "CC",
+      tipo_identificacion: "TI",
       numero_identificacion: "",
       no_matricula: "",
       nombres: "",
       apellidos: "",
-      grado: "",
+      grado: "1",
       telefono: "",
       direccion: "",
       barrio: "",
       nombre_acudiente: "",
       telefono_acudiente: "",
+      coordinador_academico: "Nicol Delgado",
       programa: "",
       fecha_inicio: "",
       fecha_matricula: "",
       valor_matricula: "",
-      matricula_cancelada: false,
+      medio_pago_matricula: "efectivo",
       valor_apoyo_semanal: "",
     },
   });
@@ -134,7 +153,7 @@ export default function EditStudentPage() {
         s.tipo_identificacion as (typeof IDENTIFICATION_TYPE_VALUES)[number],
       )
         ? (s.tipo_identificacion as StudentFormValues["tipo_identificacion"])
-        : "CC";
+        : "TI";
 
       form.reset({
         tipo_identificacion: tipoIdentificacion,
@@ -142,18 +161,19 @@ export default function EditStudentPage() {
         no_matricula: s.no_matricula ?? "",
         nombres: s.nombres,
         apellidos: s.apellidos,
-        grado: String(s.grado),
-        telefono: s.telefono ?? "",
-        direccion: s.direccion ?? "",
-        barrio: s.barrio ?? "",
-        nombre_acudiente: s.nombre_acudiente ?? "",
-        telefono_acudiente: s.telefono_acudiente ?? "",
-        programa: s.programa ?? "",
-        fecha_inicio: s.fecha_inicio ?? "",
-        fecha_matricula: s.fecha_matricula ?? "",
-        valor_matricula:
-          s.valor_matricula !== null ? String(s.valor_matricula) : "",
-        matricula_cancelada: s.matricula_cancelada,
+        grado: s.grado as StudentFormValues["grado"],
+        telefono: s.telefono,
+        direccion: s.direccion,
+        barrio: s.barrio,
+        nombre_acudiente: s.nombre_acudiente,
+        telefono_acudiente: s.telefono_acudiente,
+        coordinador_academico:
+          s.coordinador_academico as StudentFormValues["coordinador_academico"],
+        programa: s.programa,
+        fecha_inicio: s.fecha_inicio,
+        fecha_matricula: s.fecha_matricula,
+        valor_matricula: String(s.valor_matricula),
+        medio_pago_matricula: s.medio_pago_matricula,
         valor_apoyo_semanal: String(s.valor_apoyo_semanal),
       });
       setIsFetching(false);
@@ -172,19 +192,18 @@ export default function EditStudentPage() {
         no_matricula: values.no_matricula || null,
         nombres: values.nombres,
         apellidos: values.apellidos,
-        grado: Number(values.grado),
-        telefono: values.telefono || null,
-        direccion: values.direccion || null,
-        barrio: values.barrio || null,
-        nombre_acudiente: values.nombre_acudiente || null,
-        telefono_acudiente: values.telefono_acudiente || null,
-        programa: values.programa || null,
-        fecha_inicio: values.fecha_inicio || null,
-        fecha_matricula: values.fecha_matricula || null,
-        valor_matricula: values.valor_matricula
-          ? Number(values.valor_matricula)
-          : null,
-        matricula_cancelada: values.matricula_cancelada ?? false,
+        grado: values.grado,
+        telefono: values.telefono,
+        direccion: values.direccion,
+        barrio: values.barrio,
+        nombre_acudiente: values.nombre_acudiente,
+        telefono_acudiente: values.telefono_acudiente,
+        coordinador_academico: values.coordinador_academico,
+        programa: values.programa,
+        fecha_inicio: values.fecha_inicio,
+        fecha_matricula: values.fecha_matricula,
+        valor_matricula: Number(values.valor_matricula),
+        medio_pago_matricula: values.medio_pago_matricula,
         valor_apoyo_semanal: Number(values.valor_apoyo_semanal),
       });
 
@@ -339,9 +358,22 @@ export default function EditStudentPage() {
                   name="grado"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Grado (1-11) *</FormLabel>
+                      <FormLabel>Grado *</FormLabel>
                       <FormControl>
-                        <Input type="number" min={1} max={11} {...field} />
+                        <select
+                          value={field.value}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
+                          name={field.name}
+                          ref={field.ref}
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        >
+                          {STUDENT_GRADE_OPTIONS.map((grade) => (
+                            <option key={grade} value={grade}>
+                              {grade}
+                            </option>
+                          ))}
+                        </select>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -352,7 +384,7 @@ export default function EditStudentPage() {
                   name="programa"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Programa</FormLabel>
+                      <FormLabel>Programa *</FormLabel>
                       <FormControl>
                         <Input {...field} />
                       </FormControl>
@@ -365,7 +397,7 @@ export default function EditStudentPage() {
                   name="telefono"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Teléfono</FormLabel>
+                      <FormLabel>Teléfono *</FormLabel>
                       <FormControl>
                         <Input {...field} />
                       </FormControl>
@@ -381,7 +413,7 @@ export default function EditStudentPage() {
                   name="direccion"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Dirección</FormLabel>
+                      <FormLabel>Dirección *</FormLabel>
                       <FormControl>
                         <Input {...field} />
                       </FormControl>
@@ -394,7 +426,7 @@ export default function EditStudentPage() {
                   name="barrio"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Barrio</FormLabel>
+                      <FormLabel>Barrio *</FormLabel>
                       <FormControl>
                         <Input {...field} />
                       </FormControl>
@@ -410,7 +442,7 @@ export default function EditStudentPage() {
                   name="nombre_acudiente"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Nombre del acudiente</FormLabel>
+                      <FormLabel>Nombre del acudiente *</FormLabel>
                       <FormControl>
                         <Input {...field} />
                       </FormControl>
@@ -423,9 +455,35 @@ export default function EditStudentPage() {
                   name="telefono_acudiente"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Teléfono del acudiente</FormLabel>
+                      <FormLabel>Teléfono del acudiente *</FormLabel>
                       <FormControl>
                         <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="coordinador_academico"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Coordinador académico *</FormLabel>
+                      <FormControl>
+                        <select
+                          value={field.value}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
+                          name={field.name}
+                          ref={field.ref}
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        >
+                          {STUDENT_COORDINATOR_OPTIONS.map((coordinator) => (
+                            <option key={coordinator} value={coordinator}>
+                              {coordinator}
+                            </option>
+                          ))}
+                        </select>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -439,7 +497,7 @@ export default function EditStudentPage() {
                   name="fecha_inicio"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Fecha de inicio</FormLabel>
+                      <FormLabel>Fecha de inicio *</FormLabel>
                       <FormControl>
                         <Input type="date" {...field} />
                       </FormControl>
@@ -452,7 +510,7 @@ export default function EditStudentPage() {
                   name="fecha_matricula"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Fecha de matrícula</FormLabel>
+                      <FormLabel>Fecha de matrícula *</FormLabel>
                       <FormControl>
                         <Input type="date" {...field} />
                       </FormControl>
@@ -468,7 +526,7 @@ export default function EditStudentPage() {
                   name="valor_matricula"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Valor matrícula</FormLabel>
+                      <FormLabel>Valor matrícula *</FormLabel>
                       <FormControl>
                         <Input type="number" min={0} step="0.01" {...field} />
                       </FormControl>
@@ -491,21 +549,25 @@ export default function EditStudentPage() {
                 />
                 <FormField
                   control={form.control}
-                  name="matricula_cancelada"
+                  name="medio_pago_matricula"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Matrícula cancelada</FormLabel>
+                      <FormLabel>Medio de pago matrícula *</FormLabel>
                       <FormControl>
-                        <label className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={field.value}
-                            onChange={(event) =>
-                              field.onChange(event.target.checked)
-                            }
-                          />
-                          Marcar si ya pagó matrícula
-                        </label>
+                        <select
+                          value={field.value}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
+                          name={field.name}
+                          ref={field.ref}
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        >
+                          {PAYMENT_METHOD_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
                       </FormControl>
                       <FormMessage />
                     </FormItem>

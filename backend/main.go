@@ -55,17 +55,18 @@ type studentEnrollRequest struct {
 	NoMatricula           *string  `json:"no_matricula"`
 	Nombres               string   `json:"nombres"`
 	Apellidos             string   `json:"apellidos"`
-	Grado                 int      `json:"grado"`
+	Grado                 string   `json:"grado"`
 	Telefono              *string  `json:"telefono"`
 	Direccion             *string  `json:"direccion"`
 	Barrio                *string  `json:"barrio"`
 	NombreAcudiente       *string  `json:"nombre_acudiente"`
 	TelefonoAcudiente     *string  `json:"telefono_acudiente"`
+	CoordinadorAcademico  string   `json:"coordinador_academico"`
 	Programa              *string  `json:"programa"`
 	FechaInicio           *string  `json:"fecha_inicio"`
 	FechaMatricula        *string  `json:"fecha_matricula"`
 	ValorMatricula        *float64 `json:"valor_matricula"`
-	MatriculaCancelada    bool     `json:"matricula_cancelada"`
+	MedioPagoMatricula    string   `json:"medio_pago_matricula"`
 	ValorApoyoSemanal     float64  `json:"valor_apoyo_semanal"`
 	HuellaIndiceDerecho   *string  `json:"huella_indice_derecho"`
 	HuellaIndiceIzquierdo *string  `json:"huella_indice_izquierdo"`
@@ -212,24 +213,73 @@ func (a *app) enrollStudent(c *gin.Context) {
 	req.TipoIdentificacion = strings.TrimSpace(req.TipoIdentificacion)
 	req.Nombres = strings.TrimSpace(req.Nombres)
 	req.Apellidos = strings.TrimSpace(req.Apellidos)
+	req.Grado = strings.TrimSpace(req.Grado)
+	req.CoordinadorAcademico = strings.TrimSpace(req.CoordinadorAcademico)
+	req.MedioPagoMatricula = strings.TrimSpace(req.MedioPagoMatricula)
 
 	validIdentificationTypes := map[string]struct{}{
-		"CC":        {},
-		"TI":        {},
-		"CE":        {},
-		"RCN":       {},
-		"PASAPORTE": {},
-		"PAS":       {},
-		"PPT":       {},
+		"TI":  {},
+		"CE":  {},
+		"RCN": {},
+		"PAS": {},
+		"PPT": {},
 	}
 
-	if req.TipoIdentificacion == "" || req.NumeroIdentificacion == "" || req.Nombres == "" || req.Apellidos == "" || req.Grado < 1 || req.Grado > 11 {
+	validGrades := map[string]struct{}{
+		"1": {}, "2": {}, "3": {}, "4": {}, "5": {}, "6": {}, "7": {},
+		"8": {}, "9": {}, "10": {}, "11": {}, "T": {}, "B": {},
+	}
+
+	validPaymentMethods := map[string]struct{}{
+		"efectivo":      {},
+		"transferencia": {},
+		"nequi":         {},
+		"daviplata":     {},
+		"otro":          {},
+	}
+
+	validCoordinators := map[string]struct{}{
+		"Nicol Delgado":    {},
+		"Santiago Delgado": {},
+		"David Delgado":    {},
+		"Elena Martinez":   {},
+	}
+
+	if req.TipoIdentificacion == "" || req.NumeroIdentificacion == "" || req.Nombres == "" || req.Apellidos == "" || req.Grado == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "tipo_identificacion, numero_identificacion, nombres, apellidos y grado validos son requeridos"})
 		return
 	}
 
 	if _, ok := validIdentificationTypes[req.TipoIdentificacion]; !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "tipo_identificacion no valido"})
+		return
+	}
+
+	if _, ok := validGrades[req.Grado]; !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "grado no valido"})
+		return
+	}
+
+	if req.Telefono == nil || strings.TrimSpace(*req.Telefono) == "" ||
+		req.Direccion == nil || strings.TrimSpace(*req.Direccion) == "" ||
+		req.Barrio == nil || strings.TrimSpace(*req.Barrio) == "" ||
+		req.NombreAcudiente == nil || strings.TrimSpace(*req.NombreAcudiente) == "" ||
+		req.TelefonoAcudiente == nil || strings.TrimSpace(*req.TelefonoAcudiente) == "" ||
+		req.Programa == nil || strings.TrimSpace(*req.Programa) == "" ||
+		req.FechaInicio == nil || strings.TrimSpace(*req.FechaInicio) == "" ||
+		req.FechaMatricula == nil || strings.TrimSpace(*req.FechaMatricula) == "" ||
+		req.ValorMatricula == nil || req.CoordinadorAcademico == "" || req.MedioPagoMatricula == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "todos los campos del estudiante son obligatorios"})
+		return
+	}
+
+	if _, ok := validCoordinators[req.CoordinadorAcademico]; !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "coordinador_academico no valido"})
+		return
+	}
+
+	if _, ok := validPaymentMethods[req.MedioPagoMatricula]; !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "medio_pago_matricula no valido"})
 		return
 	}
 
@@ -262,11 +312,12 @@ func (a *app) enrollStudent(c *gin.Context) {
 		"barrio":                  normalizeOptional(req.Barrio),
 		"nombre_acudiente":        normalizeOptional(req.NombreAcudiente),
 		"telefono_acudiente":      normalizeOptional(req.TelefonoAcudiente),
+		"coordinador_academico":   req.CoordinadorAcademico,
 		"programa":                normalizeOptional(req.Programa),
 		"fecha_inicio":            normalizeOptional(req.FechaInicio),
 		"fecha_matricula":         normalizeOptional(req.FechaMatricula),
 		"valor_matricula":         req.ValorMatricula,
-		"matricula_cancelada":     req.MatriculaCancelada,
+		"medio_pago_matricula":    req.MedioPagoMatricula,
 		"valor_apoyo_semanal":     req.ValorApoyoSemanal,
 		"huella_indice_derecho":   rightTemplate,
 		"huella_indice_izquierdo": leftTemplate,

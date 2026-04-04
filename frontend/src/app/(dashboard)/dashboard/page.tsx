@@ -48,10 +48,18 @@ export default async function DashboardPage() {
       .eq("asistio", false),
   ]);
 
-  const studentsCount = studentsCountResult.count ?? 0;
-  const coursesCount = coursesCountResult.count ?? 0;
-  const attendedCount = attendedCountResult.count ?? 0;
-  const absentCount = absentCountResult.count ?? 0;
+  const studentsCount = studentsCountResult.error
+    ? 0
+    : (studentsCountResult.count ?? 0);
+  const coursesCount = coursesCountResult.error
+    ? 0
+    : (coursesCountResult.count ?? 0);
+  const attendedCount = attendedCountResult.error
+    ? 0
+    : (attendedCountResult.count ?? 0);
+  const absentCount = absentCountResult.error
+    ? 0
+    : (absentCountResult.count ?? 0);
 
   return (
     <div className="space-y-6">

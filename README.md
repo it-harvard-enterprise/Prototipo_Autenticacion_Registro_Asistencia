@@ -2,6 +2,16 @@
 
 Repository to host the source code associated with an in-house development of a solution to authenticate and track the attendance of students of a language school.
 
+## Database updates for existing instances
+
+If you already have a running PostgreSQL/Supabase database, run the script `db_migration_existing.sql`.
+
+- It adds the new student fields (`coordinador_academico`, `medio_pago_matricula`, grade enum with `T` and `B`).
+- It enforces required student fields.
+- It creates `last_modified_at` for courses and update trigger support.
+- It creates `vista_deuda_estudiantes`.
+- It enables RLS policies that only allow approved administrators.
+
 ## Deploy frontend on Vercel
 
 This repository contains backend and frontend code. To avoid a 404 deployment on Vercel, the project must build from the frontend directory.
