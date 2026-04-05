@@ -14,17 +14,23 @@ export interface StudentFormData {
   no_matricula?: string | null;
   nombres: string;
   apellidos: string;
-  grado: number;
-  telefono?: string | null;
-  direccion?: string | null;
-  barrio?: string | null;
-  nombre_acudiente?: string | null;
-  telefono_acudiente?: string | null;
-  programa?: string | null;
-  fecha_inicio?: string | null;
-  fecha_matricula?: string | null;
-  valor_matricula?: number | null;
-  matricula_cancelada?: boolean;
+  grado: string;
+  telefono: string;
+  direccion: string;
+  barrio: string;
+  nombre_acudiente: string;
+  telefono_acudiente: string;
+  coordinador_academico: string;
+  programa: string;
+  fecha_inicio: string;
+  fecha_matricula: string;
+  valor_matricula: number;
+  medio_pago_matricula:
+    | "efectivo"
+    | "transferencia"
+    | "nequi"
+    | "daviplata"
+    | "otro";
   valor_apoyo_semanal: number;
   huella_indice_derecho?: string | null;
   huella_indice_izquierdo?: string | null;
@@ -133,6 +139,9 @@ export async function updateStudent(
       ...(data.telefono_acudiente !== undefined && {
         telefono_acudiente: data.telefono_acudiente,
       }),
+      ...(data.coordinador_academico !== undefined && {
+        coordinador_academico: data.coordinador_academico,
+      }),
       ...(data.programa !== undefined && { programa: data.programa }),
       ...(data.fecha_inicio !== undefined && {
         fecha_inicio: data.fecha_inicio,
@@ -143,17 +152,11 @@ export async function updateStudent(
       ...(data.valor_matricula !== undefined && {
         valor_matricula: data.valor_matricula,
       }),
-      ...(data.matricula_cancelada !== undefined && {
-        matricula_cancelada: data.matricula_cancelada,
+      ...(data.medio_pago_matricula !== undefined && {
+        medio_pago_matricula: data.medio_pago_matricula,
       }),
       ...(data.valor_apoyo_semanal !== undefined && {
         valor_apoyo_semanal: data.valor_apoyo_semanal,
-      }),
-      ...(data.huella_indice_derecho !== undefined && {
-        huella_indice_derecho: data.huella_indice_derecho,
-      }),
-      ...(data.huella_indice_izquierdo !== undefined && {
-        huella_indice_izquierdo: data.huella_indice_izquierdo,
       }),
       updated_at: new Date().toISOString(),
     })

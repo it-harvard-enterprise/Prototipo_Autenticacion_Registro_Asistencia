@@ -25,11 +25,16 @@ export async function signUp(
   lastName: string,
 ) {
   const supabase = await createClient();
+  const frontendOrigin =
+    process.env.FRONTEND_ORIGIN?.split(",")[0]?.trim() ||
+    "http://localhost:3000";
+  const emailRedirectTo = new URL("/login", frontendOrigin).toString();
 
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
+      emailRedirectTo,
       data: {
         nombres: firstName,
         apellidos: lastName,

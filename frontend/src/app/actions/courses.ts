@@ -268,7 +268,7 @@ type LinkedStudentRow = {
   nombres: string;
   apellidos: string;
   no_matricula: string | null;
-  grado: number;
+  grado: string;
   tipo_identificacion: string | null;
 };
 

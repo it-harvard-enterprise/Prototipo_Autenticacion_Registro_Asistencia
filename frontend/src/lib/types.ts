@@ -18,17 +18,23 @@ export interface Student {
   nombres: string;
   apellidos: string;
   edad?: number;
-  grado: number;
-  telefono: string | null;
-  direccion: string | null;
-  barrio: string | null;
-  nombre_acudiente: string | null;
-  telefono_acudiente: string | null;
-  programa: string | null;
-  fecha_inicio: string | null;
-  fecha_matricula: string | null;
-  valor_matricula: number | null;
-  matricula_cancelada: boolean;
+  grado: string;
+  telefono: string;
+  direccion: string;
+  barrio: string;
+  nombre_acudiente: string;
+  telefono_acudiente: string;
+  coordinador_academico: string;
+  programa: string;
+  fecha_inicio: string;
+  fecha_matricula: string;
+  valor_matricula: number;
+  medio_pago_matricula:
+    | "efectivo"
+    | "transferencia"
+    | "nequi"
+    | "daviplata"
+    | "otro";
   valor_apoyo_semanal: number;
   fingerprint_right?: string | null;
   fingerprint_left?: string | null;
@@ -53,4 +59,5 @@ export interface Course {
   schedule?: string | null;
   created_at: string;
   updated_at?: string;
+  last_modified_at?: string;
 }

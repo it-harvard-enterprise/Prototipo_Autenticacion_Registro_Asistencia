@@ -77,7 +77,7 @@ export default function LoginPage() {
   return (
     <Card className="shadow-md p-2">
       <CardHeader className="space-y-2 pt-6">
-        <CardTitle className="text-3xl font-semibold">Iniciar sesión</CardTitle>
+        <CardTitle className="text-3xl font-semibold">Iniciar Sesión</CardTitle>
         <CardDescription className="text-base">
           Ingrese sus credenciales para acceder al sistema
         </CardDescription>

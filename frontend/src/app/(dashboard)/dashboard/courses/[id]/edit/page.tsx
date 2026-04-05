@@ -128,7 +128,9 @@ export default function EditCoursePage() {
       }
 
       toast.success("Curso actualizado correctamente");
-      router.replace(`/dashboard/courses/${id}`);
+      const nextId = result.data?.id_curso ?? Number(id);
+      router.push(`/dashboard/courses/${nextId}`);
+      router.refresh();
     } catch {
       toast.error("Error inesperado al actualizar el curso");
     } finally {

@@ -22,6 +22,11 @@ export default async function CourseDetailPage({
     .eq("id_curso", Number(id))
     .single();
 
+  const { data: linkedStudents } = await supabase
+    .from("cursos_x_estudiantes")
+    .select("numero_identificacion, estudiantes(nombres, apellidos)")
+    .eq("id_curso", Number(id));
+
   if (error || !course) {
     notFound();
   }
@@ -141,10 +146,44 @@ export default async function CourseDetailPage({
                 Última actualización
               </dt>
               <dd className="mt-1 text-sm text-gray-900">
-                {formatDate(c.updated_at)}
+                {formatDate(c.last_modified_at ?? c.updated_at)}
               </dd>
             </div>
           </dl>
+        </CardContent>
+      </Card>
+
+      <Card className="max-w-3xl mx-auto">
+        <CardHeader>
+          <CardTitle className="text-lg">Estudiantes Asociados</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!linkedStudents || linkedStudents.length === 0 ? (
+            <p className="text-sm text-gray-500">
+              Este curso no tiene estudiantes asociados.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {linkedStudents.map((row, index) => {
+                const student = Array.isArray(row.estudiantes)
+                  ? row.estudiantes[0]
+                  : row.estudiantes;
+                return (
+                  <li
+                    key={`${row.numero_identificacion}-${index}`}
+                    className="rounded-md border px-3 py-2 text-sm"
+                  >
+                    <span className="font-medium text-gray-900">
+                      {student?.apellidos ?? ""}, {student?.nombres ?? ""}
+                    </span>
+                    <span className="ml-2 text-gray-500">
+                      ({row.numero_identificacion})
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </CardContent>
       </Card>
     </div>

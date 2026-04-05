@@ -1,9 +1,7 @@
 export const IDENTIFICATION_TYPE_VALUES = [
-  "CC",
   "TI",
   "CE",
   "RCN",
-  "PASAPORTE",
   "PAS",
   "PPT",
 ] as const;
@@ -14,11 +12,6 @@ export const IDENTIFICATION_TYPE_OPTIONS: Array<{
   value: IdentificationType;
   label: string;
 }> = [
-  {
-    value: "CC",
-    label:
-      "Cedula de Ciudadania - Documento principal obligatorio para mayores de 18 anos.",
-  },
   {
     value: "TI",
     label:
@@ -33,12 +26,8 @@ export const IDENTIFICATION_TYPE_OPTIONS: Array<{
     label: "Registro Civil de Nacimiento - Requerido para menores de 7 anos.",
   },
   {
-    value: "PASAPORTE",
-    label: "Pasaporte Colombiano - Documento de viaje internacional.",
-  },
-  {
     value: "PAS",
-    label: "PAS - Permiso Especial de Permanencia para poblacion venezolana.",
+    label: "PAS - Pasaporte.",
   },
   {
     value: "PPT",
