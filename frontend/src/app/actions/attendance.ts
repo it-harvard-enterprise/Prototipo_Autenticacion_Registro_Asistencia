@@ -69,14 +69,32 @@ export interface FingerprintAttendanceMatch {
   error?: string;
 }
 
-function getUtcDayBounds(date: string) {
-  const start = new Date(`${date}T00:00:00.000Z`);
+function getBogotaDayBounds(date: string) {
+  const start = new Date(`${date}T00:00:00.000-05:00`);
   const end = new Date(start);
   end.setUTCDate(end.getUTCDate() + 1);
   return {
     startIso: start.toISOString(),
     endIso: end.toISOString(),
   };
+}
+
+function getBogotaTimestampForDate(date: string): string {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Bogota",
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+
+  const parts = formatter.formatToParts(new Date());
+  const hour = parts.find((part) => part.type === "hour")?.value ?? "00";
+  const minute = parts.find((part) => part.type === "minute")?.value ?? "00";
+  const second = parts.find((part) => part.type === "second")?.value ?? "00";
+
+  // Persist explicit Colombia offset for consistency across deployments.
+  return `${date}T${hour}:${minute}:${second}.000-05:00`;
 }
 
 export async function identifyStudentByFingerprintForAttendance(params: {
@@ -211,7 +229,7 @@ export async function getAttendanceRosterByCourseAndDate(
 
   const supabase = await createClient();
 
-  const { startIso, endIso } = getUtcDayBounds(date);
+  const { startIso, endIso } = getBogotaDayBounds(date);
 
   const { data: enrolledStudents, error: enrolledError } = await supabase
     .from("cursos_x_estudiantes")
@@ -348,7 +366,7 @@ export async function saveAttendanceForCourseAndDate(params: {
     return { success: false, error: "No hay estudiantes para registrar" };
   }
 
-  const { startIso, endIso } = getUtcDayBounds(params.date);
+  const { startIso, endIso } = getBogotaDayBounds(params.date);
 
   const studentIds = normalizedRows.map((row) => row.numero_identificacion);
 
@@ -390,7 +408,7 @@ export async function saveAttendanceForCourseAndDate(params: {
     const fechaMarcado = row.asistio
       ? existing.asistio
         ? existing.fecha
-        : (row.marcado_en ?? new Date().toISOString())
+        : (row.marcado_en ?? getBogotaTimestampForDate(params.date))
       : existing.fecha;
 
     const { error } = await supabase
@@ -414,7 +432,7 @@ export async function saveAttendanceForCourseAndDate(params: {
       numero_identificacion: row.numero_identificacion,
       id_curso: params.idCurso,
       fecha: row.asistio
-        ? (row.marcado_en ?? new Date().toISOString())
+        ? (row.marcado_en ?? getBogotaTimestampForDate(params.date))
         : startIso,
       asistio: row.asistio,
       saldo: row.asistio ? row.saldo : null,
@@ -424,7 +442,9 @@ export async function saveAttendanceForCourseAndDate(params: {
 
     const { error } = await supabase
       .from("registro_asistencia")
-      .insert(payload);
+      .upsert(payload, {
+        onConflict: "numero_identificacion,id_curso,fecha",
+      });
 
     if (error) {
       return { success: false, error: error.message };
@@ -448,7 +468,7 @@ export async function getAttendanceExportByCourseAndDate(
   }
 
   const supabase = await createClient();
-  const { startIso, endIso } = getUtcDayBounds(date);
+  const { startIso, endIso } = getBogotaDayBounds(date);
 
   const { data, error } = await supabase
     .from("registro_asistencia")
