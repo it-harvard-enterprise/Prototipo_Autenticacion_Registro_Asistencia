@@ -28,6 +28,7 @@ export interface AttendanceStudentRow {
   asistio: boolean;
   saldo: Saldo;
   metodo_pago: MetodoPago;
+  marcado_en: string | null;
 }
 
 export interface AttendanceSaveRow {
@@ -35,6 +36,7 @@ export interface AttendanceSaveRow {
   asistio: boolean;
   saldo: Saldo;
   metodo_pago: MetodoPago;
+  marcado_en?: string | null;
 }
 
 export interface AttendanceExportRow {
@@ -245,7 +247,12 @@ export async function getAttendanceRosterByCourseAndDate(
 
   const attendanceByStudent = new Map<
     string,
-    { asistio: boolean; saldo: Saldo; metodo_pago: MetodoPago }
+    {
+      asistio: boolean;
+      saldo: Saldo;
+      metodo_pago: MetodoPago;
+      marcado_en: string;
+    }
   >();
 
   for (const row of attendanceRows ?? []) {
@@ -253,6 +260,7 @@ export async function getAttendanceRosterByCourseAndDate(
       asistio: row.asistio,
       saldo: row.saldo as Saldo,
       metodo_pago: row.metodo_pago as MetodoPago,
+      marcado_en: row.fecha,
     });
   }
 
@@ -270,6 +278,7 @@ export async function getAttendanceRosterByCourseAndDate(
         asistio: attendance?.asistio ?? false,
         saldo: attendance?.saldo ?? null,
         metodo_pago: attendance?.metodo_pago ?? null,
+        marcado_en: attendance?.marcado_en ?? null,
       };
     },
   );
@@ -299,6 +308,7 @@ export async function saveAttendanceForCourseAndDate(params: {
           asistio: false,
           saldo: null as Saldo,
           metodo_pago: null as MetodoPago,
+          marcado_en: null as string | null,
         };
       }
 
@@ -309,6 +319,7 @@ export async function saveAttendanceForCourseAndDate(params: {
           asistio: true,
           saldo: "debe" as Saldo,
           metodo_pago: null as MetodoPago,
+          marcado_en: row.marcado_en ?? null,
         };
       }
 
@@ -318,6 +329,7 @@ export async function saveAttendanceForCourseAndDate(params: {
           asistio: true,
           saldo: "cancelado" as Saldo,
           metodo_pago: row.metodo_pago,
+          marcado_en: row.marcado_en ?? null,
         };
       }
 
@@ -327,6 +339,7 @@ export async function saveAttendanceForCourseAndDate(params: {
         asistio: true,
         saldo: null as Saldo,
         metodo_pago: null as MetodoPago,
+        marcado_en: row.marcado_en ?? null,
       };
     })
     .filter((row) => row.numero_identificacion);
@@ -341,7 +354,7 @@ export async function saveAttendanceForCourseAndDate(params: {
 
   const { data: existingRows, error: existingError } = await supabase
     .from("registro_asistencia")
-    .select("id, numero_identificacion")
+    .select("id, numero_identificacion, asistio, fecha")
     .eq("id_curso", params.idCurso)
     .in("numero_identificacion", studentIds)
     .gte("fecha", startIso)
@@ -351,9 +364,16 @@ export async function saveAttendanceForCourseAndDate(params: {
     return { success: false, error: existingError.message };
   }
 
-  const existingByStudent = new Map<string, number>();
+  const existingByStudent = new Map<
+    string,
+    { id: number; asistio: boolean; fecha: string }
+  >();
   for (const row of existingRows ?? []) {
-    existingByStudent.set(row.numero_identificacion, row.id);
+    existingByStudent.set(row.numero_identificacion, {
+      id: row.id,
+      asistio: row.asistio,
+      fecha: row.fecha,
+    });
   }
 
   const toUpdate = normalizedRows.filter((row) =>
@@ -364,18 +384,25 @@ export async function saveAttendanceForCourseAndDate(params: {
   );
 
   for (const row of toUpdate) {
-    const id = existingByStudent.get(row.numero_identificacion);
-    if (!id) continue;
+    const existing = existingByStudent.get(row.numero_identificacion);
+    if (!existing) continue;
+
+    const fechaMarcado = row.asistio
+      ? existing.asistio
+        ? existing.fecha
+        : (row.marcado_en ?? new Date().toISOString())
+      : existing.fecha;
 
     const { error } = await supabase
       .from("registro_asistencia")
       .update({
+        fecha: fechaMarcado,
         asistio: row.asistio,
         saldo: row.asistio ? row.saldo : null,
         metodo_pago:
           row.asistio && row.saldo === "cancelado" ? row.metodo_pago : null,
       })
-      .eq("id", id);
+      .eq("id", existing.id);
 
     if (error) {
       return { success: false, error: error.message };
@@ -386,7 +413,9 @@ export async function saveAttendanceForCourseAndDate(params: {
     const payload = toInsert.map((row) => ({
       numero_identificacion: row.numero_identificacion,
       id_curso: params.idCurso,
-      fecha: startIso,
+      fecha: row.asistio
+        ? (row.marcado_en ?? new Date().toISOString())
+        : startIso,
       asistio: row.asistio,
       saldo: row.asistio ? row.saldo : null,
       metodo_pago:
