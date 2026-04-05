@@ -62,6 +62,29 @@ type MetodoPagoValue =
   | "otro"
   | null;
 
+function createAttendanceTimestamp(selectedDate: string): string {
+  const now = new Date();
+  const [year, month, day] = selectedDate
+    .split("-")
+    .map((part) => Number(part));
+
+  if (!year || !month || !day) {
+    return now.toISOString();
+  }
+
+  const combined = new Date(
+    year,
+    month - 1,
+    day,
+    now.getHours(),
+    now.getMinutes(),
+    now.getSeconds(),
+    now.getMilliseconds(),
+  );
+
+  return combined.toISOString();
+}
+
 function getTodayIsoDate() {
   const now = new Date();
   const year = now.getFullYear();
@@ -129,6 +152,7 @@ export default function AttendancePage() {
         asistio: student.asistio,
         saldo: student.saldo as SaldoValue,
         metodo_pago: student.metodo_pago as MetodoPagoValue,
+        marcado_en: student.marcado_en,
       })),
     });
     setIsAutoSaving(false);
@@ -282,17 +306,25 @@ export default function AttendancePage() {
     numeroIdentificacion: string,
     patch: Partial<AttendanceStudentRow>,
   ) {
+    const selectedDate = form.getValues("fecha");
+
     setStudents((prev) =>
       prev.map((student) => {
         if (student.numero_identificacion !== numeroIdentificacion) {
           return student;
         }
 
+        const wasPresent = student.asistio;
         const next = { ...student, ...patch };
+
+        if (!wasPresent && next.asistio) {
+          next.marcado_en = createAttendanceTimestamp(selectedDate);
+        }
 
         if (!next.asistio) {
           next.saldo = null;
           next.metodo_pago = null;
+          next.marcado_en = null;
         } else if (next.saldo !== "cancelado") {
           next.metodo_pago = null;
         }
@@ -359,6 +391,7 @@ export default function AttendancePage() {
         asistio: student.asistio,
         saldo: student.saldo as SaldoValue,
         metodo_pago: student.metodo_pago as MetodoPagoValue,
+        marcado_en: student.marcado_en,
       })),
     });
     setIsSaving(false);
