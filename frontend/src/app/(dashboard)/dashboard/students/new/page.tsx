@@ -153,7 +153,7 @@ export default function NewStudentPage() {
   const form = useForm<StudentFormValues>({
     resolver: zodResolver(studentSchema),
     defaultValues: {
-      tipo_identificacion: "TI",
+      tipo_identificacion: "CC",
       numero_identificacion: "",
       no_matricula: "",
       nombres: "",
