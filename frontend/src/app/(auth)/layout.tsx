@@ -16,11 +16,11 @@ export default function AuthLayout({
         <div className="w-full max-w-lg">
           <div className="mb-8 text-center lg:text-left">
             <h1 className="text-4xl font-semibold text-gray-900 tracking-tight">
-              SysAsistencia - Hardvard Enterprise
+              SysAsistencia - Harvard Enterprise
             </h1>
             <p className="text-gray-500 mt-2 text-base">
               Sistema de Creación de Estudiantes, Cursos y Registro de
-              Asistencia de Hardvard Enterprise.
+              Asistencia de Harvard Enterprise.
             </p>
           </div>
           {children}

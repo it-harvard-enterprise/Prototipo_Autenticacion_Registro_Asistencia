@@ -218,6 +218,7 @@ func (a *app) enrollStudent(c *gin.Context) {
 	req.MedioPagoMatricula = strings.TrimSpace(req.MedioPagoMatricula)
 
 	validIdentificationTypes := map[string]struct{}{
+		"CC":  {},
 		"TI":  {},
 		"CE":  {},
 		"RCN": {},

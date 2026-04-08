@@ -1,4 +1,5 @@
 export const IDENTIFICATION_TYPE_VALUES = [
+  "CC",
   "TI",
   "CE",
   "RCN",
@@ -12,6 +13,11 @@ export const IDENTIFICATION_TYPE_OPTIONS: Array<{
   value: IdentificationType;
   label: string;
 }> = [
+  {
+    value: "CC",
+    label:
+      "Cédula de Ciudadania - Documento identificación oficial en Colombia.",
+  },
   {
     value: "TI",
     label:

@@ -111,7 +111,7 @@ export default function EditStudentPage() {
   const form = useForm<StudentFormValues>({
     resolver: zodResolver(studentSchema),
     defaultValues: {
-      tipo_identificacion: "TI",
+      tipo_identificacion: "CC",
       numero_identificacion: "",
       no_matricula: "",
       nombres: "",
@@ -153,7 +153,7 @@ export default function EditStudentPage() {
         s.tipo_identificacion as (typeof IDENTIFICATION_TYPE_VALUES)[number],
       )
         ? (s.tipo_identificacion as StudentFormValues["tipo_identificacion"])
-        : "TI";
+        : "CC";
 
       form.reset({
         tipo_identificacion: tipoIdentificacion,
