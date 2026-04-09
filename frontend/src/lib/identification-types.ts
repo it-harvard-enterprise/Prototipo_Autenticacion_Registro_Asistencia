@@ -15,21 +15,19 @@ export const IDENTIFICATION_TYPE_OPTIONS: Array<{
 }> = [
   {
     value: "CC",
-    label:
-      "Cédula de Ciudadania - Documento identificación oficial en Colombia.",
+    label: "CC",
   },
   {
     value: "TI",
-    label:
-      "Tarjeta de Identidad - Documento obligatorio para menores entre 7 y 17 anos.",
+    label: "TI.",
   },
   {
     value: "CE",
-    label: "Cedula de Extranjeria - Identificacion de residentes extranjeros.",
+    label: "CE - Cédula de Extranjería.",
   },
   {
     value: "RCN",
-    label: "Registro Civil de Nacimiento - Requerido para menores de 7 anos.",
+    label: "Registro Civil de Nacimiento",
   },
   {
     value: "PAS",
@@ -37,6 +35,6 @@ export const IDENTIFICATION_TYPE_OPTIONS: Array<{
   },
   {
     value: "PPT",
-    label: "PPT - Permiso por Proteccion Temporal para poblacion venezolana.",
+    label: "PPT - Permiso por Protección Temporal para población venezolana.",
   },
 ];
