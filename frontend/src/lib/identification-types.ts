@@ -15,11 +15,11 @@ export const IDENTIFICATION_TYPE_OPTIONS: Array<{
 }> = [
   {
     value: "CC",
-    label: "CC",
+    label: "CC - Cédula de Ciudadanía.",
   },
   {
     value: "TI",
-    label: "TI.",
+    label: "TI - Tarjeta de Identidad.",
   },
   {
     value: "CE",
@@ -27,7 +27,7 @@ export const IDENTIFICATION_TYPE_OPTIONS: Array<{
   },
   {
     value: "RCN",
-    label: "Registro Civil de Nacimiento",
+    label: "RCN - Registro Civil de Nacimiento.",
   },
   {
     value: "PAS",
