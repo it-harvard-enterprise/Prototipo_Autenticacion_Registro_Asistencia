@@ -24,6 +24,7 @@ export interface Student {
   barrio: string;
   nombre_acudiente: string;
   telefono_acudiente: string;
+  eps: string;
   coordinador_academico: string;
   programa: string;
   fecha_inicio: string;

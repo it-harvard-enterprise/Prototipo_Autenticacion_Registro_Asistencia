@@ -16,6 +16,8 @@ import {
   IDENTIFICATION_TYPE_VALUES,
 } from "@/lib/identification-types";
 import {
+  COLOMBIA_EPS_OPTIONS,
+  EPS_OTHER_OPTION,
   PAYMENT_METHOD_OPTIONS,
   STUDENT_COORDINATOR_OPTIONS,
   STUDENT_GRADE_OPTIONS,
@@ -39,62 +41,77 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 
-const studentSchema = z.object({
-  tipo_identificacion: z.enum(IDENTIFICATION_TYPE_VALUES, {
-    message: "Debe seleccionar un tipo de identificacion",
-  }),
-  numero_identificacion: z
-    .string()
-    .min(1, "La identificación es requerida")
-    .max(20),
-  no_matricula: z.string().max(20).optional(),
-  nombres: z.string().min(2, "Los nombres son requeridos").max(100),
-  apellidos: z.string().min(2, "Los apellidos son requeridos").max(100),
-  grado: z.enum(STUDENT_GRADE_OPTIONS, {
-    message: "Debe seleccionar un grado válido",
-  }),
-  telefono: z.string().min(1, "El teléfono es requerido").max(20),
-  direccion: z.string().min(1, "La dirección es requerida").max(200),
-  barrio: z.string().min(1, "El barrio es requerido").max(100),
-  nombre_acudiente: z
-    .string()
-    .min(1, "El nombre del acudiente es requerido")
-    .max(200),
-  telefono_acudiente: z
-    .string()
-    .min(1, "El teléfono del acudiente es requerido")
-    .max(20),
-  coordinador_academico: z.enum(STUDENT_COORDINATOR_OPTIONS, {
-    message: "Debe seleccionar un coordinador académico",
-  }),
-  programa: z.string().min(1, "El programa es requerido").max(100),
-  fecha_inicio: z.string().min(1, "La fecha de inicio es requerida"),
-  fecha_matricula: z.string().min(1, "La fecha de matrícula es requerida"),
-  valor_matricula: z
-    .string()
-    .min(1, "El valor de matrícula es requerido")
-    .refine((val) => !Number.isNaN(Number(val)) && Number(val) >= 0, {
-      message: "El valor de matrícula debe ser mayor o igual a 0",
+const studentSchema = z
+  .object({
+    tipo_identificacion: z.enum(IDENTIFICATION_TYPE_VALUES, {
+      message: "Debe seleccionar un tipo de identificacion",
     }),
-  medio_pago_matricula: z.enum(
-    PAYMENT_METHOD_OPTIONS.map((item) => item.value) as [
-      "efectivo",
-      "transferencia",
-      "nequi",
-      "daviplata",
-      "otro",
-    ],
-    {
-      message: "Debe seleccionar el medio de pago de matrícula",
-    },
-  ),
-  valor_apoyo_semanal: z
-    .string()
-    .min(1, "El valor de apoyo semanal es requerido")
-    .refine((val) => !Number.isNaN(Number(val)) && Number(val) > 0, {
-      message: "El valor de apoyo semanal debe ser mayor que 0",
+    numero_identificacion: z
+      .string()
+      .min(1, "La identificación es requerida")
+      .max(20),
+    no_matricula: z.string().max(20).optional(),
+    nombres: z.string().min(2, "Los nombres son requeridos").max(100),
+    apellidos: z.string().min(2, "Los apellidos son requeridos").max(100),
+    grado: z.enum(STUDENT_GRADE_OPTIONS, {
+      message: "Debe seleccionar un grado válido",
     }),
-});
+    telefono: z.string().min(1, "El teléfono es requerido").max(20),
+    direccion: z.string().min(1, "La dirección es requerida").max(200),
+    barrio: z.string().min(1, "El barrio es requerido").max(100),
+    nombre_acudiente: z
+      .string()
+      .min(1, "El nombre del acudiente es requerido")
+      .max(200),
+    telefono_acudiente: z
+      .string()
+      .min(1, "El teléfono del acudiente es requerido")
+      .max(20),
+    eps_select: z.string().min(1, "Debe seleccionar una EPS"),
+    eps_otra: z.string().optional(),
+    coordinador_academico: z.enum(STUDENT_COORDINATOR_OPTIONS, {
+      message: "Debe seleccionar un coordinador académico",
+    }),
+    programa: z.string().min(1, "El programa es requerido").max(100),
+    fecha_inicio: z.string().min(1, "La fecha de inicio es requerida"),
+    fecha_matricula: z.string().min(1, "La fecha de matrícula es requerida"),
+    valor_matricula: z
+      .string()
+      .min(1, "El valor de matrícula es requerido")
+      .refine((val) => !Number.isNaN(Number(val)) && Number(val) >= 0, {
+        message: "El valor de matrícula debe ser mayor o igual a 0",
+      }),
+    medio_pago_matricula: z.enum(
+      PAYMENT_METHOD_OPTIONS.map((item) => item.value) as [
+        "efectivo",
+        "transferencia",
+        "nequi",
+        "daviplata",
+        "otro",
+      ],
+      {
+        message: "Debe seleccionar el medio de pago de matrícula",
+      },
+    ),
+    valor_apoyo_semanal: z
+      .string()
+      .min(1, "El valor de apoyo semanal es requerido")
+      .refine((val) => !Number.isNaN(Number(val)) && Number(val) > 0, {
+        message: "El valor de apoyo semanal debe ser mayor que 0",
+      }),
+  })
+  .superRefine((data, ctx) => {
+    if (
+      data.eps_select === EPS_OTHER_OPTION &&
+      (!data.eps_otra || data.eps_otra.trim().length < 2)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["eps_otra"],
+        message: "Debe escribir la EPS cuando selecciona 'Otro'",
+      });
+    }
+  });
 
 type StudentFormValues = z.input<typeof studentSchema>;
 
@@ -122,6 +139,8 @@ export default function EditStudentPage() {
       barrio: "",
       nombre_acudiente: "",
       telefono_acudiente: "",
+      eps_select: "Nueva EPS",
+      eps_otra: "",
       coordinador_academico: "Nicol Delgado",
       programa: "",
       fecha_inicio: "",
@@ -155,6 +174,10 @@ export default function EditStudentPage() {
         ? (s.tipo_identificacion as StudentFormValues["tipo_identificacion"])
         : "CC";
 
+      const epsInList = COLOMBIA_EPS_OPTIONS.includes(
+        s.eps as (typeof COLOMBIA_EPS_OPTIONS)[number],
+      );
+
       form.reset({
         tipo_identificacion: tipoIdentificacion,
         numero_identificacion: s.numero_identificacion,
@@ -167,6 +190,8 @@ export default function EditStudentPage() {
         barrio: s.barrio,
         nombre_acudiente: s.nombre_acudiente,
         telefono_acudiente: s.telefono_acudiente,
+        eps_select: epsInList ? s.eps : EPS_OTHER_OPTION,
+        eps_otra: epsInList ? "" : s.eps,
         coordinador_academico:
           s.coordinador_academico as StudentFormValues["coordinador_academico"],
         programa: s.programa,
@@ -183,6 +208,16 @@ export default function EditStudentPage() {
   }, [id, form]);
 
   async function onSubmit(values: StudentFormValues) {
+    const epsValue =
+      values.eps_select === EPS_OTHER_OPTION
+        ? (values.eps_otra ?? "").trim()
+        : values.eps_select;
+
+    if (!epsValue) {
+      toast.error("Debe seleccionar o escribir la EPS");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -198,6 +233,7 @@ export default function EditStudentPage() {
         barrio: values.barrio,
         nombre_acudiente: values.nombre_acudiente,
         telefono_acudiente: values.telefono_acudiente,
+        eps: epsValue,
         coordinador_academico: values.coordinador_academico,
         programa: values.programa,
         fecha_inicio: values.fecha_inicio,
@@ -436,7 +472,7 @@ export default function EditStudentPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <FormField
                   control={form.control}
                   name="nombre_acudiente"
@@ -458,6 +494,32 @@ export default function EditStudentPage() {
                       <FormLabel>Teléfono del acudiente *</FormLabel>
                       <FormControl>
                         <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="eps_select"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>EPS *</FormLabel>
+                      <FormControl>
+                        <select
+                          value={field.value}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
+                          name={field.name}
+                          ref={field.ref}
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        >
+                          {COLOMBIA_EPS_OPTIONS.map((eps) => (
+                            <option key={eps} value={eps}>
+                              {eps}
+                            </option>
+                          ))}
+                        </select>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -490,6 +552,24 @@ export default function EditStudentPage() {
                   )}
                 />
               </div>
+
+              {form.watch("eps_select") === EPS_OTHER_OPTION && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="eps_otra"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Escriba la EPS *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Ej: Mi EPS" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
