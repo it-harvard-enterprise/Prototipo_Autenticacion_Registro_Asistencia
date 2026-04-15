@@ -15,12 +15,13 @@ import {
 import { toast } from "sonner";
 
 import { createStudent } from "@/app/actions/students";
-import { useDigitalPersonaFingerprintReader } from "@/lib/biometrics/digitalpersona";
 import {
   IDENTIFICATION_TYPE_OPTIONS,
   IDENTIFICATION_TYPE_VALUES,
 } from "@/lib/identification-types";
 import {
+  COLOMBIA_EPS_OPTIONS,
+  EPS_OTHER_OPTION,
   PAYMENT_METHOD_OPTIONS,
   STUDENT_COORDINATOR_OPTIONS,
   STUDENT_GRADE_OPTIONS,
@@ -67,88 +68,85 @@ function formatCurrencyInput(value: string): string {
   return currencyFormatter.format(parsed);
 }
 
-const studentSchema = z.object({
-  tipo_identificacion: z.enum(IDENTIFICATION_TYPE_VALUES, {
-    message: "Debe seleccionar un tipo de identificacion",
-  }),
-  numero_identificacion: z
-    .string()
-    .min(1, "La identificación es requerida")
-    .max(20),
-  no_matricula: z.string().max(20).optional(),
-  nombres: z.string().min(2, "Los nombres son requeridos").max(100),
-  apellidos: z.string().min(2, "Los apellidos son requeridos").max(100),
-  grado: z.enum(STUDENT_GRADE_OPTIONS, {
-    message: "Debe seleccionar un grado válido",
-  }),
-  telefono: z.string().min(1, "El teléfono es requerido").max(20),
-  direccion: z.string().min(1, "La dirección es requerida").max(200),
-  barrio: z.string().min(1, "El barrio es requerido").max(100),
-  nombre_acudiente: z
-    .string()
-    .min(1, "El nombre del acudiente es requerido")
-    .max(200),
-  telefono_acudiente: z
-    .string()
-    .min(1, "El teléfono del acudiente es requerido")
-    .max(20),
-  coordinador_academico: z.enum(STUDENT_COORDINATOR_OPTIONS, {
-    message: "Debe seleccionar un coordinador académico",
-  }),
-  programa: z.string().min(1, "El programa es requerido").max(100),
-  fecha_inicio: z.string().min(1, "La fecha de inicio es requerida"),
-  fecha_matricula: z.string().min(1, "La fecha de matrícula es requerida"),
-  valor_matricula: z
-    .string()
-    .min(1, "El valor de matrícula es requerido")
-    .refine((val) => (parseCurrencyToNumber(val) ?? -1) >= 0, {
-      message: "El valor de matrícula debe ser mayor o igual a 0",
+const TEMP_FINGERPRINT_PLACEHOLDER = "PENDING_FINGERPRINT";
+
+const studentSchema = z
+  .object({
+    tipo_identificacion: z.enum(IDENTIFICATION_TYPE_VALUES, {
+      message: "Debe seleccionar un tipo de identificacion",
     }),
-  medio_pago_matricula: z.enum(
-    PAYMENT_METHOD_OPTIONS.map((item) => item.value) as [
-      "efectivo",
-      "transferencia",
-      "nequi",
-      "daviplata",
-      "otro",
-    ],
-    {
-      message: "Debe seleccionar el medio de pago de matrícula",
-    },
-  ),
-  valor_apoyo_semanal: z
-    .string()
-    .min(1, "El valor de apoyo semanal es requerido")
-    .refine((val) => (parseCurrencyToNumber(val) ?? 0) > 0, {
-      message: "El valor de apoyo semanal debe ser mayor que 0",
+    numero_identificacion: z
+      .string()
+      .min(1, "La identificación es requerida")
+      .max(20),
+    no_matricula: z.string().max(20).optional(),
+    nombres: z.string().min(2, "Los nombres son requeridos").max(100),
+    apellidos: z.string().min(2, "Los apellidos son requeridos").max(100),
+    grado: z.enum(STUDENT_GRADE_OPTIONS, {
+      message: "Debe seleccionar un grado válido",
     }),
-  huella_indice_derecho: z
-    .string()
-    .trim()
-    .min(1, "Debe capturar la huella indice derecha"),
-  huella_indice_izquierdo: z
-    .string()
-    .trim()
-    .min(1, "Debe capturar la huella indice izquierda"),
-});
+    telefono: z.string().min(1, "El teléfono es requerido").max(20),
+    direccion: z.string().min(1, "La dirección es requerida").max(200),
+    barrio: z.string().min(1, "El barrio es requerido").max(100),
+    nombre_acudiente: z
+      .string()
+      .min(1, "El nombre del acudiente es requerido")
+      .max(200),
+    telefono_acudiente: z
+      .string()
+      .min(1, "El teléfono del acudiente es requerido")
+      .max(20),
+    eps_select: z.string().min(1, "Debe seleccionar una EPS"),
+    eps_otra: z.string().optional(),
+    coordinador_academico: z.enum(STUDENT_COORDINATOR_OPTIONS, {
+      message: "Debe seleccionar un coordinador académico",
+    }),
+    programa: z.string().min(1, "El programa es requerido").max(100),
+    fecha_inicio: z.string().min(1, "La fecha de inicio es requerida"),
+    fecha_matricula: z.string().min(1, "La fecha de matrícula es requerida"),
+    valor_matricula: z
+      .string()
+      .min(1, "El valor de matrícula es requerido")
+      .refine((val) => (parseCurrencyToNumber(val) ?? -1) >= 0, {
+        message: "El valor de matrícula debe ser mayor o igual a 0",
+      }),
+    medio_pago_matricula: z.enum(
+      PAYMENT_METHOD_OPTIONS.map((item) => item.value) as [
+        "efectivo",
+        "transferencia",
+        "nequi",
+        "daviplata",
+        "otro",
+      ],
+      {
+        message: "Debe seleccionar el medio de pago de matrícula",
+      },
+    ),
+    valor_apoyo_semanal: z
+      .string()
+      .min(1, "El valor de apoyo semanal es requerido")
+      .refine((val) => (parseCurrencyToNumber(val) ?? 0) > 0, {
+        message: "El valor de apoyo semanal debe ser mayor que 0",
+      }),
+  })
+  .superRefine((data, ctx) => {
+    if (
+      data.eps_select === EPS_OTHER_OPTION &&
+      (!data.eps_otra || data.eps_otra.trim().length < 2)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["eps_otra"],
+        message: "Debe escribir la EPS cuando selecciona 'Otro'",
+      });
+    }
+  });
 
 type StudentFormValues = z.input<typeof studentSchema>;
 
 export default function NewStudentPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
-  const [capturingSide, setCapturingSide] = useState<
-    "huella_indice_derecho" | "huella_indice_izquierdo" | null
-  >(null);
-
-  const {
-    ready: readerReady,
-    isCapturing,
-    deviceStatus,
-    captureStatus,
-    lastQuality,
-    capture,
-  } = useDigitalPersonaFingerprintReader();
 
   const form = useForm<StudentFormValues>({
     resolver: zodResolver(studentSchema),
@@ -164,6 +162,8 @@ export default function NewStudentPage() {
       barrio: "",
       nombre_acudiente: "",
       telefono_acudiente: "",
+      eps_select: "Nueva EPS",
+      eps_otra: "",
       coordinador_academico: "Nicol Delgado",
       programa: "",
       fecha_inicio: "",
@@ -171,18 +171,17 @@ export default function NewStudentPage() {
       valor_matricula: "",
       medio_pago_matricula: "efectivo",
       valor_apoyo_semanal: "",
-      huella_indice_derecho: "",
-      huella_indice_izquierdo: "",
     },
   });
 
   async function onSubmit(values: StudentFormValues) {
-    const rightFingerprint = values.huella_indice_derecho?.trim() ?? "";
-    const leftFingerprint = values.huella_indice_izquierdo?.trim() ?? "";
-    if (!rightFingerprint || !leftFingerprint) {
-      toast.error(
-        "Debe capturar la huella indice derecha e izquierda antes de guardar",
-      );
+    const epsValue =
+      values.eps_select === EPS_OTHER_OPTION
+        ? (values.eps_otra ?? "").trim()
+        : values.eps_select;
+
+    if (!epsValue) {
+      toast.error("Debe seleccionar o escribir la EPS");
       return;
     }
 
@@ -200,6 +199,7 @@ export default function NewStudentPage() {
       barrio: values.barrio,
       nombre_acudiente: values.nombre_acudiente,
       telefono_acudiente: values.telefono_acudiente,
+      eps: epsValue,
       coordinador_academico: values.coordinador_academico,
       programa: values.programa,
       fecha_inicio: values.fecha_inicio,
@@ -208,8 +208,8 @@ export default function NewStudentPage() {
       medio_pago_matricula: values.medio_pago_matricula,
       valor_apoyo_semanal:
         parseCurrencyToNumber(values.valor_apoyo_semanal) ?? 0,
-      huella_indice_derecho: rightFingerprint,
-      huella_indice_izquierdo: leftFingerprint,
+      huella_indice_derecho: TEMP_FINGERPRINT_PLACEHOLDER,
+      huella_indice_izquierdo: TEMP_FINGERPRINT_PLACEHOLDER,
     });
 
     if (result.success) {
@@ -220,42 +220,6 @@ export default function NewStudentPage() {
       setIsLoading(false);
     }
   }
-
-  async function handleCaptureFingerprint(
-    side: "huella_indice_derecho" | "huella_indice_izquierdo",
-  ) {
-    if (!readerReady) {
-      toast.error(
-        "El lector no esta listo. Verifique la conexion y el servicio de DigitalPersona.",
-      );
-      return;
-    }
-
-    setCapturingSide(side);
-    const mode =
-      side === "huella_indice_derecho" ? "enroll-right" : "enroll-left";
-    const sample = await capture(mode);
-    setCapturingSide(null);
-
-    if (!sample) {
-      toast.error("No fue posible capturar la huella. Intente nuevamente.");
-      return;
-    }
-
-    form.setValue(side, sample, {
-      shouldDirty: true,
-      shouldTouch: true,
-      shouldValidate: true,
-    });
-
-    toast.success("Huella capturada correctamente");
-  }
-
-  const rightFingerprintValue = form.watch("huella_indice_derecho");
-  const leftFingerprintValue = form.watch("huella_indice_izquierdo");
-  const hasBothFingerprints =
-    rightFingerprintValue.trim().length > 0 &&
-    leftFingerprintValue.trim().length > 0;
 
   return (
     <div className="space-y-6">
@@ -452,7 +416,7 @@ export default function NewStudentPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <FormField
                   control={form.control}
                   name="nombre_acudiente"
@@ -474,6 +438,32 @@ export default function NewStudentPage() {
                       <FormLabel>Teléfono del acudiente *</FormLabel>
                       <FormControl>
                         <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="eps_select"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>EPS *</FormLabel>
+                      <FormControl>
+                        <select
+                          value={field.value}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
+                          name={field.name}
+                          ref={field.ref}
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        >
+                          {COLOMBIA_EPS_OPTIONS.map((eps) => (
+                            <option key={eps} value={eps}>
+                              {eps}
+                            </option>
+                          ))}
+                        </select>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -506,6 +496,24 @@ export default function NewStudentPage() {
                   )}
                 />
               </div>
+
+              {form.watch("eps_select") === EPS_OTHER_OPTION && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="eps_otra"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Escriba la EPS *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Ej: Mi EPS" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
@@ -634,145 +642,21 @@ export default function NewStudentPage() {
               <div className="space-y-3">
                 <div>
                   <h3 className="text-sm font-semibold text-gray-900">
-                    Captura de huellas
+                    Huellas Dactilares
                   </h3>
                   <p className="text-xs text-gray-500 mt-1">
-                    Captura en vivo con DigitalPersona U.are.U 4500 en formato
-                    PNG base64 para procesamiento en backend.
+                    Captura biométrica para el registro del estudiante.
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div className="rounded-md border p-3 bg-white">
-                    <p className="text-[11px] uppercase tracking-wide text-gray-500">
-                      Lector
-                    </p>
-                    <p
-                      className={`text-sm mt-1 ${
-                        readerReady ? "text-green-700" : "text-[#982725]"
-                      }`}
-                    >
-                      {deviceStatus}
-                    </p>
-                  </div>
-                  <div className="rounded-md border p-3 bg-white">
-                    <p className="text-[11px] uppercase tracking-wide text-gray-500">
-                      Estado de captura
-                    </p>
-                    <p className="text-sm mt-1 text-gray-700">
-                      {captureStatus}
-                    </p>
-                  </div>
-                  <div className="rounded-md border p-3 bg-white">
-                    <p className="text-[11px] uppercase tracking-wide text-gray-500">
-                      Calidad
-                    </p>
-                    <p className="text-sm mt-1 text-gray-700">
-                      {typeof lastQuality === "number" ? lastQuality : "N/A"}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Card className="border-dashed border-gray-300">
-                    <CardContent className="pt-6 flex flex-col items-center text-center gap-3">
-                      <div
-                        className={`rounded-full p-3 ${
-                          rightFingerprintValue
-                            ? "bg-green-500/10"
-                            : "bg-[#b92f2d]/10"
-                        }`}
-                      >
-                        <Fingerprint
-                          className={`h-7 w-7 ${
-                            rightFingerprintValue
-                              ? "text-green-600"
-                              : "text-[#b92f2d]"
-                          }`}
-                        />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          Huella índice derecho
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {rightFingerprintValue
-                            ? "Huella capturada"
-                            : "Sin captura"}
-                        </p>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() =>
-                          handleCaptureFingerprint("huella_indice_derecho")
-                        }
-                        disabled={
-                          isLoading ||
-                          isCapturing ||
-                          capturingSide === "huella_indice_izquierdo"
-                        }
-                      >
-                        {isCapturing &&
-                        capturingSide === "huella_indice_derecho"
-                          ? "Capturando..."
-                          : rightFingerprintValue
-                            ? "Capturar Huella Otra vez"
-                            : "Capturar Huella"}
-                      </Button>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-dashed border-gray-300">
-                    <CardContent className="pt-6 flex flex-col items-center text-center gap-3">
-                      <div
-                        className={`rounded-full p-3 ${
-                          leftFingerprintValue
-                            ? "bg-green-500/10"
-                            : "bg-[#b92f2d]/10"
-                        }`}
-                      >
-                        <Fingerprint
-                          className={`h-7 w-7 ${
-                            leftFingerprintValue
-                              ? "text-green-600"
-                              : "text-[#b92f2d]"
-                          }`}
-                        />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          Huella índice izquierdo
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {leftFingerprintValue
-                            ? "Huella capturada"
-                            : "Sin captura"}
-                        </p>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() =>
-                          handleCaptureFingerprint("huella_indice_izquierdo")
-                        }
-                        disabled={
-                          isLoading ||
-                          isCapturing ||
-                          capturingSide === "huella_indice_derecho"
-                        }
-                      >
-                        {isCapturing &&
-                        capturingSide === "huella_indice_izquierdo"
-                          ? "Capturando..."
-                          : leftFingerprintValue
-                            ? "Capturar Huella Otra vez"
-                            : "Capturar Huella"}
-                      </Button>
-                    </CardContent>
-                  </Card>
+                <div className="rounded-lg border bg-gray-50 px-4 py-3 flex items-center gap-3">
+                  <Fingerprint className="h-5 w-5 text-gray-400" />
+                  <p className="text-sm font-medium text-gray-700">
+                    Funcionalidad no disponible temporalmente
+                  </p>
                 </div>
               </div>
+
               <div className="flex justify-end gap-3 pt-2">
                 <Button
                   type="button"
@@ -782,10 +666,7 @@ export default function NewStudentPage() {
                 >
                   <Link href="/dashboard/students">Cancelar</Link>
                 </Button>
-                <Button
-                  type="submit"
-                  disabled={isLoading || !hasBothFingerprints}
-                >
+                <Button type="submit" disabled={isLoading}>
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />

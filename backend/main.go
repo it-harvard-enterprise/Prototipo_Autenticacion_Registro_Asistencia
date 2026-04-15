@@ -31,6 +31,7 @@ const (
 	defaultThreshold   = 40.0
 	fingerprintDPI     = 500.0
 	minFingerprintSize = 1024
+	defaultFingerprint = "PENDING_FINGERPRINT"
 )
 
 type app struct {
@@ -61,6 +62,7 @@ type studentEnrollRequest struct {
 	Barrio                *string  `json:"barrio"`
 	NombreAcudiente       *string  `json:"nombre_acudiente"`
 	TelefonoAcudiente     *string  `json:"telefono_acudiente"`
+	EPS                   *string  `json:"eps"`
 	CoordinadorAcademico  string   `json:"coordinador_academico"`
 	Programa              *string  `json:"programa"`
 	FechaInicio           *string  `json:"fecha_inicio"`
@@ -266,6 +268,7 @@ func (a *app) enrollStudent(c *gin.Context) {
 		req.Barrio == nil || strings.TrimSpace(*req.Barrio) == "" ||
 		req.NombreAcudiente == nil || strings.TrimSpace(*req.NombreAcudiente) == "" ||
 		req.TelefonoAcudiente == nil || strings.TrimSpace(*req.TelefonoAcudiente) == "" ||
+		req.EPS == nil || strings.TrimSpace(*req.EPS) == "" ||
 		req.Programa == nil || strings.TrimSpace(*req.Programa) == "" ||
 		req.FechaInicio == nil || strings.TrimSpace(*req.FechaInicio) == "" ||
 		req.FechaMatricula == nil || strings.TrimSpace(*req.FechaMatricula) == "" ||
@@ -289,13 +292,13 @@ func (a *app) enrollStudent(c *gin.Context) {
 		return
 	}
 
-	rightTemplate, err := a.extractTemplateIfPresent(req.HuellaIndiceDerecho)
+	rightTemplate, err := a.resolveStoredFingerprintTemplate(req.HuellaIndiceDerecho)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Huella derecha invalida: " + err.Error()})
 		return
 	}
 
-	leftTemplate, err := a.extractTemplateIfPresent(req.HuellaIndiceIzquierdo)
+	leftTemplate, err := a.resolveStoredFingerprintTemplate(req.HuellaIndiceIzquierdo)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Huella izquierda invalida: " + err.Error()})
 		return
@@ -313,6 +316,7 @@ func (a *app) enrollStudent(c *gin.Context) {
 		"barrio":                  normalizeOptional(req.Barrio),
 		"nombre_acudiente":        normalizeOptional(req.NombreAcudiente),
 		"telefono_acudiente":      normalizeOptional(req.TelefonoAcudiente),
+		"eps":                     normalizeOptional(req.EPS),
 		"coordinador_academico":   req.CoordinadorAcademico,
 		"programa":                normalizeOptional(req.Programa),
 		"fecha_inicio":            normalizeOptional(req.FechaInicio),
@@ -349,6 +353,28 @@ func (a *app) enrollStudent(c *gin.Context) {
 			"created_at":            created.CreatedAt,
 		},
 	})
+}
+
+func (a *app) resolveStoredFingerprintTemplate(raw *string) (string, error) {
+	if raw == nil || strings.TrimSpace(*raw) == "" {
+		return defaultFingerprint, nil
+	}
+
+	trimmed := strings.TrimSpace(*raw)
+	if strings.EqualFold(trimmed, defaultFingerprint) {
+		return defaultFingerprint, nil
+	}
+
+	template, err := a.extractTemplateIfPresent(&trimmed)
+	if err != nil {
+		return "", err
+	}
+
+	if template == nil || strings.TrimSpace(*template) == "" {
+		return defaultFingerprint, nil
+	}
+
+	return *template, nil
 }
 
 func (a *app) identifyAttendance(c *gin.Context) {

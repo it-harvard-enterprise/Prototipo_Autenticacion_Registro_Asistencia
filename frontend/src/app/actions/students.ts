@@ -20,6 +20,7 @@ export interface StudentFormData {
   barrio: string;
   nombre_acudiente: string;
   telefono_acudiente: string;
+  eps: string;
   coordinador_academico: string;
   programa: string;
   fecha_inicio: string;
@@ -138,6 +139,9 @@ export async function updateStudent(
       }),
       ...(data.telefono_acudiente !== undefined && {
         telefono_acudiente: data.telefono_acudiente,
+      }),
+      ...(data.eps !== undefined && {
+        eps: data.eps,
       }),
       ...(data.coordinador_academico !== undefined && {
         coordinador_academico: data.coordinador_academico,

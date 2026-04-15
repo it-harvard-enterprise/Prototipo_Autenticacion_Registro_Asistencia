@@ -21,6 +21,33 @@ export const STUDENT_COORDINATOR_OPTIONS = [
   "Elena Martinez",
 ] as const;
 
+export const EPS_OTHER_OPTION = "Otro";
+
+// Curated fallback list of EPS names used when no reliable public API is available.
+export const COLOMBIA_EPS_OPTIONS = [
+  "Aliansalud EPS",
+  "Asmet Salud EPS",
+  "Capital Salud EPS",
+  "Cajacopi Atlántico EPS",
+  "Compensar EPS",
+  "Comfenalco Valle EPS",
+  "Coosalud EPS",
+  "Dusakawi EPSI",
+  "EMSSANAR EPS",
+  "EPS Familiar de Colombia",
+  "EPS Sanitas",
+  "Famisanar EPS",
+  "Mallamas EPSI",
+  "Mutual Ser EPS",
+  "Nueva EPS",
+  "Pijaos Salud EPSI",
+  "Salud Bolívar EPS",
+  "Salud Total EPS",
+  "Savia Salud EPS",
+  "SURA EPS",
+  EPS_OTHER_OPTION,
+] as const;
+
 export const PAYMENT_METHOD_OPTIONS = [
   { value: "efectivo", label: "Efectivo" },
   { value: "transferencia", label: "Transferencia" },
