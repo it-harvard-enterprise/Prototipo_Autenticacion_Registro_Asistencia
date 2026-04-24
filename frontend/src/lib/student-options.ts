@@ -43,6 +43,7 @@ export const COLOMBIA_EPS_OPTIONS = [
   "Pijaos Salud EPSI",
   "Salud Bolívar EPS",
   "Salud Total EPS",
+  "Sisben",
   "Savia Salud EPS",
   "SURA EPS",
   EPS_OTHER_OPTION,

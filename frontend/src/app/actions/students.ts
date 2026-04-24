@@ -2,10 +2,6 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { ensureApprovedAdmin } from "@/lib/auth/approved-admin";
-import {
-  biometricBackendConfigHint,
-  resolveBiometricBackendBaseUrl,
-} from "@/lib/biometric-backend";
 import { Student } from "@/lib/types";
 
 export interface StudentFormData {
@@ -45,64 +41,49 @@ export async function createStudent(
     return { success: false, error: approval.error };
   }
 
-  const backendUrl = resolveBiometricBackendBaseUrl();
-  if (!backendUrl) {
-    return {
-      success: false,
-      error: `No se ha configurado la URL del backend biometrico. ${biometricBackendConfigHint()}`,
-    };
+  const supabase = await createClient();
+
+  const randomFingerprintToken = crypto.randomUUID();
+  const huellaIndiceDerecho =
+    data.huella_indice_derecho?.trim() ||
+    `PENDING_FINGERPRINT_RIGHT_${randomFingerprintToken}`;
+  const huellaIndiceIzquierdo =
+    data.huella_indice_izquierdo?.trim() ||
+    `PENDING_FINGERPRINT_LEFT_${randomFingerprintToken}`;
+
+  const { data: student, error } = await supabase
+    .from("estudiantes")
+    .insert({
+      tipo_identificacion: data.tipo_identificacion,
+      numero_identificacion: data.numero_identificacion,
+      no_matricula: data.no_matricula ?? null,
+      nombres: data.nombres,
+      apellidos: data.apellidos,
+      grado: data.grado,
+      telefono: data.telefono,
+      direccion: data.direccion,
+      barrio: data.barrio,
+      nombre_acudiente: data.nombre_acudiente,
+      telefono_acudiente: data.telefono_acudiente,
+      eps: data.eps,
+      coordinador_academico: data.coordinador_academico,
+      programa: data.programa,
+      fecha_inicio: data.fecha_inicio,
+      fecha_matricula: data.fecha_matricula,
+      valor_matricula: data.valor_matricula,
+      medio_pago_matricula: data.medio_pago_matricula,
+      valor_apoyo_semanal: data.valor_apoyo_semanal,
+      huella_indice_derecho: huellaIndiceDerecho,
+      huella_indice_izquierdo: huellaIndiceIzquierdo,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    return { success: false, error: error.message };
   }
 
-  const backendAccessKey = process.env.BIOMETRIC_BACKEND_ACCESS_KEY?.trim();
-  const frontendOrigin =
-    process.env.FRONTEND_ORIGIN?.split(",")[0]?.trim() ||
-    "http://localhost:3000";
-
-  try {
-    const response = await fetch(`${backendUrl}/api/students/enroll`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Frontend-Origin": frontendOrigin,
-        ...(backendAccessKey
-          ? {
-              "X-Backend-Access-Key": backendAccessKey,
-            }
-          : {}),
-      },
-      body: JSON.stringify(data),
-      cache: "no-store",
-      signal: AbortSignal.timeout(15000),
-    });
-
-    const rawText = await response.text();
-    const payload = rawText
-      ? (JSON.parse(rawText) as {
-          success?: boolean;
-          error?: string;
-          data?: Student;
-        })
-      : {};
-
-    if (!response.ok || payload.success === false) {
-      return {
-        success: false,
-        error:
-          payload.error ??
-          `Error al crear el estudiante en backend (${response.status})`,
-      };
-    }
-
-    return {
-      success: true,
-      data: payload.data,
-    };
-  } catch {
-    return {
-      success: false,
-      error: `No fue posible conectar con el backend biometrico (${backendUrl})`,
-    };
-  }
+  return { success: true, data: student as Student };
 }
 
 export async function updateStudent(
