@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { ensureApprovedAdmin } from "@/lib/auth/approved-admin";
+import { resolveBiometricBackendBaseUrl } from "@/lib/biometric-backend";
 import { Student } from "@/lib/types";
 
 export interface StudentFormData {
@@ -41,49 +42,84 @@ export async function createStudent(
     return { success: false, error: approval.error };
   }
 
-  const supabase = await createClient();
+  try {
+    const backendUrl = resolveBiometricBackendBaseUrl();
+    if (!backendUrl) {
+      return {
+        success: false,
+        error:
+          "Backend URL no configurado. Configure BIOMETRIC_BACKEND_URL o BIOMETRIC_BACKEND_INTERNAL_URL.",
+      };
+    }
 
-  const randomFingerprintToken = crypto.randomUUID();
-  const huellaIndiceDerecho =
-    data.huella_indice_derecho?.trim() ||
-    `PENDING_FINGERPRINT_RIGHT_${randomFingerprintToken}`;
-  const huellaIndiceIzquierdo =
-    data.huella_indice_izquierdo?.trim() ||
-    `PENDING_FINGERPRINT_LEFT_${randomFingerprintToken}`;
+    const response = await fetch(`${backendUrl}/api/students/enroll`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        tipo_identificacion: data.tipo_identificacion,
+        numero_identificacion: data.numero_identificacion,
+        no_matricula: data.no_matricula || null,
+        nombres: data.nombres,
+        apellidos: data.apellidos,
+        grado: data.grado,
+        telefono: data.telefono,
+        direccion: data.direccion,
+        barrio: data.barrio,
+        nombre_acudiente: data.nombre_acudiente,
+        telefono_acudiente: data.telefono_acudiente,
+        eps: data.eps,
+        coordinador_academico: data.coordinador_academico,
+        programa: data.programa,
+        fecha_inicio: data.fecha_inicio,
+        fecha_matricula: data.fecha_matricula,
+        valor_matricula: data.valor_matricula,
+        medio_pago_matricula: data.medio_pago_matricula,
+        valor_apoyo_semanal: data.valor_apoyo_semanal,
+        huella_indice_derecho: data.huella_indice_derecho || null,
+        huella_indice_izquierdo: data.huella_indice_izquierdo || null,
+      }),
+    });
 
-  const { data: student, error } = await supabase
-    .from("estudiantes")
-    .insert({
-      tipo_identificacion: data.tipo_identificacion,
-      numero_identificacion: data.numero_identificacion,
-      no_matricula: data.no_matricula ?? null,
-      nombres: data.nombres,
-      apellidos: data.apellidos,
-      grado: data.grado,
-      telefono: data.telefono,
-      direccion: data.direccion,
-      barrio: data.barrio,
-      nombre_acudiente: data.nombre_acudiente,
-      telefono_acudiente: data.telefono_acudiente,
-      eps: data.eps,
-      coordinador_academico: data.coordinador_academico,
-      programa: data.programa,
-      fecha_inicio: data.fecha_inicio,
-      fecha_matricula: data.fecha_matricula,
-      valor_matricula: data.valor_matricula,
-      medio_pago_matricula: data.medio_pago_matricula,
-      valor_apoyo_semanal: data.valor_apoyo_semanal,
-      huella_indice_derecho: huellaIndiceDerecho,
-      huella_indice_izquierdo: huellaIndiceIzquierdo,
-    })
-    .select()
-    .single();
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      return {
+        success: false,
+        error: errorData?.error || `Error del servidor: ${response.status}`,
+      };
+    }
 
-  if (error) {
-    return { success: false, error: error.message };
+    const responseData = await response.json().catch(() => null);
+    if (!responseData || !responseData.success) {
+      return {
+        success: false,
+        error: responseData?.error || "Error desconocido",
+      };
+    }
+
+    // Fetch the created student from Supabase to return the full Student object
+    const supabase = await createClient();
+    const { data: student, error } = await supabase
+      .from("estudiantes")
+      .select("*")
+      .eq("numero_identificacion", data.numero_identificacion)
+      .single();
+
+    if (error || !student) {
+      return {
+        success: true,
+        data: responseData.data,
+      };
+    }
+
+    return { success: true, data: student as Student };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Error desconocido",
+    };
   }
-
-  return { success: true, data: student as Student };
 }
 
 export async function updateStudent(
@@ -142,6 +178,12 @@ export async function updateStudent(
       }),
       ...(data.valor_apoyo_semanal !== undefined && {
         valor_apoyo_semanal: data.valor_apoyo_semanal,
+      }),
+      ...(data.huella_indice_derecho !== undefined && {
+        huella_indice_derecho: data.huella_indice_derecho,
+      }),
+      ...(data.huella_indice_izquierdo !== undefined && {
+        huella_indice_izquierdo: data.huella_indice_izquierdo,
       }),
       updated_at: new Date().toISOString(),
     })

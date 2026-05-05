@@ -509,41 +509,42 @@ export default function AttendancePage() {
                 </p>
               )}
 
-              <Card className="border-dashed border-[#b92f2d]/30 bg-[#b92f2d]/5">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base text-[#982725] flex items-center gap-2">
-                    <Fingerprint className="h-4 w-4" />
-                    Asistencia por huella
-                  </CardTitle>
-                  <CardDescription>
-                    Captura de huellas digitales con el sensor DigitalPersona
-                    U.are.U 4500 para autenticacion biometrica y marcado
-                    automatico de asistencia.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div className="rounded-md border p-3 bg-white">
-                      <p className="text-[11px] uppercase tracking-wide text-gray-500">
-                        Lector
-                      </p>
-                      <p
-                        className={`text-sm mt-1 ${
-                          readerReady ? "text-green-700" : "text-[#982725]"
-                        }`}
-                      >
-                        {deviceStatus}
-                      </p>
-                    </div>
-                    <div className="rounded-md border p-3 bg-white">
-                      <p className="text-[11px] uppercase tracking-wide text-gray-500">
-                        Estado de captura
-                      </p>
-                      <p className="text-sm mt-1 text-gray-700">
-                        {captureStatus}
-                      </p>
-                    </div>
-                    {/* <div className="rounded-md border p-3 bg-white">
+              <div className="hidden">
+                <Card className="border-dashed border-[#b92f2d]/30 bg-[#b92f2d]/5">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base text-[#982725] flex items-center gap-2">
+                      <Fingerprint className="h-4 w-4" />
+                      Asistencia por huella
+                    </CardTitle>
+                    <CardDescription>
+                      Captura de huellas digitales con el sensor DigitalPersona
+                      U.are.U 4500 para autenticacion biometrica y marcado
+                      automatico de asistencia.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div className="rounded-md border p-3 bg-white">
+                        <p className="text-[11px] uppercase tracking-wide text-gray-500">
+                          Lector
+                        </p>
+                        <p
+                          className={`text-sm mt-1 ${
+                            readerReady ? "text-green-700" : "text-[#982725]"
+                          }`}
+                        >
+                          {deviceStatus}
+                        </p>
+                      </div>
+                      <div className="rounded-md border p-3 bg-white">
+                        <p className="text-[11px] uppercase tracking-wide text-gray-500">
+                          Estado de captura
+                        </p>
+                        <p className="text-sm mt-1 text-gray-700">
+                          {captureStatus}
+                        </p>
+                      </div>
+                      {/* <div className="rounded-md border p-3 bg-white">
                       <p className="text-[11px] uppercase tracking-wide text-gray-500">
                         Calidad
                       </p>
@@ -551,36 +552,37 @@ export default function AttendancePage() {
                         {typeof lastQuality === "number" ? lastQuality : "N/A"}
                       </p>
                     </div> */}
-                  </div>
+                    </div>
 
-                  <Button
-                    type="button"
-                    onClick={handleCaptureFingerprintAttendance}
-                    disabled={isCapturingFingerprint || isLoadingRoster}
-                    className="bg-[#b92f2d] hover:bg-[#982725] text-white"
-                  >
-                    {isCapturingFingerprint ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Capturando y validando...
-                      </>
-                    ) : (
-                      "Capturar y Marcar"
+                    <Button
+                      type="button"
+                      onClick={handleCaptureFingerprintAttendance}
+                      disabled={isCapturingFingerprint || isLoadingRoster}
+                      className="bg-[#b92f2d] hover:bg-[#982725] text-white"
+                    >
+                      {isCapturingFingerprint ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Capturando y validando...
+                        </>
+                      ) : (
+                        "Capturar y Marcar"
+                      )}
+                    </Button>
+
+                    {lastFingerprintMatch && (
+                      <p className="text-xs text-[#982725]">
+                        Ultima coincidencia:{" "}
+                        {lastFingerprintMatch.numero_identificacion}
+                        {typeof lastFingerprintMatch.confidence === "number" &&
+                          ` (confianza ${(lastFingerprintMatch.confidence * 100).toFixed(1)}%)`}
+                        {lastFingerprintMatch.source &&
+                          ` - fuente ${lastFingerprintMatch.source}`}
+                      </p>
                     )}
-                  </Button>
-
-                  {lastFingerprintMatch && (
-                    <p className="text-xs text-[#982725]">
-                      Ultima coincidencia:{" "}
-                      {lastFingerprintMatch.numero_identificacion}
-                      {typeof lastFingerprintMatch.confidence === "number" &&
-                        ` (confianza ${(lastFingerprintMatch.confidence * 100).toFixed(1)}%)`}
-                      {lastFingerprintMatch.source &&
-                        ` - fuente ${lastFingerprintMatch.source}`}
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              </div>
 
               <div className="rounded-md border bg-white overflow-hidden">
                 <Table>

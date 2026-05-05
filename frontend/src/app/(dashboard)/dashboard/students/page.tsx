@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
+import { NewStudentButton } from "@/components/new-student-button";
 import { DetailLookup } from "@/components/detail-lookup";
 import { StudentsTable } from "@/components/students-table";
 import { Student } from "@/lib/types";
@@ -23,12 +24,7 @@ export default async function StudentsPage() {
             Gestión de estudiantes registrados en el sistema
           </p>
         </div>
-        <Button asChild>
-          <Link href="/dashboard/students/new">
-            <Plus className="mr-2 h-4 w-4" />
-            Nuevo Estudiante
-          </Link>
-        </Button>
+        <NewStudentButton />
       </div>
 
       <DetailLookup type="student" />
