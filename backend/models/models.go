@@ -2,6 +2,12 @@ package models
 
 import "encoding/json"
 
+// EncryptedPayload represents an AES-GCM encrypted value with IV and ciphertext.
+type EncryptedPayload struct {
+    IV         string `json:"iv"`         // base64-encoded IV (12 bytes)
+    Ciphertext string `json:"ciphertext"` // base64-encoded ciphertext with GCM tag
+}
+
 type StudentEnrollRequest struct {
     TipoIdentificacion    string   `json:"tipo_identificacion"`
     NumeroIdentificacion  string   `json:"numero_identificacion"`
@@ -21,9 +27,13 @@ type StudentEnrollRequest struct {
     FechaMatricula        *string  `json:"fecha_matricula"`
     ValorMatricula        *float64 `json:"valor_matricula"`
     MedioPagoMatricula    string   `json:"medio_pago_matricula"`
-    ValorApoyoSemanal     float64  `json:"valor_apoyo_semanal"`
-    HuellaIndiceDerecho   *string  `json:"huella_indice_derecho"`
-    HuellaIndiceIzquierdo *string  `json:"huella_indice_izquierdo"`
+    ValorApoyoSemanal     float64          `json:"valor_apoyo_semanal"`
+    // Old plaintext fields (for backward compatibility; prefer encrypted versions)
+    HuellaIndiceDerecho   *string          `json:"huella_indice_derecho"`
+    HuellaIndiceIzquierdo *string          `json:"huella_indice_izquierdo"`
+    // New encrypted fields (AES-GCM encrypted PNG)
+    HuellaIndiceDerecho_Encrypted   *EncryptedPayload `json:"huella_indice_derecho_encrypted"`
+    HuellaIndiceIzquierdo_Encrypted *EncryptedPayload `json:"huella_indice_izquierdo_encrypted"`
 }
 
 type AttendanceIdentifyRequest struct {

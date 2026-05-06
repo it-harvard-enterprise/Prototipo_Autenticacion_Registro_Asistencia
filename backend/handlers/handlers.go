@@ -1,6 +1,7 @@
 package handlers
 
 import (
+    "encoding/json"
     "net/http"
     "strings"
 
@@ -32,15 +33,67 @@ func EnrollStudentHandler(app *services.App) gin.HandlerFunc {
             return
         }
 
-        rightTemplate, err := app.ResolveStoredFingerprintTemplate(req.HuellaIndiceDerecho)
+        // Resolve fingerprints: check for encrypted payloads first, then fall back to plaintext
+        var rightPNG, leftPNG *string
+        if req.HuellaIndiceDerecho_Encrypted != nil {
+            // Decrypt the encrypted PNG
+            decrypted, err := app.DecryptPNG(req.HuellaIndiceDerecho_Encrypted)
+            if err != nil {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "Huella derecha no se pudo desencriptar: " + err.Error()})
+                return
+            }
+            rightPNG = &decrypted
+        } else if req.HuellaIndiceDerecho != nil {
+            rightPNG = req.HuellaIndiceDerecho
+        }
+
+        if req.HuellaIndiceIzquierdo_Encrypted != nil {
+            // Decrypt the encrypted PNG
+            decrypted, err := app.DecryptPNG(req.HuellaIndiceIzquierdo_Encrypted)
+            if err != nil {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "Huella izquierda no se pudo desencriptar: " + err.Error()})
+                return
+            }
+            leftPNG = &decrypted
+        } else if req.HuellaIndiceIzquierdo != nil {
+            leftPNG = req.HuellaIndiceIzquierdo
+        }
+
+        // Extract templates from PNG and encrypt them for storage
+        rightTemplate, err := app.ResolveStoredFingerprintTemplate(rightPNG)
         if err != nil {
             c.JSON(http.StatusBadRequest, gin.H{"error": "Huella derecha invalida: " + err.Error()})
             return
         }
-        leftTemplate, err := app.ResolveStoredFingerprintTemplate(req.HuellaIndiceIzquierdo)
+
+        leftTemplate, err := app.ResolveStoredFingerprintTemplate(leftPNG)
         if err != nil {
             c.JSON(http.StatusBadRequest, gin.H{"error": "Huella izquierda invalida: " + err.Error()})
             return
+        }
+
+        // Encrypt templates before storage
+        var rightEncrypted, leftEncrypted any
+        if rightTemplate != services.DefaultFingerprint {
+            encPayload, err := app.EncryptTemplate(rightTemplate)
+            if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Error encriptando huella derecha: " + err.Error()})
+                return
+            }
+            rightEncrypted = encPayload
+        } else {
+            rightEncrypted = nil
+        }
+
+        if leftTemplate != services.DefaultFingerprint {
+            encPayload, err := app.EncryptTemplate(leftTemplate)
+            if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Error encriptando huella izquierda: " + err.Error()})
+                return
+            }
+            leftEncrypted = encPayload
+        } else {
+            leftEncrypted = nil
         }
 
         payload := map[string]any{
@@ -63,8 +116,8 @@ func EnrollStudentHandler(app *services.App) gin.HandlerFunc {
             "valor_matricula": req.ValorMatricula,
             "medio_pago_matricula": req.MedioPagoMatricula,
             "valor_apoyo_semanal": req.ValorApoyoSemanal,
-            "huella_indice_derecho": rightTemplate,
-            "huella_indice_izquierdo": leftTemplate,
+            "huella_indice_derecho": rightEncrypted,
+            "huella_indice_izquierdo": leftEncrypted,
         }
 
         rows, status, err := app.InsertStudent(c.Request.Context(), payload)
@@ -141,12 +194,35 @@ func IdentifyAttendanceHandler(app *services.App) gin.HandlerFunc {
 
         for _, enrollment := range enrollments {
             templatesToTry := []*string{enrollment.HuellaIndiceDerecho, enrollment.HuellaIndiceIzquierdo}
-            for _, rawTemplate := range templatesToTry {
-                if rawTemplate == nil || strings.TrimSpace(*rawTemplate) == "" {
+            for _, encryptedTemplateStr := range templatesToTry {
+                if encryptedTemplateStr == nil || strings.TrimSpace(*encryptedTemplateStr) == "" {
                     continue
                 }
 
-                candidate, err := app.DeserializeTemplate(*rawTemplate)
+                // Encrypted templates come from DB as JSON strings; parse and decrypt
+                var encPayload models.EncryptedPayload
+                if err := json.Unmarshal([]byte(*encryptedTemplateStr), &encPayload); err != nil {
+                    // Fallback: assume plaintext template (backward compatibility)
+                    candidate, err := app.DeserializeTemplate(*encryptedTemplateStr)
+                    if err != nil {
+                        continue
+                    }
+                    score := matcher.Match(ctx, candidate)
+                    if bestID == "" || score > bestScore {
+                        bestID = enrollment.NumeroIdentificacion
+                        bestScore = score
+                    }
+                    continue
+                }
+
+                // Decrypt the template
+                decryptedTemplateStr, err := app.DecryptTemplate(&encPayload)
+                if err != nil {
+                    continue
+                }
+
+                // Deserialize decrypted template
+                candidate, err := app.DeserializeTemplate(decryptedTemplateStr)
                 if err != nil {
                     continue
                 }
