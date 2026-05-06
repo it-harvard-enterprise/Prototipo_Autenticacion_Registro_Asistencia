@@ -20,5 +20,5 @@ ENV GIN_MODE=release
 ENV PORT=4000
 
 EXPOSE 4000
-
+       
 ENTRYPOINT ["/app/fingerprint-backend"]

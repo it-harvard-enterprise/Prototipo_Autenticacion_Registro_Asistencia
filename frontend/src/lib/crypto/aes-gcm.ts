@@ -26,10 +26,12 @@ export async function deriveKeyFromPassphrase(
     ["deriveBits"],
   );
 
+  // WebCrypto expects a BufferSource for the salt; use the underlying ArrayBuffer
+  const saltBuffer = salt.buffer as ArrayBuffer;
   const derivedBits = await crypto.subtle.deriveBits(
     {
       name: "PBKDF2",
-      salt,
+      salt: saltBuffer,
       iterations: 100000,
       hash: "SHA-256",
     },
