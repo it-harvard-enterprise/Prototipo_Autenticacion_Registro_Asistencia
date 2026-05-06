@@ -10,10 +10,7 @@ export function NewStudentButton() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
 
-  async function handleClick(e: React.MouseEvent) {
-    e.preventDefault();
-    if (isLoading) return;
-    setIsLoading(true);
+  async function startFingerprintService() {
     try {
       const res = await fetch("/api/start-service");
       if (res.ok) {
@@ -27,12 +24,18 @@ export function NewStudentButton() {
           json?.message || "Fingerprint capture service could not be started",
         );
       }
-    } catch (err) {
+    } catch {
       toast.error("Error contacting fingerprint service");
-    } finally {
-      setIsLoading(false);
-      router.push("/dashboard/students/new");
     }
+  }
+
+  async function handleClick(e: React.MouseEvent) {
+    e.preventDefault();
+    if (isLoading) return;
+    setIsLoading(true);
+    void startFingerprintService();
+    setIsLoading(false);
+    router.push("/dashboard/students/new");
   }
 
   return (
