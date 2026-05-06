@@ -17,6 +17,11 @@ import { toast } from "sonner";
 // Use API route instead of importing server action directly from client
 import { useDigitalPersonaFingerprintReader } from "@/lib/biometrics/digitalpersona";
 import {
+  deriveKeyFromPassphrase,
+  encryptAESGCM,
+  type EncryptedPayload,
+} from "@/lib/crypto/aes-gcm";
+import {
   IDENTIFICATION_TYPE_OPTIONS,
   IDENTIFICATION_TYPE_VALUES,
 } from "@/lib/identification-types";
@@ -219,44 +224,65 @@ export default function NewStudentPage() {
 
     setIsLoading(true);
 
-    const res = await fetch(`/api/students/create`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tipo_identificacion: values.tipo_identificacion,
-        numero_identificacion: values.numero_identificacion,
-        no_matricula: values.no_matricula || null,
-        nombres: values.nombres,
-        apellidos: values.apellidos,
-        grado: values.grado,
-        telefono: values.telefono,
-        direccion: values.direccion,
-        barrio: values.barrio,
-        nombre_acudiente: values.nombre_acudiente,
-        telefono_acudiente: values.telefono_acudiente,
-        eps: epsValue,
-        coordinador_academico: values.coordinador_academico,
-        programa: values.programa,
-        fecha_inicio: values.fecha_inicio,
-        fecha_matricula: values.fecha_matricula,
-        valor_matricula: parseCurrencyToNumber(values.valor_matricula) ?? 0,
-        medio_pago_matricula: values.medio_pago_matricula,
-        valor_apoyo_semanal:
-          parseCurrencyToNumber(values.valor_apoyo_semanal) ?? 0,
-        huella_indice_derecho: rightFingerprint,
-        huella_indice_izquierdo: leftFingerprint,
-      }),
-    });
+    try {
+      // Derive encryption key from a static passphrase (in production, use KMS or secure key exchange)
+      const encryptionKey = await deriveKeyFromPassphrase(
+        "student-biometric-default-key",
+      );
 
-    const result = await res
-      .json()
-      .catch(() => ({ success: false, error: "No response" }));
+      // Encrypt both fingerprints
+      const rightEncrypted = await encryptAESGCM(
+        rightFingerprint,
+        encryptionKey,
+      );
+      const leftEncrypted = await encryptAESGCM(leftFingerprint, encryptionKey);
 
-    if (res.ok && result?.success) {
-      toast.success("Estudiante creado correctamente");
-      router.replace("/dashboard/students");
-    } else {
-      toast.error(result.error ?? "Error al crear el estudiante");
+      const res = await fetch(`/api/students/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo_identificacion: values.tipo_identificacion,
+          numero_identificacion: values.numero_identificacion,
+          no_matricula: values.no_matricula || null,
+          nombres: values.nombres,
+          apellidos: values.apellidos,
+          grado: values.grado,
+          telefono: values.telefono,
+          direccion: values.direccion,
+          barrio: values.barrio,
+          nombre_acudiente: values.nombre_acudiente,
+          telefono_acudiente: values.telefono_acudiente,
+          eps: epsValue,
+          coordinador_academico: values.coordinador_academico,
+          programa: values.programa,
+          fecha_inicio: values.fecha_inicio,
+          fecha_matricula: values.fecha_matricula,
+          valor_matricula: parseCurrencyToNumber(values.valor_matricula) ?? 0,
+          medio_pago_matricula: values.medio_pago_matricula,
+          valor_apoyo_semanal:
+            parseCurrencyToNumber(values.valor_apoyo_semanal) ?? 0,
+          huella_indice_derecho_encrypted: rightEncrypted,
+          huella_indice_izquierdo_encrypted: leftEncrypted,
+        }),
+      });
+
+      const result = await res
+        .json()
+        .catch(() => ({ success: false, error: "No response" }));
+
+      if (res.ok && result?.success) {
+        toast.success("Estudiante creado correctamente");
+        router.replace("/dashboard/students");
+      } else {
+        toast.error(result.error ?? "Error al crear el estudiante");
+        setIsLoading(false);
+      }
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? `Error de encriptación: ${err.message}`
+          : "Error desconocido durante encriptación",
+      );
       setIsLoading(false);
     }
   }

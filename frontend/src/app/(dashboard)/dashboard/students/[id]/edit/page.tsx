@@ -13,6 +13,11 @@ import { createClient } from "@/lib/supabase/client";
 // Use API route instead of importing server action into client
 import { useDigitalPersonaFingerprintReader } from "@/lib/biometrics/digitalpersona";
 import {
+  deriveKeyFromPassphrase,
+  encryptAESGCM,
+  type EncryptedPayload,
+} from "@/lib/crypto/aes-gcm";
+import {
   IDENTIFICATION_TYPE_OPTIONS,
   IDENTIFICATION_TYPE_VALUES,
 } from "@/lib/identification-types";
@@ -255,6 +260,18 @@ export default function EditStudentPage() {
     setIsLoading(true);
 
     try {
+      // Derive encryption key from a static passphrase (in production, use KMS or secure key exchange)
+      const encryptionKey = await deriveKeyFromPassphrase(
+        "student-biometric-default-key",
+      );
+
+      // Encrypt both fingerprints
+      const rightEncrypted = await encryptAESGCM(
+        rightFingerprint,
+        encryptionKey,
+      );
+      const leftEncrypted = await encryptAESGCM(leftFingerprint, encryptionKey);
+
       const res = await fetch(`/api/students/update`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -280,8 +297,8 @@ export default function EditStudentPage() {
             valor_matricula: Number(values.valor_matricula),
             medio_pago_matricula: values.medio_pago_matricula,
             valor_apoyo_semanal: Number(values.valor_apoyo_semanal),
-            huella_indice_derecho: rightFingerprint,
-            huella_indice_izquierdo: leftFingerprint,
+            huella_indice_derecho_encrypted: rightEncrypted,
+            huella_indice_izquierdo_encrypted: leftEncrypted,
           },
         }),
       });
@@ -297,8 +314,12 @@ export default function EditStudentPage() {
         result.data?.numero_identificacion ?? values.numero_identificacion;
       toast.success("Estudiante actualizado correctamente");
       router.replace(`/dashboard/students/${nextId}`);
-    } catch {
-      toast.error("Error inesperado al actualizar el estudiante");
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? `Error de encriptación: ${err.message}`
+          : "Error desconocido durante encriptación",
+      );
     } finally {
       setIsLoading(false);
     }
