@@ -1,0 +1,11 @@
+.git
+.gitignore
+.env
+.env.*
+Dockerfile
+fingerprint-backend
+fingerprint-backend.exe
+*.log
+*.tmp
+*.out
+coverage*
