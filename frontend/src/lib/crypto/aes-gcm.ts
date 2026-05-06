@@ -131,7 +131,26 @@ export async function exportKeyToRaw(key: CryptoKey): Promise<Uint8Array> {
 export async function importKeyFromRaw(
   keyBytes: Uint8Array,
 ): Promise<CryptoKey> {
-  return crypto.subtle.importKey("raw", keyBytes, "AES-GCM", false, [
+  // Ensure we pass a proper ArrayBuffer (BufferSource) to satisfy TypeScript
+  // and WebCrypto. If the Uint8Array references a sub-range of an ArrayBuffer,
+  // slice out the exact bytes as a new ArrayBuffer view.
+  let raw: ArrayBuffer;
+  if (
+    keyBytes.byteOffset === 0 &&
+    keyBytes.byteLength === keyBytes.buffer.byteLength
+  ) {
+    raw = keyBytes.buffer as ArrayBuffer;
+  } else {
+    // Create a new ArrayBuffer containing only the requested subrange to
+    // guarantee we have a plain ArrayBuffer (not SharedArrayBuffer).
+    const tmp = new Uint8Array(keyBytes.byteLength);
+    tmp.set(
+      new Uint8Array(keyBytes.buffer, keyBytes.byteOffset, keyBytes.byteLength),
+    );
+    raw = tmp.buffer;
+  }
+
+  return crypto.subtle.importKey("raw", raw, "AES-GCM", false, [
     "encrypt",
     "decrypt",
   ]);
