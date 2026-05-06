@@ -51,12 +51,12 @@ func (a *App) DecryptPNG(payload *models.EncryptedPayload) (string, error) {
 	// Derive the same encryption key used during encryption
 	encryptionKey, err := DeriveKeyFromPassphrase("student-biometric-default-key", 100000)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	decrypted, err := a.decryptWithKey(payload, encryptionKey)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	return string(decrypted), nil
@@ -82,12 +82,12 @@ func (a *App) DecryptTemplate(payload *models.EncryptedPayload) (string, error) 
 
 	encryptionKey, err := DeriveKeyFromPassphrase("student-biometric-template-key", 100000)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	decrypted, err := a.decryptWithKey(payload, encryptionKey)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	return string(decrypted), nil
