@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ClipboardList, Fingerprint, Loader2 } from "lucide-react";
+import { ChevronDown, ClipboardList, Fingerprint, Loader2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { toast } from "sonner";
 
 import {
+  deleteAttendanceForCourseAndDate,
   getAttendanceRosterByCourseAndDate,
   getCourseOptions,
   saveAttendanceForCourseAndDate,
@@ -33,6 +34,16 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Table,
   TableBody,
@@ -102,6 +113,12 @@ export default function AttendancePage() {
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [hasLoadedRoster, setHasLoadedRoster] = useState(false);
   const [isCapturingFingerprint, setIsCapturingFingerprint] = useState(false);
+  const [courseSearch, setCourseSearch] = useState("");
+  const [showCourseList, setShowCourseList] = useState(false);
+  const [isRosterDirty, setIsRosterDirty] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [isDeletingRoster, setIsDeletingRoster] = useState(false);
   const [lastFingerprintMatch, setLastFingerprintMatch] = useState<{
     numero_identificacion: string;
     confidence?: number;
@@ -120,7 +137,7 @@ export default function AttendancePage() {
     resolver: zodResolver(attendanceSchema),
     defaultValues: {
       idCurso: "",
-      fecha: getTodayIsoDate(),
+      fecha: "",
     },
   });
 
@@ -133,6 +150,30 @@ export default function AttendancePage() {
     );
   }, [courses, form]);
 
+  const filteredCourses = useMemo(() => {
+    const query = courseSearch.trim().toLowerCase();
+    if (!query) return courses;
+
+    return courses.filter((course) => {
+      const idMatch = String(course.id_curso).includes(query);
+      const nameMatch = course.nombre_curso.toLowerCase().includes(query);
+      return idMatch || nameMatch;
+    });
+  }, [courseSearch, courses]);
+
+  useEffect(() => {
+    if (!courses.length) return;
+    const currentId = form.getValues("idCurso");
+    if (!currentId) return;
+
+    const selected = courses.find(
+      (course) => String(course.id_curso) === String(currentId),
+    );
+    if (!selected) return;
+
+    setCourseSearch(`${selected.id_curso} - ${selected.nombre_curso}`);
+  }, [courses, form]);
+
   const autosaveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
@@ -140,8 +181,8 @@ export default function AttendancePage() {
   async function persistAttendanceRowsInBackground(
     values: AttendanceFormValues,
     rowsToPersist: AttendanceStudentRow[],
-  ) {
-    if (rowsToPersist.length === 0) return;
+  ): Promise<boolean> {
+    if (rowsToPersist.length === 0) return false;
 
     setIsAutoSaving(true);
     const result = await saveAttendanceForCourseAndDate({
@@ -161,7 +202,10 @@ export default function AttendancePage() {
       toast.error(
         result.error ?? "No fue posible guardar el progreso de asistencia",
       );
+      return false;
     }
+
+    return true;
   }
 
   useEffect(() => {
@@ -215,7 +259,12 @@ export default function AttendancePage() {
     const rows = result.data ?? [];
     setStudents(rows);
     setHasLoadedRoster(true);
+    setIsRosterDirty(false);
     toast.success("Lista de asistencia cargada");
+
+    if (rows.length === 0) {
+      toast.info("No hay estudiantes inscritos en este curso");
+    }
 
     return rows;
   }
@@ -332,10 +381,19 @@ export default function AttendancePage() {
         return next;
       }),
     );
+    setIsRosterDirty(true);
   }
 
   useEffect(() => {
-    if (!hasLoadedRoster || students.length === 0) return;
+    if (
+      !hasLoadedRoster ||
+      students.length === 0 ||
+      !isRosterDirty ||
+      isDeletingRoster ||
+      isDeleteDialogOpen
+    ) {
+      return;
+    }
 
     const parsed = attendanceSchema.safeParse(form.getValues());
     if (!parsed.success) return;
@@ -345,7 +403,15 @@ export default function AttendancePage() {
     }
 
     autosaveDebounceRef.current = setTimeout(() => {
-      void persistAttendanceRowsInBackground(parsed.data, students);
+      void (async () => {
+        const saved = await persistAttendanceRowsInBackground(
+          parsed.data,
+          students,
+        );
+        if (saved) {
+          setIsRosterDirty(false);
+        }
+      })();
     }, 450);
 
     return () => {
@@ -354,7 +420,14 @@ export default function AttendancePage() {
         autosaveDebounceRef.current = null;
       }
     };
-  }, [hasLoadedRoster, students, form]);
+  }, [
+    hasLoadedRoster,
+    isRosterDirty,
+    isDeletingRoster,
+    isDeleteDialogOpen,
+    students,
+    form,
+  ]);
 
   async function onSubmit(values: AttendanceFormValues) {
     if (students.length === 0) {
@@ -401,9 +474,54 @@ export default function AttendancePage() {
       return;
     }
 
+    setIsRosterDirty(false);
+
     toast.success(
       `Asistencia guardada correctamente (${result.savedCount ?? students.length} registros)`,
     );
+  }
+
+  async function handleDeleteAttendanceRoster() {
+    const parsed = attendanceSchema.safeParse(form.getValues());
+    if (!parsed.success) {
+      await form.trigger();
+      return;
+    }
+
+    if (deleteConfirmText.trim() !== "ELIMINAR") {
+      toast.error("Debe escribir ELIMINAR para confirmar la eliminacion");
+      return;
+    }
+
+    if (autosaveDebounceRef.current) {
+      clearTimeout(autosaveDebounceRef.current);
+      autosaveDebounceRef.current = null;
+    }
+
+    setIsRosterDirty(false);
+    setHasLoadedRoster(false);
+    setStudents([]);
+    setIsDeletingRoster(true);
+    const result = await deleteAttendanceForCourseAndDate({
+      idCurso: Number(parsed.data.idCurso),
+      date: parsed.data.fecha,
+    });
+    setIsDeletingRoster(false);
+
+    if (!result.success) {
+      toast.error(
+        result.error ?? "No fue posible eliminar la lista de asistencia",
+      );
+      return;
+    }
+
+    setIsDeleteDialogOpen(false);
+    setDeleteConfirmText("");
+    setLastFingerprintMatch(null);
+    setCourseSearch("");
+    form.reset({ idCurso: "", fecha: "" });
+
+    toast.success("Lista de asistencia eliminada correctamente");
   }
 
   return (
@@ -438,27 +556,78 @@ export default function AttendancePage() {
                   name="idCurso"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Curso (id_curso - nombre) *</FormLabel>
+                      <FormLabel>Curso *</FormLabel>
                       <FormControl>
-                        <select
-                          {...field}
-                          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                          disabled={isLoadingCourses}
-                        >
-                          <option value="">
-                            {isLoadingCourses
-                              ? "Cargando cursos..."
-                              : "Seleccione un curso"}
-                          </option>
-                          {courses.map((course) => (
-                            <option
-                              key={course.id_curso}
-                              value={String(course.id_curso)}
-                            >
-                              {course.id_curso} - {course.nombre_curso}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="relative">
+                          <Input
+                            placeholder={
+                              isLoadingCourses
+                                ? "Cargando cursos..."
+                                : "Escriba el nombre o id del curso"
+                            }
+                            value={courseSearch}
+                            onChange={(event) => {
+                              const nextValue = event.target.value;
+                              setCourseSearch(nextValue);
+                              setShowCourseList(true);
+
+                              const directId = nextValue.trim();
+                              const idMatch = courses.find(
+                                (course) =>
+                                  String(course.id_curso) === directId,
+                              );
+                              const labelMatch = courses.find((course) =>
+                                `${course.id_curso} - ${course.nombre_curso}`
+                                  .toLowerCase()
+                                  .startsWith(directId.toLowerCase()),
+                              );
+
+                              const selectedCourse = idMatch ?? labelMatch;
+                              if (selectedCourse) {
+                                field.onChange(String(selectedCourse.id_curso));
+                              } else {
+                                field.onChange("");
+                              }
+                            }}
+                            onFocus={() => setShowCourseList(true)}
+                            onBlur={() => {
+                              setTimeout(() => setShowCourseList(false), 120);
+                            }}
+                            disabled={isLoadingCourses}
+                          />
+                          <button
+                            type="button"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => setShowCourseList((prev) => !prev)}
+                            disabled={isLoadingCourses}
+                            aria-label="Mostrar lista de cursos"
+                          >
+                            <ChevronDown className="h-4 w-4" />
+                          </button>
+                          {showCourseList && filteredCourses.length > 0 && (
+                            <div className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-md border border-input bg-white shadow-sm">
+                              {filteredCourses.map((course) => (
+                                <button
+                                  key={course.id_curso}
+                                  type="button"
+                                  className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                  onMouseDown={(event) =>
+                                    event.preventDefault()
+                                  }
+                                  onClick={() => {
+                                    const label = `${course.id_curso} - ${course.nombre_curso}`;
+                                    setCourseSearch(label);
+                                    field.onChange(String(course.id_curso));
+                                    setShowCourseList(false);
+                                  }}
+                                >
+                                  {course.id_curso} - {course.nombre_curso}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -496,7 +665,7 @@ export default function AttendancePage() {
                 </Button>
               </div>
 
-              {selectedCourseName && (
+              {hasLoadedRoster && selectedCourseName && students.length > 0 && (
                 <div className="rounded-md border border-[#b92f2d]/20 bg-[#b92f2d]/5 p-3 text-sm text-[#982725]">
                   Curso seleccionado:{" "}
                   <span className="font-semibold">{selectedCourseName}</span>
@@ -509,80 +678,70 @@ export default function AttendancePage() {
                 </p>
               )}
 
-              <div className="hidden">
-                <Card className="border-dashed border-[#b92f2d]/30 bg-[#b92f2d]/5">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base text-[#982725] flex items-center gap-2">
-                      <Fingerprint className="h-4 w-4" />
-                      Asistencia por huella
-                    </CardTitle>
-                    <CardDescription>
-                      Captura de huellas digitales con el sensor DigitalPersona
-                      U.are.U 4500 para autenticacion biometrica y marcado
-                      automatico de asistencia.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div className="rounded-md border p-3 bg-white">
-                        <p className="text-[11px] uppercase tracking-wide text-gray-500">
-                          Lector
-                        </p>
-                        <p
-                          className={`text-sm mt-1 ${
-                            readerReady ? "text-green-700" : "text-[#982725]"
-                          }`}
-                        >
-                          {deviceStatus}
-                        </p>
-                      </div>
-                      <div className="rounded-md border p-3 bg-white">
-                        <p className="text-[11px] uppercase tracking-wide text-gray-500">
-                          Estado de captura
-                        </p>
-                        <p className="text-sm mt-1 text-gray-700">
-                          {captureStatus}
-                        </p>
-                      </div>
-                      {/* <div className="rounded-md border p-3 bg-white">
+              <Card className="border-dashed border-[#b92f2d]/30 bg-[#b92f2d]/5">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base text-[#982725] flex items-center gap-2">
+                    <Fingerprint className="h-4 w-4" />
+                    Asistencia por huella
+                  </CardTitle>
+                  <CardDescription>
+                    Captura de huellas digitales con el sensor para
+                    autenticacion biometrica y marcado automatico de asistencia.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="rounded-md border p-3 bg-white">
                       <p className="text-[11px] uppercase tracking-wide text-gray-500">
-                        Calidad
+                        Lector
+                      </p>
+                      <p
+                        className={`text-sm mt-1 ${
+                          readerReady ? "text-green-700" : "text-[#982725]"
+                        }`}
+                      >
+                        {deviceStatus}
+                      </p>
+                    </div>
+                    <div className="rounded-md border p-3 bg-white">
+                      <p className="text-[11px] uppercase tracking-wide text-gray-500">
+                        Estado de captura
                       </p>
                       <p className="text-sm mt-1 text-gray-700">
-                        {typeof lastQuality === "number" ? lastQuality : "N/A"}
+                        {captureStatus}
                       </p>
-                    </div> */}
                     </div>
+                    <div className="rounded-md border p-3 bg-white flex flex-col justify-between">
+                      <Button
+                        type="button"
+                        onClick={handleCaptureFingerprintAttendance}
+                        disabled={isCapturingFingerprint || isLoadingRoster}
+                        className="w-full h-full min-h-10 bg-[#b92f2d] hover:bg-[#982725] text-white"
+                      >
+                        {isCapturingFingerprint ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Capturando y validando...
+                          </>
+                        ) : (
+                          "Capturar y Marcar Asistencia"
+                        )}
+                      </Button>
+                    </div>
+                  </div>
 
-                    <Button
-                      type="button"
-                      onClick={handleCaptureFingerprintAttendance}
-                      disabled={isCapturingFingerprint || isLoadingRoster}
-                      className="bg-[#b92f2d] hover:bg-[#982725] text-white"
-                    >
-                      {isCapturingFingerprint ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Capturando y validando...
-                        </>
-                      ) : (
-                        "Capturar y Marcar"
-                      )}
-                    </Button>
-
-                    {lastFingerprintMatch && (
-                      <p className="text-xs text-[#982725]">
-                        Ultima coincidencia:{" "}
-                        {lastFingerprintMatch.numero_identificacion}
-                        {typeof lastFingerprintMatch.confidence === "number" &&
-                          ` (confianza ${(lastFingerprintMatch.confidence * 100).toFixed(1)}%)`}
-                        {lastFingerprintMatch.source &&
-                          ` - fuente ${lastFingerprintMatch.source}`}
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
+                  {lastFingerprintMatch && (
+                    <p className="text-xs text-[#982725]">
+                      Ultima coincidencia:{" "}
+                      {lastFingerprintMatch.numero_identificacion}
+                      {typeof lastFingerprintMatch.confidence === "number" &&
+                        ` (confianza ${(lastFingerprintMatch.confidence * 100).toFixed(1)}%)`}
+                      {lastFingerprintMatch.source &&
+                        ` - fuente ${lastFingerprintMatch.source}`}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
 
               <div className="rounded-md border bg-white overflow-hidden">
                 <Table>
@@ -693,7 +852,58 @@ export default function AttendancePage() {
                 </Table>
               </div>
 
-              <div className="flex justify-end">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                {hasLoadedRoster && (
+                  <AlertDialog
+                    open={isDeleteDialogOpen}
+                    onOpenChange={(open) => {
+                      setIsDeleteDialogOpen(open);
+                      if (!open) {
+                        setDeleteConfirmText("");
+                      }
+                    }}
+                  >
+                    <Button
+                      type="button"
+                      onClick={() => setIsDeleteDialogOpen(true)}
+                      className="border border-[#b92f2d] bg-white text-[#b92f2d] hover:bg-[#b92f2d]/10"
+                      disabled={isDeletingRoster}
+                    >
+                      Eliminar Lista de Asistencia
+                    </Button>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle className="font-bold text-[#b92f2d]">
+                          Advertencia
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Esta operacion es irreversible. ¿Está seguro de que
+                          quiere eliminar la lista de asistencia actual?
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <Input
+                        placeholder="Escriba ELIMINAR"
+                        value={deleteConfirmText}
+                        onChange={(event) =>
+                          setDeleteConfirmText(event.target.value)
+                        }
+                      />
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={handleDeleteAttendanceRoster}
+                          disabled={
+                            isDeletingRoster ||
+                            deleteConfirmText.trim() !== "ELIMINAR"
+                          }
+                          className="bg-[#b92f2d] text-white hover:bg-[#982725]"
+                        >
+                          {isDeletingRoster ? "Eliminando..." : "Eliminar"}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
                 <Button
                   type="submit"
                   disabled={students.length === 0 || isSaving}

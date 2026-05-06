@@ -454,6 +454,32 @@ export async function saveAttendanceForCourseAndDate(params: {
   return { success: true, savedCount: normalizedRows.length };
 }
 
+export async function deleteAttendanceForCourseAndDate(params: {
+  idCurso: number;
+  date: string;
+}): Promise<{ success: boolean; error?: string; deletedCount?: number }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
+  const supabase = await createClient();
+  const { startIso, endIso } = getBogotaDayBounds(params.date);
+
+  const { error, count } = await supabase
+    .from("registro_asistencia")
+    .delete({ count: "exact" })
+    .eq("id_curso", params.idCurso)
+    .gte("fecha", startIso)
+    .lt("fecha", endIso);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  return { success: true, deletedCount: count ?? 0 };
+}
+
 export async function getAttendanceExportByCourseAndDate(
   idCurso: number,
   date: string,

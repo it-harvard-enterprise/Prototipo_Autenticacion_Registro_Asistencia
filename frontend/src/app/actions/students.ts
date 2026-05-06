@@ -52,10 +52,15 @@ export async function createStudent(
       };
     }
 
+    const frontendOrigin =
+      process.env.FRONTEND_ORIGIN?.split(",")[0]?.trim() ||
+      "http://localhost:3000";
+
     const response = await fetch(`${backendUrl}/api/students/enroll`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "X-Frontend-Origin": frontendOrigin,
       },
       body: JSON.stringify({
         tipo_identificacion: data.tipo_identificacion,

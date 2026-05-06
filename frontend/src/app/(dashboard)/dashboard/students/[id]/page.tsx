@@ -71,6 +71,14 @@ export default async function StudentDetailPage({
     return value;
   };
 
+  const hasFingerprintRight = Boolean(
+    s.huella_indice_derecho && s.huella_indice_derecho.trim() !== "",
+  );
+  const hasFingerprintLeft = Boolean(
+    s.huella_indice_izquierdo && s.huella_indice_izquierdo.trim() !== "",
+  );
+  const hasFingerprints = hasFingerprintRight && hasFingerprintLeft;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -264,9 +272,17 @@ export default async function StudentDetailPage({
         <CardContent>
           <div className="rounded-lg border bg-gray-50 px-4 py-3 flex items-center gap-3">
             <Fingerprint className="h-5 w-5 text-gray-400" />
-            <p className="text-sm font-medium text-gray-700">
-              Funcionalidad no disponible temporalmente
-            </p>
+            <div className="text-sm text-gray-700">
+              <p className="font-medium">
+                {hasFingerprints
+                  ? "Huellas registradas"
+                  : "Huellas no registradas"}
+              </p>
+              <p className="text-xs text-gray-500">
+                Derecha: {hasFingerprintRight ? "Registrada" : "Pendiente"} ·
+                Izquierda: {hasFingerprintLeft ? "Registrada" : "Pendiente"}
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>

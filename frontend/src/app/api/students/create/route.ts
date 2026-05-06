@@ -14,6 +14,7 @@ export async function POST(req: Request) {
     }
 
     const payload = await req.json();
+    const frontendOrigin = req.headers.get("origin") ?? new URL(req.url).origin;
 
     const backendUrl = resolveBiometricBackendBaseUrl();
     if (!backendUrl) {
@@ -25,7 +26,10 @@ export async function POST(req: Request) {
 
     const res = await fetch(`${backendUrl}/api/students/enroll`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Frontend-Origin": frontendOrigin,
+      },
       body: JSON.stringify(payload),
     });
 
