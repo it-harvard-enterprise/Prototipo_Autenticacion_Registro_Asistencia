@@ -9,15 +9,30 @@ export interface EncryptedPayload {
   tag?: string; // included in ciphertext with GCM
 }
 
+const DEFAULT_PBKDF2_SALT = "student-biometric-salt";
+
+function bytesToBase64(bytes: Uint8Array): string {
+  const chunkSize = 0x8000;
+  let binary = "";
+
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    const chunk = bytes.subarray(index, index + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+
+  return btoa(binary);
+}
+
 /**
  * Derive a stable AES-256 key from a passphrase using PBKDF2.
  * Used for session or hardcoded passphrases; KMS integration can replace this.
  */
 export async function deriveKeyFromPassphrase(
   passphrase: string,
-  salt: Uint8Array = new Uint8Array(16),
+  salt?: Uint8Array,
 ): Promise<CryptoKey> {
   const encoder = new TextEncoder();
+  const effectiveSalt = salt ?? encoder.encode(DEFAULT_PBKDF2_SALT);
   const baseKey = await crypto.subtle.importKey(
     "raw",
     encoder.encode(passphrase),
@@ -27,7 +42,7 @@ export async function deriveKeyFromPassphrase(
   );
 
   // WebCrypto expects a BufferSource for the salt; use the underlying ArrayBuffer
-  const saltBuffer = salt.buffer as ArrayBuffer;
+  const saltBuffer = effectiveSalt.buffer as ArrayBuffer;
   const derivedBits = await crypto.subtle.deriveBits(
     {
       name: "PBKDF2",
@@ -77,10 +92,8 @@ export async function encryptAESGCM(
   );
 
   return {
-    iv: btoa(String.fromCharCode(...Array.from(iv))),
-    ciphertext: btoa(
-      String.fromCharCode(...Array.from(new Uint8Array(ciphertext))),
-    ),
+    iv: bytesToBase64(iv),
+    ciphertext: bytesToBase64(new Uint8Array(ciphertext)),
   };
 }
 

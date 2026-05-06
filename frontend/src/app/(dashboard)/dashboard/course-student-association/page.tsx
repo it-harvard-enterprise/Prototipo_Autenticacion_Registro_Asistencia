@@ -440,12 +440,12 @@ export default function CourseStudentAssociationPage() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>
-                              numero_identificacion (1 o N, separados por comas)
-                              *
+                              Número de Identificación (1 o muchos, separados
+                              por comas) *
                             </FormLabel>
                             <FormControl>
                               <Input
-                                placeholder="Ej: 1001,1002,1003"
+                                placeholder="Ej: 1021456789,1021456789,1021456789"
                                 {...field}
                               />
                             </FormControl>

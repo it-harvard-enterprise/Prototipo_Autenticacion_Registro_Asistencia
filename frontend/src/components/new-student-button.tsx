@@ -18,7 +18,7 @@ export function NewStudentButton() {
       const res = await fetch("/api/start-service");
       if (res.ok) {
         const json = await res.json();
-        toast.success(
+        console.info(
           json?.message || "Fingerprint capture service is up and running.",
         );
       } else {

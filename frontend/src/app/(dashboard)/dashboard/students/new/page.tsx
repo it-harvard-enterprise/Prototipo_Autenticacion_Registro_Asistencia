@@ -744,12 +744,8 @@ export default function NewStudentPage() {
               <div className="space-y-3">
                 <div>
                   <h3 className="text-sm font-semibold text-gray-900">
-                    Captura de huellas
+                    Captura de Huellas
                   </h3>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Captura en vivo con DigitalPersona U.are.U 4500 en formato
-                    PNG base64 para procesamiento en backend.
-                  </p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -771,14 +767,6 @@ export default function NewStudentPage() {
                     </p>
                     <p className="text-sm mt-1 text-gray-700">
                       {captureStatus}
-                    </p>
-                  </div>
-                  <div className="rounded-md border p-3 bg-white">
-                    <p className="text-[11px] uppercase tracking-wide text-gray-500">
-                      Calidad
-                    </p>
-                    <p className="text-sm mt-1 text-gray-700">
-                      {typeof lastQuality === "number" ? lastQuality : "N/A"}
                     </p>
                   </div>
                 </div>
