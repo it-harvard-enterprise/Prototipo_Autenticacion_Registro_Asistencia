@@ -59,6 +59,7 @@ const studentSchema = z
     no_matricula: z.string().max(20).optional(),
     nombres: z.string().min(2, "Los nombres son requeridos").max(100),
     apellidos: z.string().min(2, "Los apellidos son requeridos").max(100),
+    email: z.string().email("Ingrese un correo electrónico válido"),
     grado: z.enum(STUDENT_GRADE_OPTIONS, {
       message: "Debe seleccionar un grado válido",
     }),
@@ -105,14 +106,8 @@ const studentSchema = z
       .refine((val) => !Number.isNaN(Number(val)) && Number(val) > 0, {
         message: "El valor de apoyo semanal debe ser mayor que 0",
       }),
-    huella_indice_derecho: z
-      .string()
-      .trim()
-      .min(1, "Debe capturar la huella indice derecha"),
-    huella_indice_izquierdo: z
-      .string()
-      .trim()
-      .min(1, "Debe capturar la huella indice izquierda"),
+    huella_indice_derecho: z.string().trim().optional(),
+    huella_indice_izquierdo: z.string().trim().optional(),
   })
   .superRefine((data, ctx) => {
     if (
@@ -159,6 +154,7 @@ export default function EditStudentPage() {
       no_matricula: "",
       nombres: "",
       apellidos: "",
+      email: "",
       grado: "1",
       telefono: "",
       direccion: "",
@@ -212,6 +208,7 @@ export default function EditStudentPage() {
         no_matricula: s.no_matricula ?? "",
         nombres: s.nombres,
         apellidos: s.apellidos,
+        email: s.email ?? "",
         grado: s.grado as StudentFormValues["grado"],
         telefono: s.telefono,
         direccion: s.direccion,
@@ -250,12 +247,6 @@ export default function EditStudentPage() {
 
     const rightFingerprint = values.huella_indice_derecho?.trim() ?? "";
     const leftFingerprint = values.huella_indice_izquierdo?.trim() ?? "";
-    if (!rightFingerprint || !leftFingerprint) {
-      toast.error(
-        "Debe capturar la huella indice derecha e izquierda antes de guardar",
-      );
-      return;
-    }
 
     setIsLoading(true);
 
@@ -265,12 +256,12 @@ export default function EditStudentPage() {
         "student-biometric-default-key",
       );
 
-      // Encrypt both fingerprints
-      const rightEncrypted = await encryptAESGCM(
-        rightFingerprint,
-        encryptionKey,
-      );
-      const leftEncrypted = await encryptAESGCM(leftFingerprint, encryptionKey);
+      const rightEncrypted: EncryptedPayload | null = rightFingerprint
+        ? await encryptAESGCM(rightFingerprint, encryptionKey)
+        : null;
+      const leftEncrypted: EncryptedPayload | null = leftFingerprint
+        ? await encryptAESGCM(leftFingerprint, encryptionKey)
+        : null;
 
       const res = await fetch(`/api/students/update`, {
         method: "POST",
@@ -283,6 +274,7 @@ export default function EditStudentPage() {
             no_matricula: values.no_matricula || null,
             nombres: values.nombres,
             apellidos: values.apellidos,
+            email: values.email,
             grado: values.grado,
             telefono: values.telefono,
             direccion: values.direccion,
@@ -355,8 +347,8 @@ export default function EditStudentPage() {
     toast.success("Huella capturada correctamente");
   }
 
-  const rightFingerprintValue = form.watch("huella_indice_derecho");
-  const leftFingerprintValue = form.watch("huella_indice_izquierdo");
+  const rightFingerprintValue = form.watch("huella_indice_derecho") ?? "";
+  const leftFingerprintValue = form.watch("huella_indice_izquierdo") ?? "";
   const hasBothFingerprints =
     rightFingerprintValue.trim().length > 0 &&
     leftFingerprintValue.trim().length > 0;
@@ -483,6 +475,19 @@ export default function EditStudentPage() {
                       <FormLabel>Apellidos *</FormLabel>
                       <FormControl>
                         <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Correo electrónico *</FormLabel>
+                      <FormControl>
+                        <Input type="email" autoComplete="email" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -897,10 +902,7 @@ export default function EditStudentPage() {
                 >
                   <Link href={`/dashboard/students/${id}`}>Cancelar</Link>
                 </Button>
-                <Button
-                  type="submit"
-                  disabled={isLoading || !hasBothFingerprints}
-                >
+                <Button type="submit" disabled={isLoading}>
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />

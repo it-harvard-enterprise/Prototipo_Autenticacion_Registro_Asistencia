@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { ensureApprovedAdmin } from "@/lib/auth/approved-admin";
 import { resolveBiometricBackendBaseUrl } from "@/lib/biometric-backend";
+import { inviteUserByEmail } from "@/lib/supabase/admin";
 import { Student } from "@/lib/types";
 
 export interface StudentFormData {
@@ -11,6 +12,7 @@ export interface StudentFormData {
   no_matricula?: string | null;
   nombres: string;
   apellidos: string;
+  email?: string | null;
   grado: string;
   telefono: string;
   direccion: string;
@@ -68,6 +70,7 @@ export async function createStudent(
         no_matricula: data.no_matricula || null,
         nombres: data.nombres,
         apellidos: data.apellidos,
+        email: data.email || null,
         grado: data.grado,
         telefono: data.telefono,
         direccion: data.direccion,
@@ -101,6 +104,21 @@ export async function createStudent(
         success: false,
         error: responseData?.error || "Error desconocido",
       };
+    }
+
+    if (data.email) {
+      const frontendOrigin =
+        process.env.FRONTEND_ORIGIN?.split(",")[0]?.trim() ||
+        "http://localhost:3000";
+      const emailRedirectTo = new URL("/login", frontendOrigin).toString();
+      const inviteResult = await inviteUserByEmail(data.email, emailRedirectTo);
+
+      if (!inviteResult.ok && !inviteResult.alreadyRegistered) {
+        return {
+          success: false,
+          error: inviteResult.error || "No se pudo enviar la invitación",
+        };
+      }
     }
 
     // Fetch the created student from Supabase to return the full Student object
@@ -152,6 +170,7 @@ export async function updateStudent(
       }),
       ...(data.nombres !== undefined && { nombres: data.nombres }),
       ...(data.apellidos !== undefined && { apellidos: data.apellidos }),
+      ...(data.email !== undefined && { email: data.email }),
       ...(data.grado !== undefined && { grado: data.grado }),
       ...(data.telefono !== undefined && { telefono: data.telefono }),
       ...(data.direccion !== undefined && { direccion: data.direccion }),

@@ -46,6 +46,11 @@ const navItems: NavItem[] = [
     icon: Users,
   },
   {
+    label: "Profesores",
+    href: "/dashboard/professors",
+    icon: Users,
+  },
+  {
     label: "Cursos",
     href: "/dashboard/courses",
     icon: BookOpen,

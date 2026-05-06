@@ -102,6 +102,7 @@ func EnrollStudentHandler(app *services.App) gin.HandlerFunc {
             "no_matricula": app.NormalizeOptional(req.NoMatricula),
             "nombres": req.Nombres,
             "apellidos": req.Apellidos,
+            "email": app.NormalizeOptional(req.Email),
             "grado": req.Grado,
             "telefono": app.NormalizeOptional(req.Telefono),
             "direccion": app.NormalizeOptional(req.Direccion),

@@ -21,21 +21,25 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
-  const { data: admin } = await supabase
-    .from("administrador")
-    .select("nombres, apellidos, aprobado")
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("nombre, apellido, role, approved")
     .eq("id", user.id)
     .single();
 
-  const userName = admin
-    ? `${admin.nombres} ${admin.apellidos}`
+  const userName = profile
+    ? `${profile.nombre} ${profile.apellido}`
     : user.user_metadata?.first_name
       ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
       : undefined;
 
   const userEmail = user.email;
 
-  if (!admin?.aprobado) {
+  if (profile?.role !== "administrador") {
+    redirect("/welcome");
+  }
+
+  if (!profile?.approved) {
     redirect("/not-approved");
   }
 

@@ -14,6 +14,7 @@ type StudentEnrollRequest struct {
     NoMatricula           *string  `json:"no_matricula"`
     Nombres               string   `json:"nombres"`
     Apellidos             string   `json:"apellidos"`
+    Email                 *string  `json:"email"`
     Grado                 string   `json:"grado"`
     Telefono              *string  `json:"telefono"`
     Direccion             *string  `json:"direccion"`

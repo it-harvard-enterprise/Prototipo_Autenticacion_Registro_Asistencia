@@ -26,13 +26,17 @@ export default async function NotApprovedPage() {
     redirect("/login");
   }
 
-  const { data: admin } = await supabase
-    .from("administrador")
-    .select("aprobado")
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, approved")
     .eq("id", user.id)
     .single();
 
-  if (admin?.aprobado) {
+  if (profile?.role !== "administrador") {
+    redirect("/welcome");
+  }
+
+  if (profile?.approved) {
     redirect("/dashboard");
   }
 

@@ -9,6 +9,10 @@ import { z } from "zod";
 import { Loader2 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
+import {
+  IDENTIFICATION_TYPE_OPTIONS,
+  IDENTIFICATION_TYPE_VALUES,
+} from "@/lib/identification-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -29,6 +33,13 @@ import {
 } from "@/components/ui/form";
 
 const registerSchema = z.object({
+  tipo_identificacion: z.enum(IDENTIFICATION_TYPE_VALUES, {
+    message: "Debe seleccionar un tipo de identificación",
+  }),
+  numero_identificacion: z
+    .string()
+    .min(4, "El número de identificación es requerido")
+    .max(20, "El número de identificación es demasiado largo"),
   firstName: z
     .string()
     .min(2, "El nombre debe tener al menos 2 caracteres")
@@ -52,6 +63,8 @@ export default function RegisterPage() {
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
+      tipo_identificacion: "CC",
+      numero_identificacion: "",
       firstName: "",
       lastName: "",
       email: "",
@@ -88,8 +101,11 @@ export default function RegisterPage() {
     if (data.user) {
       await supabase.from("administrador").upsert({
         id: data.user.id,
+        tipo_identificacion: values.tipo_identificacion,
+        numero_identificacion: values.numero_identificacion,
         nombres: values.firstName,
         apellidos: values.lastName,
+        email: values.email,
         aprobado: false,
       });
 
@@ -138,7 +154,56 @@ export default function RegisterPage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <FormField
+                  control={form.control}
+                  name="tipo_identificacion"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-base">
+                        Tipo de identificación
+                      </FormLabel>
+                      <FormControl>
+                        <select
+                          value={field.value}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
+                          name={field.name}
+                          ref={field.ref}
+                          className="h-11 w-full rounded-md border border-input bg-background px-3 text-base"
+                        >
+                          {IDENTIFICATION_TYPE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="numero_identificacion"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-base">
+                        Número de identificación
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="123456789"
+                          className="h-11 text-base"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <FormField
                   control={form.control}
                   name="firstName"
