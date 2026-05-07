@@ -137,6 +137,30 @@ func EnrollStudentHandler(app *services.App) gin.HandlerFunc {
         }
 
         created := rows[0]
+
+        // Send invitation email if email is provided
+        if req.Email != nil && strings.TrimSpace(*req.Email) != "" {
+            email := strings.TrimSpace(*req.Email)
+            metadata := map[string]interface{}{
+                "rol":       "estudiante",
+                "nombres":   req.Nombres,
+                "apellidos": req.Apellidos,
+            }
+            _, err := app.InviteUserByEmail(c.Request.Context(), email, metadata)
+            if err != nil {
+                // Log the error but don't fail the entire operation
+                // The student was created successfully, but email invitation failed
+                c.JSON(http.StatusCreated, gin.H{"success": true, "data": gin.H{
+                    "numero_identificacion": created["numero_identificacion"],
+                    "nombres": created["nombres"],
+                    "apellidos": created["apellidos"],
+                    "created_at": created["created_at"],
+                    "email_invitation_error": err.Error(),
+                }})
+                return
+            }
+        }
+
         c.JSON(http.StatusCreated, gin.H{"success": true, "data": gin.H{
             "numero_identificacion": created["numero_identificacion"],
             "nombres": created["nombres"],

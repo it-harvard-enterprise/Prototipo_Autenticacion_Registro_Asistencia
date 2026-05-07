@@ -410,3 +410,59 @@ func (a *App) ResolveStoredFingerprintTemplate(raw *string) (string, error) {
 
     return *template, nil
 }
+
+// InviteUserByEmail sends an invitation email using Supabase Admin API
+// This creates an auth user with a temporary password and sends an invitation email
+func (a *App) InviteUserByEmail(ctx context.Context, email string, metadata map[string]interface{}) (map[string]interface{}, error) {
+    if strings.TrimSpace(email) == "" {
+        return nil, errors.New("email is required")
+    }
+
+    payload := map[string]interface{}{
+        "email": strings.TrimSpace(email),
+        "data":  metadata,
+    }
+
+    requestURL := a.SupabaseURL + "/auth/v1/admin/invite"
+
+    data, err := json.Marshal(payload)
+    if err != nil {
+        return nil, err
+    }
+
+    req, err := http.NewRequestWithContext(ctx, http.MethodPost, requestURL, bytes.NewReader(data))
+    if err != nil {
+        return nil, err
+    }
+
+    req.Header.Set("apikey", a.ServiceKey)
+    req.Header.Set("Authorization", "Bearer "+a.ServiceKey)
+    req.Header.Set("Content-Type", "application/json")
+
+    resp, err := a.HTTPClient.Do(req)
+    if err != nil {
+        return nil, fmt.Errorf("failed to send invitation: %w", err)
+    }
+    defer resp.Body.Close()
+
+    respBody, err := io.ReadAll(resp.Body)
+    if err != nil {
+        return nil, fmt.Errorf("failed to read invitation response: %w", err)
+    }
+
+    if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+        var sbErr supabaseError
+        _ = json.Unmarshal(respBody, &sbErr)
+        if sbErr.Message != "" {
+            return nil, fmt.Errorf("supabase error: %s", sbErr.Message)
+        }
+        return nil, fmt.Errorf("invitation request failed with status %d", resp.StatusCode)
+    }
+
+    var result map[string]interface{}
+    if err := json.Unmarshal(respBody, &result); err != nil {
+        return nil, fmt.Errorf("failed to parse invitation response: %w", err)
+    }
+
+    return result, nil
+}

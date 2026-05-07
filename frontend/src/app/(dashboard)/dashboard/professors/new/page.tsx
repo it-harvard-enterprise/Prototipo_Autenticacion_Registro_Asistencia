@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -73,6 +74,7 @@ const professorSchema = z
 type ProfessorFormValues = z.input<typeof professorSchema>;
 
 export default function NewProfessorPage() {
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
 
   const form = useForm<ProfessorFormValues>({
@@ -132,7 +134,7 @@ export default function NewProfessorPage() {
       }
 
       toast.success("Profesor creado correctamente");
-      form.reset();
+      router.replace("/dashboard/professors");
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Error desconocido al crear",

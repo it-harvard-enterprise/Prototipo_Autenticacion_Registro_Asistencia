@@ -49,7 +49,10 @@ export async function createProfessor(
   const frontendOrigin =
     process.env.FRONTEND_ORIGIN?.split(",")[0]?.trim() ||
     "http://localhost:3000";
-  const emailRedirectTo = new URL("/login", frontendOrigin).toString();
+  const emailRedirectTo = new URL(
+    "/accept-invitation",
+    frontendOrigin,
+  ).toString();
   const inviteResult = await inviteUserByEmail(data.email, emailRedirectTo);
 
   if (!inviteResult.ok && !inviteResult.alreadyRegistered) {
