@@ -6,12 +6,12 @@ import (
 	"os"
 	"strings"
 
-	"github.com/joho/godotenv"
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 
-	"fingerprint-backend/services"
-	"fingerprint-backend/middleware"
 	"fingerprint-backend/handlers"
+	"fingerprint-backend/middleware"
+	"fingerprint-backend/services"
 	sfconfig "github.com/jtejido/sourceafis/config"
 )
 
@@ -64,10 +64,10 @@ func main() {
 		}
 
 		c.JSON(statusCode, gin.H{
-			"backend": backendStatus,
-			"frontend": frontendStatus,
+			"backend":         backendStatus,
+			"frontend":        frontendStatus,
 			"frontend_detail": frontendDetail,
-			"overall": overallStatus,
+			"overall":         overallStatus,
 		})
 	})
 
@@ -77,14 +77,17 @@ func main() {
 	router.HEAD("/api/health", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 	router.POST("/api/students/enroll", handlers.EnrollStudentHandler(app))
+	router.POST("/api/students/update-fingerprints", handlers.UpdateStudentFingerprintsHandler(app))
 	router.POST("/api/attendance/identify", handlers.IdentifyAttendanceHandler(app))
+	router.POST("/api/person/identify-by-fingerprint", handlers.IdentifyPersonByFingerprintHandler(app))
 	router.GET("/startService", handlers.StartServiceHandler(app))
 
 	port := strings.TrimSpace(os.Getenv("PORT"))
-	if port == "" { port = defaultPort }
+	if port == "" {
+		port = defaultPort
+	}
 	log.Printf("Biometric backend running on http://localhost:%s", port)
 	if err := router.Run(":" + port); err != nil {
 		log.Fatal(err)
 	}
 }
-

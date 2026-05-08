@@ -66,11 +66,11 @@ const attendanceSchema = z.object({
 type AttendanceFormValues = z.infer<typeof attendanceSchema>;
 type SaldoValue = "cancelado" | "debe" | null;
 type MetodoPagoValue =
-  | "efectivo"
-  | "transferencia"
-  | "nequi"
-  | "daviplata"
-  | "otro"
+  | "EFECTIVO"
+  | "TRANSFERENCIA"
+  | "NEQUI"
+  | "DAVIPLATA"
+  | "OTRO"
   | null;
 
 function createAttendanceTimestamp(selectedDate: string): string {
@@ -791,7 +791,7 @@ export default function AttendancePage() {
                           </TableCell>
                           <TableCell>
                             <select
-                              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:bg-input/50"
+                              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
                               value={student.saldo ?? ""}
                               disabled={!student.asistio}
                               onChange={(event) =>
@@ -813,7 +813,7 @@ export default function AttendancePage() {
                           </TableCell>
                           <TableCell>
                             <select
-                              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:bg-input/50"
+                              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
                               value={student.metodo_pago ?? ""}
                               disabled={
                                 !student.asistio ||
@@ -825,24 +825,24 @@ export default function AttendancePage() {
                                   {
                                     metodo_pago: (event.target.value ||
                                       null) as
-                                      | "efectivo"
-                                      | "transferencia"
-                                      | "nequi"
-                                      | "daviplata"
-                                      | "otro"
+                                      | "EFECTIVO"
+                                      | "TRANSFERENCIA"
+                                      | "NEQUI"
+                                      | "DAVIPLATA"
+                                      | "OTRO"
                                       | null,
                                   },
                                 )
                               }
                             >
                               <option value="">Seleccione</option>
-                              <option value="efectivo">Efectivo</option>
-                              <option value="transferencia">
-                                Transferencia
+                              <option value="EFECTIVO">EFECTIVO</option>
+                              <option value="TRANSFERENCIA">
+                                TRANSFERENCIA
                               </option>
-                              <option value="nequi">Nequi</option>
-                              <option value="daviplata">Daviplata</option>
-                              <option value="otro">Otro</option>
+                              <option value="NEQUI">NEQUI</option>
+                              <option value="DAVIPLATA">DAVIPLATA</option>
+                              <option value="OTRO">OTRO</option>
                             </select>
                           </TableCell>
                         </TableRow>

@@ -98,7 +98,7 @@ export default function EditProfessorPage() {
       barrio: "",
       nombre_contacto_emergencia: "",
       telefono_contacto_emergencia: "",
-      eps_select: "Nueva EPS",
+      eps_select: "NUEVA EPS",
       eps_otra: "",
     },
   });
@@ -261,7 +261,7 @@ export default function EditProfessorPage() {
                           onBlur={field.onBlur}
                           name={field.name}
                           ref={field.ref}
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
                         >
                           {IDENTIFICATION_TYPE_OPTIONS.map((option) => (
                             <option key={option.value} value={option.value}>
@@ -414,14 +414,14 @@ export default function EditProfessorPage() {
                           onBlur={field.onBlur}
                           name={field.name}
                           ref={field.ref}
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
                         >
                           {COLOMBIA_EPS_OPTIONS.map((option) => (
                             <option key={option} value={option}>
                               {option}
                             </option>
                           ))}
-                          <option value={EPS_OTHER_OPTION}>Otro</option>
+                          <option value={EPS_OTHER_OPTION}>OTRO</option>
                         </select>
                       </FormControl>
                       <FormMessage />

@@ -9,11 +9,11 @@ import {
 
 type Saldo = "cancelado" | "debe" | null;
 type MetodoPago =
-  | "efectivo"
-  | "transferencia"
-  | "nequi"
-  | "daviplata"
-  | "otro"
+  | "EFECTIVO"
+  | "TRANSFERENCIA"
+  | "NEQUI"
+  | "DAVIPLATA"
+  | "OTRO"
   | null;
 
 export interface CourseOption {

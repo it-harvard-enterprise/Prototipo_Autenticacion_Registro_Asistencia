@@ -15,44 +15,44 @@ export const STUDENT_GRADE_OPTIONS = [
 ] as const;
 
 export const STUDENT_COORDINATOR_OPTIONS = [
-  "Nicol Delgado",
-  "Santiago Delgado",
-  "David Delgado",
-  "Elena Martinez",
+  "NICOL DELGADO",
+  "SANTIAGO DELGADO",
+  "DAVID DELGADO",
+  "ELENA MARTINEZ",
 ] as const;
 
-export const EPS_OTHER_OPTION = "Otro";
+export const EPS_OTHER_OPTION = "OTRO";
 
 // Curated fallback list of EPS names used when no reliable public API is available.
 export const COLOMBIA_EPS_OPTIONS = [
-  "Aliansalud EPS",
-  "Asmet Salud EPS",
-  "Capital Salud EPS",
-  "Cajacopi Atlántico EPS",
-  "Compensar EPS",
-  "Comfenalco Valle EPS",
-  "Coosalud EPS",
-  "Dusakawi EPSI",
+  "ALIANSALUD EPS",
+  "ASMET SALUD EPS",
+  "CAPITAL SALUD EPS",
+  "CAJACOPI ATLANTICO EPS",
+  "COMPENSAR EPS",
+  "COMFENALCO VALLE EPS",
+  "COOSALUD EPS",
+  "DUSAKAWI EPSI",
   "EMSSANAR EPS",
-  "EPS Familiar de Colombia",
-  "EPS Sanitas",
-  "Famisanar EPS",
-  "Mallamas EPSI",
-  "Mutual Ser EPS",
-  "Nueva EPS",
-  "Pijaos Salud EPSI",
-  "Salud Bolívar EPS",
-  "Salud Total EPS",
-  "Sisben",
-  "Savia Salud EPS",
+  "EPS FAMILIAR DE COLOMBIA",
+  "EPS SANITAS",
+  "FAMISANAR EPS",
+  "MALLAMAS EPSI",
+  "MUTUAL SER EPS",
+  "NUEVA EPS",
+  "PIJAOS SALUD EPSI",
+  "SALUD BOLIVAR EPS",
+  "SALUD TOTAL EPS",
+  "SISBEN",
+  "SAVIA SALUD EPS",
   "SURA EPS",
   EPS_OTHER_OPTION,
 ] as const;
 
 export const PAYMENT_METHOD_OPTIONS = [
-  { value: "efectivo", label: "Efectivo" },
-  { value: "transferencia", label: "Transferencia" },
-  { value: "nequi", label: "Nequi" },
-  { value: "daviplata", label: "Daviplata" },
-  { value: "otro", label: "Otro" },
+  { value: "EFECTIVO", label: "EFECTIVO" },
+  { value: "TRANSFERENCIA", label: "TRANSFERENCIA" },
+  { value: "NEQUI", label: "NEQUI" },
+  { value: "DAVIPLATA", label: "DAVIPLATA" },
+  { value: "OTRO", label: "OTRO" },
 ] as const;

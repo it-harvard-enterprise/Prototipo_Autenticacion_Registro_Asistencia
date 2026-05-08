@@ -250,7 +250,7 @@ export default function ExportPage() {
             <div className="space-y-2">
               <label className="text-sm font-medium">Curso *</label>
               <select
-                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
                 value={selectedCourseId}
                 onChange={(event) => setSelectedCourseId(event.target.value)}
                 disabled={isLoadingCourses}

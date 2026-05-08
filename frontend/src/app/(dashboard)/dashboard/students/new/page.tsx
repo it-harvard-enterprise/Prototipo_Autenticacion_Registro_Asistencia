@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
@@ -119,11 +119,11 @@ const studentSchema = z
       }),
     medio_pago_matricula: z.enum(
       PAYMENT_METHOD_OPTIONS.map((item) => item.value) as [
-        "efectivo",
-        "transferencia",
-        "nequi",
-        "daviplata",
-        "otro",
+        "EFECTIVO",
+        "TRANSFERENCIA",
+        "NEQUI",
+        "DAVIPLATA",
+        "OTRO",
       ],
       {
         message: "Debe seleccionar el medio de pago de matrícula",
@@ -184,19 +184,25 @@ export default function NewStudentPage() {
       barrio: "",
       nombre_acudiente: "",
       telefono_acudiente: "",
-      eps_select: "Nueva EPS",
+      eps_select: "NUEVA EPS",
       eps_otra: "",
-      coordinador_academico: "Nicol Delgado",
+      coordinador_academico: "NICOL DELGADO",
       huella_indice_derecho: "",
       huella_indice_izquierdo: "",
       programa: "",
       fecha_inicio: "",
       fecha_matricula: "",
       valor_matricula: "",
-      medio_pago_matricula: "efectivo",
+      medio_pago_matricula: "EFECTIVO",
       valor_apoyo_semanal: "",
     },
   });
+
+  useEffect(() => {
+    void fetch("/api/start-service").catch(() => {
+      // Keep this fire-and-forget on page load.
+    });
+  }, []);
 
   async function onSubmit(values: StudentFormValues) {
     const epsValue =
@@ -252,8 +258,12 @@ export default function NewStudentPage() {
           medio_pago_matricula: values.medio_pago_matricula,
           valor_apoyo_semanal:
             parseCurrencyToNumber(values.valor_apoyo_semanal) ?? 0,
-          huella_indice_derecho_encrypted: rightEncrypted,
-          huella_indice_izquierdo_encrypted: leftEncrypted,
+          ...(rightEncrypted && {
+            huella_indice_derecho_encrypted: rightEncrypted,
+          }),
+          ...(leftEncrypted && {
+            huella_indice_izquierdo_encrypted: leftEncrypted,
+          }),
         }),
       });
 
@@ -352,7 +362,7 @@ export default function NewStudentPage() {
                           onBlur={field.onBlur}
                           name={field.name}
                           ref={field.ref}
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
                         >
                           {IDENTIFICATION_TYPE_OPTIONS.map((option) => (
                             <option key={option.value} value={option.value}>
@@ -458,7 +468,7 @@ export default function NewStudentPage() {
                           onBlur={field.onBlur}
                           name={field.name}
                           ref={field.ref}
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
                         >
                           {STUDENT_GRADE_OPTIONS.map((grade) => (
                             <option key={grade} value={grade}>
@@ -568,7 +578,7 @@ export default function NewStudentPage() {
                           onBlur={field.onBlur}
                           name={field.name}
                           ref={field.ref}
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
                         >
                           {COLOMBIA_EPS_OPTIONS.map((eps) => (
                             <option key={eps} value={eps}>
@@ -594,7 +604,7 @@ export default function NewStudentPage() {
                           onBlur={field.onBlur}
                           name={field.name}
                           ref={field.ref}
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
                         >
                           {STUDENT_COORDINATOR_OPTIONS.map((coordinator) => (
                             <option key={coordinator} value={coordinator}>
@@ -736,7 +746,7 @@ export default function NewStudentPage() {
                           onBlur={field.onBlur}
                           name={field.name}
                           ref={field.ref}
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
                         >
                           {PAYMENT_METHOD_OPTIONS.map((option) => (
                             <option key={option.value} value={option.value}>

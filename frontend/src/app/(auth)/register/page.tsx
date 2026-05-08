@@ -170,7 +170,7 @@ export default function RegisterPage() {
                           onBlur={field.onBlur}
                           name={field.name}
                           ref={field.ref}
-                          className="h-11 w-full rounded-md border border-input bg-background px-3 text-base"
+                          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
                         >
                           {IDENTIFICATION_TYPE_OPTIONS.map((option) => (
                             <option key={option.value} value={option.value}>

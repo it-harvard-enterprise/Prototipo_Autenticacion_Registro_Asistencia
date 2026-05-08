@@ -42,11 +42,11 @@ export interface Student {
   fecha_matricula: string;
   valor_matricula: number;
   medio_pago_matricula:
-    | "efectivo"
-    | "transferencia"
-    | "nequi"
-    | "daviplata"
-    | "otro";
+    | "EFECTIVO"
+    | "TRANSFERENCIA"
+    | "NEQUI"
+    | "DAVIPLATA"
+    | "OTRO";
   valor_apoyo_semanal: number;
   fingerprint_right?: string | null;
   fingerprint_left?: string | null;
