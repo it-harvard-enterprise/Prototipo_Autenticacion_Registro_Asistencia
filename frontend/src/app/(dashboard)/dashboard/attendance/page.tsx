@@ -541,7 +541,7 @@ export default function AttendancePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Filtro de asistencia</CardTitle>
+          <CardTitle>Filtro de Asistencia</CardTitle>
           <CardDescription>
             El selector de cursos se carga consultando id_curso y nombre_curso
             en la base de datos.
@@ -682,11 +682,11 @@ export default function AttendancePage() {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base text-[#982725] flex items-center gap-2">
                     <Fingerprint className="h-4 w-4" />
-                    Asistencia por huella
+                    Asistencia por Huella
                   </CardTitle>
                   <CardDescription>
                     Captura de huellas digitales con el sensor para
-                    autenticacion biometrica y marcado automatico de asistencia.
+                    autenticación biométrica y marcado automático de asistencia.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -730,16 +730,16 @@ export default function AttendancePage() {
                     </div>
                   </div>
 
-                  {lastFingerprintMatch && (
+                  {/* {lastFingerprintMatch && (
                     <p className="text-xs text-[#982725]">
-                      Ultima coincidencia:{" "}
+                      Última coincidencia:{" "}
                       {lastFingerprintMatch.numero_identificacion}
                       {typeof lastFingerprintMatch.confidence === "number" &&
                         ` (confianza ${(lastFingerprintMatch.confidence * 100).toFixed(1)}%)`}
                       {lastFingerprintMatch.source &&
                         ` - fuente ${lastFingerprintMatch.source}`}
                     </p>
-                  )}
+                  )} */}
                 </CardContent>
               </Card>
 

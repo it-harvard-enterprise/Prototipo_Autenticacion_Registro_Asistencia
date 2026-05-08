@@ -4,9 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, Link2, Trash2 } from "lucide-react";
+import { ChevronDown, Loader2, Link2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { getCourseOptions, type CourseOption } from "@/app/actions/attendance";
 import {
   associateParticipantsToCourse,
   dissociateParticipantsFromCourse,
@@ -47,12 +48,12 @@ const associationSchema = z.object({
   operation: z.enum(["link", "unlink"]),
   participantIdsRaw: z
     .string()
-    .min(1, "Ingrese al menos un numero_identificacion"),
+    .min(1, "Ingrese al menos un número de identificación"),
   idCurso: z
     .string()
     .min(1, "El id_curso es requerido")
     .refine((value) => Number.isInteger(Number(value)) && Number(value) > 0, {
-      message: "Ingrese un id_curso valido",
+      message: "Ingrese un id_curso válido",
     }),
 });
 
@@ -86,6 +87,7 @@ function roleClasses(role: ParticipantRole): string {
 
 export default function CourseStudentAssociationPage() {
   const [course, setCourse] = useState<Course | null>(null);
+  const [courses, setCourses] = useState<CourseOption[]>([]);
   const [linkedParticipants, setLinkedParticipants] = useState<
     LinkedParticipantRow[]
   >([]);
@@ -93,6 +95,9 @@ export default function CourseStudentAssociationPage() {
     Array<{ numero_identificacion: string; role: ParticipantRole }>
   >([]);
   const [isSearchingCourse, setIsSearchingCourse] = useState(false);
+  const [isLoadingCourses, setIsLoadingCourses] = useState(true);
+  const [courseSearch, setCourseSearch] = useState("");
+  const [showCourseList, setShowCourseList] = useState(false);
   const [isAssociating, setIsAssociating] = useState(false);
   const [isLoadingLinkedParticipants, setIsLoadingLinkedParticipants] =
     useState(false);
@@ -123,6 +128,48 @@ export default function CourseStudentAssociationPage() {
       ),
     );
   }, [participantIdsRaw]);
+
+  const filteredCourses = useMemo(() => {
+    const query = courseSearch.trim().toLowerCase();
+    if (!query) return courses;
+
+    return courses.filter((courseOption) => {
+      const idMatch = String(courseOption.id_curso).includes(query);
+      const nameMatch = courseOption.nombre_curso.toLowerCase().includes(query);
+      return idMatch || nameMatch;
+    });
+  }, [courseSearch, courses]);
+
+  useEffect(() => {
+    async function fetchCourses() {
+      setIsLoadingCourses(true);
+      const result = await getCourseOptions();
+      setIsLoadingCourses(false);
+
+      if (!result.success) {
+        toast.error(result.error ?? "No se pudieron cargar los cursos");
+        return;
+      }
+
+      setCourses(result.data ?? []);
+    }
+
+    fetchCourses();
+  }, []);
+
+  useEffect(() => {
+    if (!courses.length) return;
+
+    const currentId = form.getValues("idCurso");
+    if (!currentId) return;
+
+    const selected = courses.find(
+      (courseOption) => String(courseOption.id_curso) === String(currentId),
+    );
+    if (!selected) return;
+
+    setCourseSearch(`${selected.id_curso} - ${selected.nombre_curso}`);
+  }, [courses, form]);
 
   useEffect(() => {
     let cancelled = false;
@@ -189,7 +236,7 @@ export default function CourseStudentAssociationPage() {
     if (!result.success || !result.data) {
       setCourse(null);
       setLinkedParticipants([]);
-      toast.error(result.error ?? "No se encontro el curso");
+      toast.error(result.error ?? "No se encontró el curso");
       return;
     }
 
@@ -200,7 +247,7 @@ export default function CourseStudentAssociationPage() {
 
   async function handleUnlinkSingle(participantId: string) {
     if (!course) {
-      toast.error("Primero busque y confirme un curso valido");
+      toast.error("Primero busque y confirme un curso válido");
       return;
     }
 
@@ -221,7 +268,7 @@ export default function CourseStudentAssociationPage() {
 
   async function onSubmit(values: AssociationFormValues) {
     if (!course) {
-      toast.error("Primero busque y confirme un curso valido");
+      toast.error("Primero busque y confirme un curso válido");
       return;
     }
 
@@ -231,7 +278,7 @@ export default function CourseStudentAssociationPage() {
       .filter(Boolean);
 
     if (ids.length === 0) {
-      toast.error("Ingrese al menos un numero_identificacion");
+      toast.error("Ingrese al menos un número de identificación");
       return;
     }
 
@@ -251,7 +298,7 @@ export default function CourseStudentAssociationPage() {
       }
 
       toast.success(
-        `Asociacion completada: ${result.insertedCount ?? ids.length} participante(s) vinculados`,
+        `Asociación completada: ${result.insertedCount ?? ids.length} participante(s) vinculados`,
       );
     } else {
       const result = await dissociateParticipantsFromCourse(
@@ -268,7 +315,7 @@ export default function CourseStudentAssociationPage() {
       }
 
       toast.success(
-        `Desvinculacion completada: ${result.removedCount ?? ids.length} participante(s) desvinculados`,
+        `Desvinculación completada: ${result.removedCount ?? ids.length} participante(s) desvinculados`,
       );
     }
 
@@ -292,23 +339,26 @@ export default function CourseStudentAssociationPage() {
             Asociar Cursos con Participantes
           </h1>
           <p className="text-gray-500 mt-1">
-            Primero busque un curso por ID. Luego podra ver estudiantes y
-            profesores, y gestionar su vinculacion o desvinculacion.
+            Primero busque un curso por ID. Luego podrá ver estudiantes y
+            profesores, y gestionar su vinculación o desvinculación.
           </p>
         </div>
       </div>
 
-      <Card className="max-w-4xl">
+      <Card className="max-w-4xl overflow-visible">
         <CardHeader>
-          <CardTitle>Asociacion de participantes</CardTitle>
+          <CardTitle>Asociación de Participantes</CardTitle>
           <CardDescription>
-            Busque un curso para habilitar las opciones de gestion.
+            Busque un curso para habilitar las opciones de gestión.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-visible">
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-              <div className="grid grid-cols-1 sm:grid-cols-[220px_auto] gap-4 items-end">
+            <form
+              onSubmit={form.handleSubmit(onSubmit)}
+              className="space-y-5 overflow-visible"
+            >
+              <div className="relative z-30 grid grid-cols-1 sm:grid-cols-[minmax(360px,1fr)_auto] gap-4 items-end">
                 <FormField
                   control={form.control}
                   name="idCurso"
@@ -316,7 +366,81 @@ export default function CourseStudentAssociationPage() {
                     <FormItem>
                       <FormLabel>id_curso *</FormLabel>
                       <FormControl>
-                        <Input type="number" min={1} {...field} />
+                        <div className="relative">
+                          <Input
+                            placeholder={
+                              isLoadingCourses
+                                ? "Cargando cursos..."
+                                : "Escriba el nombre o id del curso"
+                            }
+                            value={courseSearch}
+                            onChange={(event) => {
+                              const nextValue = event.target.value;
+                              setCourseSearch(nextValue);
+                              setShowCourseList(true);
+
+                              const directId = nextValue.trim();
+                              const idMatch = courses.find(
+                                (courseOption) =>
+                                  String(courseOption.id_curso) === directId,
+                              );
+                              const labelMatch = courses.find((courseOption) =>
+                                `${courseOption.id_curso} - ${courseOption.nombre_curso}`
+                                  .toLowerCase()
+                                  .startsWith(directId.toLowerCase()),
+                              );
+
+                              const selectedCourse = idMatch ?? labelMatch;
+                              if (selectedCourse) {
+                                field.onChange(String(selectedCourse.id_curso));
+                              } else {
+                                field.onChange("");
+                              }
+                            }}
+                            onFocus={() => setShowCourseList(true)}
+                            onBlur={() => {
+                              setTimeout(() => setShowCourseList(false), 120);
+                            }}
+                            disabled={isLoadingCourses}
+                          />
+
+                          <button
+                            type="button"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => setShowCourseList((prev) => !prev)}
+                            disabled={isLoadingCourses}
+                            aria-label="Mostrar lista de cursos"
+                          >
+                            <ChevronDown className="h-4 w-4" />
+                          </button>
+
+                          {showCourseList && filteredCourses.length > 0 && (
+                            <div className="absolute z-[70] mt-1 max-h-56 w-full overflow-auto rounded-md border border-input bg-white shadow-sm">
+                              {filteredCourses.map((courseOption) => (
+                                <button
+                                  key={courseOption.id_curso}
+                                  type="button"
+                                  className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                  onMouseDown={(event) =>
+                                    event.preventDefault()
+                                  }
+                                  onClick={() => {
+                                    const label = `${courseOption.id_curso} - ${courseOption.nombre_curso}`;
+                                    setCourseSearch(label);
+                                    field.onChange(
+                                      String(courseOption.id_curso),
+                                    );
+                                    setShowCourseList(false);
+                                  }}
+                                >
+                                  {courseOption.id_curso} -{" "}
+                                  {courseOption.nombre_curso}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -327,7 +451,8 @@ export default function CourseStudentAssociationPage() {
                   type="button"
                   onClick={handleSearchCourse}
                   disabled={isSearchingCourse}
-                  className="bg-[#b92f2d] hover:bg-[#982725] text-white"
+                  size="sm"
+                  className="h-8 px-3 bg-[#b92f2d] hover:bg-[#982725] text-white"
                 >
                   {isSearchingCourse ? (
                     <>
@@ -344,7 +469,7 @@ export default function CourseStudentAssociationPage() {
                 <Card className="border-[#b92f2d]/30 bg-[#b92f2d]/5">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-lg text-[#982725]">
-                      Curso encontrado
+                      Curso Encontrado
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
@@ -380,7 +505,7 @@ export default function CourseStudentAssociationPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-lg">
-                      Participantes del curso
+                      Participantes del Curso
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -479,9 +604,9 @@ export default function CourseStudentAssociationPage() {
               {course && (
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg">Gestion masiva</CardTitle>
+                    <CardTitle className="text-lg">Gestión Masiva</CardTitle>
                     <CardDescription>
-                      Vincule o desvincule multiples participantes (estudiantes
+                      Vincule o desvincule múltiples participantes (estudiantes
                       y/o profesores) separados por comas.
                     </CardDescription>
                   </CardHeader>
@@ -492,7 +617,7 @@ export default function CourseStudentAssociationPage() {
                         name="operation"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Operacion *</FormLabel>
+                            <FormLabel>Operación *</FormLabel>
                             <FormControl>
                               <select
                                 value={field.value}
@@ -517,7 +642,7 @@ export default function CourseStudentAssociationPage() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>
-                              Numero de identificacion de estudiante o profesor
+                              Número de identificación de estudiante o profesor
                               (1 o muchos, separados por comas) *
                             </FormLabel>
                             <FormControl>

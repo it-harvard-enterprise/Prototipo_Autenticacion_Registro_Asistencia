@@ -274,16 +274,16 @@ export default function PersonIdentificationPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Metodos de identificacion</CardTitle>
+          <CardTitle>Métodos de Identificación</CardTitle>
           <CardDescription>
-            Puede buscar por numero de identificacion o realizar captura
-            biometrica.
+            Puede buscar por número de identificación o realizar captura
+            biométrica.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="rounded-md border p-4 bg-white space-y-3">
             <p className="text-sm font-medium text-gray-800">
-              Buscar por numero de identificacion
+              Buscar por número de identificación
             </p>
             <div className="flex flex-col sm:flex-row gap-2">
               <Input
@@ -291,7 +291,7 @@ export default function PersonIdentificationPage() {
                 onChange={(event) =>
                   setNumeroIdentificacion(event.target.value)
                 }
-                placeholder="Ingrese numero de identificacion"
+                placeholder="Ingrese número de identificación"
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
                     event.preventDefault();
@@ -363,12 +363,6 @@ export default function PersonIdentificationPage() {
                 </>
               )}
             </Button>
-
-            {typeof lastQuality === "number" && (
-              <p className="text-xs text-gray-500">
-                Calidad reportada por el lector: {lastQuality}
-              </p>
-            )}
           </div>
         </CardContent>
       </Card>
@@ -376,20 +370,14 @@ export default function PersonIdentificationPage() {
       {result && (
         <Card>
           <CardHeader>
-            <CardTitle>Resultado de identificacion</CardTitle>
-            <CardDescription>
-              Metodo usado:{" "}
-              {result.source === "id" ? "Identificacion" : "Huella"}
-              {typeof result.confidence === "number" &&
-                ` | Confianza ${(result.confidence * 100).toFixed(1)}%`}
-            </CardDescription>
+            <CardTitle>Resultado de Identificación</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {!result.found ||
             !result.person ||
             result.person.records.length === 0 ? (
               <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                No se encontro informacion para la busqueda realizada.
+                No se encontró información para la búsqueda realizada.
               </div>
             ) : (
               result.person.records.map((record) => {
@@ -416,7 +404,7 @@ export default function PersonIdentificationPage() {
                         )}
                       </div>
                       <CardDescription>
-                        Numero de identificacion: {record.numero_identificacion}
+                        Número de identificación: {record.numero_identificacion}
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3">
