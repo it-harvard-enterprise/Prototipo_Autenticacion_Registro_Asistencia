@@ -364,7 +364,7 @@ export default function CourseStudentAssociationPage() {
                   name="idCurso"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>id_curso *</FormLabel>
+                      <FormLabel>ID del Curso *</FormLabel>
                       <FormControl>
                         <div className="relative">
                           <Input

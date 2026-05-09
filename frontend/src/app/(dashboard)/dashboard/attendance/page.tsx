@@ -455,10 +455,13 @@ export default function AttendancePage() {
       }
     }
 
+    const savePressedAtIso = new Date().toISOString();
+
     setIsSaving(true);
     const result = await saveAttendanceForCourseAndDate({
       idCurso: Number(values.idCurso),
       date: values.fecha,
+      saveTimestampIso: savePressedAtIso,
       rows: students.map((student) => ({
         numero_identificacion: student.numero_identificacion,
         asistio: student.asistio,

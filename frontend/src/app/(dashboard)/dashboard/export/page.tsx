@@ -59,6 +59,7 @@ function toExcelIdentificationValue(value: string): string | number {
 }
 
 function toDisplayLabel(value: string | null): string {
+  if (value === null) return "NULL";
   if (!value) return "";
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
@@ -134,8 +135,20 @@ export default function ExportPage() {
     setIsExporting(true);
 
     try {
+      const safeCourseName =
+        selectedCourseName
+          .replace(/[^a-zA-Z0-9_-]/g, "_")
+          .replace(/_+/g, "_")
+          .slice(0, 40) || "curso";
+
+      const fileBaseName = `asistencia_${safeCourseName}_${selectedDate}`;
+      const fileName = `${fileBaseName}.xlsx`;
+      const worksheetName = fileBaseName.slice(0, 31) || "asistencia";
+
       const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet("Asistencia");
+      workbook.properties.title = fileBaseName;
+
+      const worksheet = workbook.addWorksheet(worksheetName);
 
       worksheet.columns = [
         { header: "ID Registro", key: "id", width: 12 },
@@ -164,7 +177,7 @@ export default function ExportPage() {
           id: row.id,
           id_curso: row.id_curso,
           nombre_curso: row.nombre_curso,
-          tipo_identificacion: row.tipo_identificacion ?? "",
+          tipo_identificacion: row.tipo_identificacion ?? "NULL",
           numero_identificacion: toExcelIdentificationValue(
             row.numero_identificacion,
           ),
@@ -177,7 +190,22 @@ export default function ExportPage() {
         });
       }
 
-      const headerRow = worksheet.getRow(1);
+      worksheet.insertRow(1, [fileBaseName]);
+      worksheet.mergeCells(1, 1, 1, worksheet.columns.length);
+
+      const titleRow = worksheet.getRow(1);
+      titleRow.height = 28;
+      titleRow.getCell(1).font = {
+        bold: true,
+        size: 14,
+        color: { argb: "FF982725" },
+      };
+      titleRow.getCell(1).alignment = {
+        vertical: "middle",
+        horizontal: "center",
+      };
+
+      const headerRow = worksheet.getRow(2);
       headerRow.font = { bold: true };
       headerRow.alignment = { vertical: "middle", horizontal: "center" };
       headerRow.height = 22;
@@ -197,18 +225,11 @@ export default function ExportPage() {
         };
       });
 
-      const safeCourseName =
-        selectedCourseName
-          .replace(/[^a-zA-Z0-9_-]/g, "_")
-          .replace(/_+/g, "_")
-          .slice(0, 40) || "curso";
-
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
 
-      const fileName = `asistencia_${safeCourseName}_${selectedDate}.xlsx`;
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
