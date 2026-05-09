@@ -81,14 +81,13 @@ BEGIN
     NEW.apellidos,
     resolved_email,
     'administrador',
-    COALESCE(NEW.aprobado, false)
+    false
   )
   ON CONFLICT (id) DO UPDATE
     SET nombre = EXCLUDED.nombre,
         apellido = EXCLUDED.apellido,
         email = EXCLUDED.email,
-        role = EXCLUDED.role,
-        approved = EXCLUDED.approved;
+        role = EXCLUDED.role;
 
   RETURN NEW;
 END;
@@ -147,7 +146,6 @@ BEGIN
       nombres,
       apellidos,
       email,
-      aprobado,
       role
     )
     VALUES (
@@ -157,7 +155,6 @@ BEGIN
       COALESCE(NULLIF(BTRIM(NEW.raw_user_meta_data->>'nombres'), ''), COALESCE(NEW.raw_user_meta_data->>'first_name', '')),
       COALESCE(NULLIF(BTRIM(NEW.raw_user_meta_data->>'apellidos'), ''), COALESCE(NEW.raw_user_meta_data->>'last_name', '')),
       NEW.email,
-      false,
       'administrador'
     )
     ON CONFLICT (id) DO UPDATE
@@ -191,14 +188,29 @@ SELECT
   a.apellidos,
   COALESCE(NULLIF(a.email, ''), u.email, 'admin+' || LEFT(a.id::text, 8) || '@example.com'),
   'administrador'::public.role_enum,
-  COALESCE(a.aprobado, false)
+  COALESCE((SELECT pr.approved FROM public.profiles pr WHERE pr.id = a.id), false)
 FROM public.administrador a
 LEFT JOIN auth.users u ON u.id = a.id
 ON CONFLICT (id) DO UPDATE
   SET nombre = EXCLUDED.nombre,
       apellido = EXCLUDED.apellido,
       email = EXCLUDED.email,
-      role = EXCLUDED.role,
-      approved = EXCLUDED.approved;
+      role = EXCLUDED.role;
+
+CREATE OR REPLACE FUNCTION public.is_approved_admin() RETURNS boolean
+  LANGUAGE sql STABLE SECURITY DEFINER
+  SET search_path TO 'public'
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    WHERE p.id = auth.uid()
+      AND p.role = 'administrador'
+      AND p.approved = true
+  );
+$$;
+
+ALTER TABLE IF EXISTS public.administrador
+  DROP COLUMN IF EXISTS aprobado;
 
 COMMIT;

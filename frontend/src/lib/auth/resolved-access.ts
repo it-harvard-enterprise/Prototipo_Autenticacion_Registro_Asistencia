@@ -48,7 +48,7 @@ export async function resolveCurrentUserAccess(): Promise<ResolvedAccess> {
 
   const { data: admin } = await supabase
     .from("administrador")
-    .select("nombres, apellidos, aprobado")
+    .select("nombres, apellidos")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -56,7 +56,7 @@ export async function resolveCurrentUserAccess(): Promise<ResolvedAccess> {
     return {
       user,
       role: "administrador",
-      approved: Boolean(admin.aprobado),
+      approved: false,
       fullName: `${admin.nombres} ${admin.apellidos}`.trim(),
       profileFound: false,
     };
