@@ -17,15 +17,6 @@ function upperOrNull(value?: string | null): string | null | undefined {
   return normalized ? normalized.toUpperCase() : null;
 }
 
-function paymentMethodCandidates(value: string): string[] {
-  const normalized = value.trim();
-  if (!normalized) return [];
-
-  const upperValue = normalized.toUpperCase();
-  const lowerValue = upperValue.toLowerCase();
-  return Array.from(new Set([upperValue, lowerValue]));
-}
-
 export interface StudentFormData {
   tipo_identificacion: string;
   numero_identificacion: string;
@@ -104,7 +95,7 @@ export async function createStudent(
         fecha_inicio: data.fecha_inicio,
         fecha_matricula: data.fecha_matricula,
         valor_matricula: data.valor_matricula,
-        medio_pago_matricula: data.medio_pago_matricula,
+        medio_pago_matricula: upper(data.medio_pago_matricula),
         valor_apoyo_semanal: data.valor_apoyo_semanal,
         huella_indice_derecho: data.huella_indice_derecho || null,
         huella_indice_izquierdo: data.huella_indice_izquierdo || null,
@@ -162,94 +153,72 @@ export async function updateStudent(
 
   const supabase = await createClient();
 
-  const basePayload = {
-    ...(data.tipo_identificacion !== undefined && {
-      tipo_identificacion: upper(data.tipo_identificacion),
-    }),
-    ...(data.numero_identificacion !== undefined && {
-      numero_identificacion: upper(data.numero_identificacion),
-    }),
-    ...(data.no_matricula !== undefined && {
-      no_matricula: upperOrNull(data.no_matricula),
-    }),
-    ...(data.nombres !== undefined && { nombres: upper(data.nombres) }),
-    ...(data.apellidos !== undefined && { apellidos: upper(data.apellidos) }),
-    ...(data.email !== undefined && {
-      email: data.email === null ? null : data.email.trim(),
-    }),
-    ...(data.grado !== undefined && { grado: upper(data.grado) }),
-    ...(data.telefono !== undefined && { telefono: upper(data.telefono) }),
-    ...(data.direccion !== undefined && { direccion: upper(data.direccion) }),
-    ...(data.barrio !== undefined && { barrio: upper(data.barrio) }),
-    ...(data.nombre_acudiente !== undefined && {
-      nombre_acudiente: upper(data.nombre_acudiente),
-    }),
-    ...(data.telefono_acudiente !== undefined && {
-      telefono_acudiente: upper(data.telefono_acudiente),
-    }),
-    ...(data.eps !== undefined && {
-      eps: upper(data.eps),
-    }),
-    ...(data.coordinador_academico !== undefined && {
-      coordinador_academico: upper(data.coordinador_academico),
-    }),
-    ...(data.programa !== undefined && { programa: upper(data.programa) }),
-    ...(data.fecha_inicio !== undefined && {
-      fecha_inicio: data.fecha_inicio,
-    }),
-    ...(data.fecha_matricula !== undefined && {
-      fecha_matricula: data.fecha_matricula,
-    }),
-    ...(data.valor_matricula !== undefined && {
-      valor_matricula: data.valor_matricula,
-    }),
-    ...(data.valor_apoyo_semanal !== undefined && {
-      valor_apoyo_semanal: data.valor_apoyo_semanal,
-    }),
-    ...(data.huella_indice_derecho !== undefined && {
-      huella_indice_derecho: data.huella_indice_derecho,
-    }),
-    ...(data.huella_indice_izquierdo !== undefined && {
-      huella_indice_izquierdo: data.huella_indice_izquierdo,
-    }),
-    updated_at: new Date().toISOString(),
-  };
+  const { data: student, error } = await supabase
+    .from("estudiantes")
+    .update({
+      ...(data.tipo_identificacion !== undefined && {
+        tipo_identificacion: upper(data.tipo_identificacion),
+      }),
+      ...(data.numero_identificacion !== undefined && {
+        numero_identificacion: upper(data.numero_identificacion),
+      }),
+      ...(data.no_matricula !== undefined && {
+        no_matricula: upperOrNull(data.no_matricula),
+      }),
+      ...(data.nombres !== undefined && { nombres: upper(data.nombres) }),
+      ...(data.apellidos !== undefined && { apellidos: upper(data.apellidos) }),
+      ...(data.email !== undefined && {
+        email: data.email === null ? null : data.email.trim(),
+      }),
+      ...(data.grado !== undefined && { grado: upper(data.grado) }),
+      ...(data.telefono !== undefined && { telefono: upper(data.telefono) }),
+      ...(data.direccion !== undefined && { direccion: upper(data.direccion) }),
+      ...(data.barrio !== undefined && { barrio: upper(data.barrio) }),
+      ...(data.nombre_acudiente !== undefined && {
+        nombre_acudiente: upper(data.nombre_acudiente),
+      }),
+      ...(data.telefono_acudiente !== undefined && {
+        telefono_acudiente: upper(data.telefono_acudiente),
+      }),
+      ...(data.eps !== undefined && {
+        eps: upper(data.eps),
+      }),
+      ...(data.coordinador_academico !== undefined && {
+        coordinador_academico: upper(data.coordinador_academico),
+      }),
+      ...(data.programa !== undefined && { programa: upper(data.programa) }),
+      ...(data.fecha_inicio !== undefined && {
+        fecha_inicio: data.fecha_inicio,
+      }),
+      ...(data.fecha_matricula !== undefined && {
+        fecha_matricula: data.fecha_matricula,
+      }),
+      ...(data.valor_matricula !== undefined && {
+        valor_matricula: data.valor_matricula,
+      }),
+      ...(data.medio_pago_matricula !== undefined && {
+        medio_pago_matricula: upper(data.medio_pago_matricula),
+      }),
+      ...(data.valor_apoyo_semanal !== undefined && {
+        valor_apoyo_semanal: data.valor_apoyo_semanal,
+      }),
+      ...(data.huella_indice_derecho !== undefined && {
+        huella_indice_derecho: data.huella_indice_derecho,
+      }),
+      ...(data.huella_indice_izquierdo !== undefined && {
+        huella_indice_izquierdo: data.huella_indice_izquierdo,
+      }),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("numero_identificacion", upper(numeroIdentificacion))
+    .select()
+    .single();
 
-  const paymentCandidates =
-    data.medio_pago_matricula !== undefined
-      ? paymentMethodCandidates(data.medio_pago_matricula)
-      : [undefined];
-
-  for (let index = 0; index < paymentCandidates.length; index += 1) {
-    const paymentValue = paymentCandidates[index];
-
-    const { data: student, error } = await supabase
-      .from("estudiantes")
-      .update({
-        ...basePayload,
-        ...(paymentValue !== undefined && {
-          medio_pago_matricula: paymentValue,
-        }),
-      })
-      .eq("numero_identificacion", upper(numeroIdentificacion))
-      .select()
-      .single();
-
-    if (!error) {
-      return { success: true, data: student as Student };
-    }
-
-    const enumError = error.message
-      .toLowerCase()
-      .includes("invalid input value for enum metodo_pago_enum");
-    const hasMoreCandidates = index < paymentCandidates.length - 1;
-
-    if (!(enumError && hasMoreCandidates)) {
-      return { success: false, error: error.message };
-    }
+  if (error) {
+    return { success: false, error: error.message };
   }
 
-  return { success: false, error: "No fue posible actualizar el estudiante" };
+  return { success: true, data: student as Student };
 }
 
 export async function deleteStudent(
