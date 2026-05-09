@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -47,7 +47,7 @@ const passwordSchema = z
 
 type PasswordFormValues = z.infer<typeof passwordSchema>;
 
-export default function AcceptInvitationPage() {
+function AcceptInvitationInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const invitedEmail = searchParams.get("invited_email")?.trim() ?? "";
@@ -372,5 +372,13 @@ export default function AcceptInvitationPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function AcceptInvitationPage() {
+  return (
+    <Suspense>
+      <AcceptInvitationInner />
+    </Suspense>
   );
 }
