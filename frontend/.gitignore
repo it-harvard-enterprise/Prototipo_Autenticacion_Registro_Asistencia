@@ -46,3 +46,7 @@ supabase/.env
 # Logs
 *.log
 logs/
+
+# Local secrets for load tests
+scripts/*.cookie.txt
+.secrets/
