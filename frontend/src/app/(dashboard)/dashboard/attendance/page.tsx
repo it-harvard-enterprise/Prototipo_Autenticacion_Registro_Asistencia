@@ -127,11 +127,22 @@ export default function AttendancePage() {
 
   const {
     ready: readerReady,
+    isReconnecting,
     deviceStatus,
     captureStatus,
     lastQuality,
     capture,
+    reconnect,
   } = useDigitalPersonaFingerprintReader();
+
+  async function handleReconnectReader() {
+    const reconnected = await reconnect();
+    if (reconnected) {
+      toast.success("Lector reconectado correctamente");
+    } else {
+      toast.error("No fue posible reconectar el lector");
+    }
+  }
 
   const form = useForm<AttendanceFormValues>({
     resolver: zodResolver(attendanceSchema),
@@ -718,7 +729,11 @@ export default function AttendancePage() {
                       <Button
                         type="button"
                         onClick={handleCaptureFingerprintAttendance}
-                        disabled={isCapturingFingerprint || isLoadingRoster}
+                        disabled={
+                          isCapturingFingerprint ||
+                          isLoadingRoster ||
+                          isReconnecting
+                        }
                         className="w-full h-full min-h-10 bg-[#b92f2d] hover:bg-[#982725] text-white"
                       >
                         {isCapturingFingerprint ? (
@@ -731,6 +746,24 @@ export default function AttendancePage() {
                         )}
                       </Button>
                     </div>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleReconnectReader}
+                      disabled={isCapturingFingerprint || isReconnecting}
+                    >
+                      {isReconnecting ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Reconectando...
+                        </>
+                      ) : (
+                        "Reconectar lector"
+                      )}
+                    </Button>
                   </div>
 
                   {/* {lastFingerprintMatch && (

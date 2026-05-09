@@ -43,10 +43,12 @@ interface FingerprintSdk {
 interface UseFingerprintReaderResult {
   ready: boolean;
   isCapturing: boolean;
+  isReconnecting: boolean;
   deviceStatus: string;
   captureStatus: string;
   lastQuality: number | null;
   capture: (mode: FingerCaptureMode) => Promise<string | null>;
+  reconnect: () => Promise<boolean>;
 }
 
 const FingerprintReaderContext =
@@ -85,6 +87,7 @@ function useDigitalPersonaFingerprintReaderState(): UseFingerprintReaderResult {
 
   const [ready, setReady] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
   const [deviceStatus, setDeviceStatus] = useState("Inicializando lector...");
   const [captureStatus, setCaptureStatus] = useState("Sin captura activa");
   const [lastQuality, setLastQuality] = useState<number | null>(null);
@@ -101,6 +104,7 @@ function useDigitalPersonaFingerprintReaderState(): UseFingerprintReaderResult {
   const reconnectDelayRef = useRef(RECONNECT_MIN_DELAY_MS);
   const deviceCheckFailureCountRef = useRef(0);
   const commFailureCountRef = useRef(0);
+  const forceReinitializeRef = useRef<(() => Promise<boolean>) | null>(null);
 
   const clearPendingCapture = (reason?: string) => {
     if (reason) {
@@ -414,6 +418,54 @@ function useDigitalPersonaFingerprintReaderState(): UseFingerprintReaderResult {
       }
     };
 
+    const forceReinitialize = async (): Promise<boolean> => {
+      setIsReconnecting(true);
+      setReady(false);
+      setDeviceStatus("Reconectando lector...");
+      setCaptureStatus("Reiniciando sesion del lector...");
+      clearInitRetryTimer();
+      clearReconnectTimer();
+      initRetryDelayRef.current = INIT_RETRY_MIN_DELAY_MS;
+      reconnectDelayRef.current = RECONNECT_MIN_DELAY_MS;
+      deviceCheckFailureCountRef.current = 0;
+      commFailureCountRef.current = 0;
+
+      try {
+        await destroyReader();
+        await initialize();
+
+        const activeReader = readerRef.current;
+        if (!activeReader) {
+          setCaptureStatus("No se pudo recrear la sesion del lector");
+          return false;
+        }
+
+        const ok = await runDeviceCheck(activeReader);
+        if (!ok) {
+          setCaptureStatus(
+            "Reconectado parcialmente, pero sin lector detectado",
+          );
+          scheduleReconnect();
+          return false;
+        }
+
+        setCaptureStatus("Lector reconectado correctamente");
+        return true;
+      } catch (error) {
+        setCaptureStatus(
+          error instanceof Error
+            ? `Error al reconectar: ${error.message}`
+            : "Error al reconectar lector",
+        );
+        scheduleReconnect();
+        return false;
+      } finally {
+        setIsReconnecting(false);
+      }
+    };
+
+    forceReinitializeRef.current = forceReinitialize;
+
     const checkOnWindowFocus = () => {
       const activeReader = readerRef.current;
       if (isUnmounted) return;
@@ -449,6 +501,7 @@ function useDigitalPersonaFingerprintReaderState(): UseFingerprintReaderResult {
         await destroyReader();
       };
       cleanup();
+      forceReinitializeRef.current = null;
       pendingResolveRef.current = null;
       currentModeRef.current = null;
     };
@@ -491,10 +544,19 @@ function useDigitalPersonaFingerprintReaderState(): UseFingerprintReaderResult {
   return {
     ready,
     isCapturing,
+    isReconnecting,
     deviceStatus,
     captureStatus,
     lastQuality,
     capture,
+    reconnect: async () => {
+      const reconnectFn = forceReinitializeRef.current;
+      if (!reconnectFn) {
+        setCaptureStatus("El reconector aun no esta listo");
+        return false;
+      }
+      return reconnectFn();
+    },
   };
 }
 
