@@ -146,7 +146,6 @@ export default function ExportPage() {
       const worksheetName = fileBaseName.slice(0, 31) || "asistencia";
 
       const workbook = new ExcelJS.Workbook();
-      workbook.properties.title = fileBaseName;
 
       const worksheet = workbook.addWorksheet(worksheetName);
 
