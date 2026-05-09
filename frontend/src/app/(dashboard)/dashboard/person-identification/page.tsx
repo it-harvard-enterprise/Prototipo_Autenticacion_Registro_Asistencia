@@ -162,11 +162,22 @@ export default function PersonIdentificationPage() {
 
   const {
     ready: readerReady,
+    isReconnecting,
     deviceStatus,
     captureStatus,
     lastQuality,
     capture,
+    reconnect,
   } = useDigitalPersonaFingerprintReader();
+
+  async function handleReconnectReader() {
+    const reconnected = await reconnect();
+    if (reconnected) {
+      toast.success("Lector reconectado correctamente");
+    } else {
+      toast.error("No fue posible reconectar el lector");
+    }
+  }
 
   const normalizedInputId = useMemo(
     () => normalizeId(numeroIdentificacion),
@@ -348,7 +359,7 @@ export default function PersonIdentificationPage() {
             <Button
               type="button"
               onClick={handleSearchByFingerprint}
-              disabled={isSearchingByFingerprint}
+              disabled={isSearchingByFingerprint || isReconnecting}
               className="w-full bg-[#b92f2d] hover:bg-[#982725] text-white"
             >
               {isSearchingByFingerprint ? (
@@ -361,6 +372,23 @@ export default function PersonIdentificationPage() {
                   <Fingerprint className="mr-2 h-4 w-4" />
                   Capturar Huella e Identificar
                 </>
+              )}
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleReconnectReader}
+              disabled={isSearchingByFingerprint || isReconnecting}
+              className="w-full"
+            >
+              {isReconnecting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Reconectando...
+                </>
+              ) : (
+                "Reconectar lector"
               )}
             </Button>
           </div>

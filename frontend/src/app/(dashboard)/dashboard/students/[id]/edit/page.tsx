@@ -144,11 +144,22 @@ export default function EditStudentPage() {
   const {
     ready: readerReady,
     isCapturing,
+    isReconnecting,
     deviceStatus,
     captureStatus,
     lastQuality,
     capture,
+    reconnect,
   } = useDigitalPersonaFingerprintReader();
+
+  async function handleReconnectReader() {
+    const reconnected = await reconnect();
+    if (reconnected) {
+      toast.success("Lector reconectado correctamente");
+    } else {
+      toast.error("No fue posible reconectar el lector");
+    }
+  }
 
   const form = useForm<StudentFormValues>({
     resolver: zodResolver(studentSchema),
@@ -875,6 +886,7 @@ export default function EditStudentPage() {
                         }
                         disabled={
                           isLoading ||
+                          isReconnecting ||
                           isCapturing ||
                           capturingSide === "huella_indice_izquierdo"
                         }
@@ -926,6 +938,7 @@ export default function EditStudentPage() {
                         }
                         disabled={
                           isLoading ||
+                          isReconnecting ||
                           isCapturing ||
                           capturingSide === "huella_indice_derecho"
                         }
@@ -939,6 +952,24 @@ export default function EditStudentPage() {
                       </Button>
                     </CardContent>
                   </Card>
+                </div>
+
+                <div className="flex justify-start">
+                  <Button
+                    type="button"
+                    className="bg-[#b92f2d] hover:bg-[#982725] text-white"
+                    onClick={handleReconnectReader}
+                    disabled={isLoading || isCapturing || isReconnecting}
+                  >
+                    {isReconnecting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Reconectando...
+                      </>
+                    ) : (
+                      "Reconectar lector"
+                    )}
+                  </Button>
                 </div>
               </div>
 

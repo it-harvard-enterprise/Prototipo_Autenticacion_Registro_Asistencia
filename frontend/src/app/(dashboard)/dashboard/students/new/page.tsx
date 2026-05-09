@@ -163,11 +163,22 @@ export default function NewStudentPage() {
   const {
     ready: readerReady,
     isCapturing,
+    isReconnecting,
     deviceStatus,
     captureStatus,
     lastQuality,
     capture,
+    reconnect,
   } = useDigitalPersonaFingerprintReader();
+
+  async function handleReconnectReader() {
+    const reconnected = await reconnect();
+    if (reconnected) {
+      toast.success("Lector reconectado correctamente");
+    } else {
+      toast.error("No fue posible reconectar el lector");
+    }
+  }
 
   const form = useForm<StudentFormValues>({
     resolver: zodResolver(studentSchema),
@@ -768,7 +779,7 @@ export default function NewStudentPage() {
                   </h3>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="rounded-md border p-3 bg-white">
                     <p className="text-[11px] uppercase tracking-wide text-gray-500">
                       Lector
@@ -827,6 +838,7 @@ export default function NewStudentPage() {
                         }
                         disabled={
                           isLoading ||
+                          isReconnecting ||
                           isCapturing ||
                           capturingSide === "huella_indice_izquierdo"
                         }
@@ -876,6 +888,7 @@ export default function NewStudentPage() {
                         }
                         disabled={
                           isLoading ||
+                          isReconnecting ||
                           isCapturing ||
                           capturingSide === "huella_indice_derecho"
                         }
@@ -889,6 +902,24 @@ export default function NewStudentPage() {
                       </Button>
                     </CardContent>
                   </Card>
+                </div>
+
+                <div className="flex justify-start">
+                  <Button
+                    type="button"
+                    className="bg-[#b92f2d] hover:bg-[#982725] text-white"
+                    onClick={handleReconnectReader}
+                    disabled={isLoading || isCapturing || isReconnecting}
+                  >
+                    {isReconnecting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Reconectando...
+                      </>
+                    ) : (
+                      "Reconectar lector"
+                    )}
+                  </Button>
                 </div>
               </div>
 
