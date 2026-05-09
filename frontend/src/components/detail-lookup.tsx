@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-type LookupType = "student" | "course";
+type LookupType = "student" | "course" | "professor";
 
 interface DetailLookupProps {
   type: LookupType;
@@ -36,7 +36,9 @@ export function DetailLookup({ type }: DetailLookupProps) {
   const label =
     type === "course"
       ? "Buscar curso por ID del curso"
-      : "Buscar estudiante por número de identificación";
+      : type === "professor"
+        ? "Buscar profesor por número de identificación"
+        : "Buscar estudiante por número de identificación";
 
   const navigate = async () => {
     if (!isValid) return;
@@ -55,6 +57,17 @@ export function DetailLookup({ type }: DetailLookupProps) {
           toast.error("El ID de curso ingresado no existe.");
           return;
         }
+      } else if (type === "professor") {
+        const { data, error } = await supabase
+          .from("profesores")
+          .select("numero_identificacion")
+          .eq("numero_identificacion", trimmedValue)
+          .limit(1);
+
+        if (error || !data || data.length === 0) {
+          toast.error("El número de identificación ingresado no existe.");
+          return;
+        }
       } else {
         const { data, error } = await supabase
           .from("estudiantes")
@@ -71,7 +84,9 @@ export function DetailLookup({ type }: DetailLookupProps) {
       const target =
         type === "course"
           ? `/dashboard/courses/${Number(trimmedValue)}`
-          : `/dashboard/students/${encodeURIComponent(trimmedValue)}`;
+          : type === "professor"
+            ? `/dashboard/professors/${encodeURIComponent(trimmedValue)}`
+            : `/dashboard/students/${encodeURIComponent(trimmedValue)}`;
 
       router.push(target);
     } finally {

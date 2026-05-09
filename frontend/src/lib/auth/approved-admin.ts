@@ -21,20 +21,27 @@ export async function ensureApprovedAdmin(): Promise<{
     };
   }
 
-  const { data: admin, error: adminError } = await supabase
-    .from("administrador")
-    .select("aprobado")
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("role, approved")
     .eq("id", user.id)
     .single();
 
-  if (adminError || !admin) {
+  if (profileError || !profile) {
     return {
       ok: false,
-      error: "No se encontró el registro del administrador.",
+      error: "No se encontró el perfil del usuario.",
     };
   }
 
-  if (!admin.aprobado) {
+  if (profile.role !== "administrador") {
+    return {
+      ok: false,
+      error: "No tiene permisos de administrador.",
+    };
+  }
+
+  if (!profile.approved) {
     return {
       ok: false,
       error: APPROVAL_REQUIRED_MESSAGE,

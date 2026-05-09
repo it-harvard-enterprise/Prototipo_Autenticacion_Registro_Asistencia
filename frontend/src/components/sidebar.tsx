@@ -8,6 +8,7 @@ import {
   BookOpen,
   Link2,
   ClipboardList,
+  Fingerprint,
   FileSpreadsheet,
   LogOut,
   X,
@@ -46,12 +47,17 @@ const navItems: NavItem[] = [
     icon: Users,
   },
   {
+    label: "Profesores",
+    href: "/dashboard/professors",
+    icon: Users,
+  },
+  {
     label: "Cursos",
     href: "/dashboard/courses",
     icon: BookOpen,
   },
   {
-    label: "Asociar Cursos con Estudiantes",
+    label: "Asociar Cursos con Estudiantes y Profesores",
     href: "/dashboard/course-student-association",
     icon: Link2,
   },
@@ -59,6 +65,11 @@ const navItems: NavItem[] = [
     label: "Tomar Asistencia",
     href: "/dashboard/attendance",
     icon: ClipboardList,
+  },
+  {
+    label: "Identificar Persona",
+    href: "/dashboard/person-identification",
+    icon: Fingerprint,
   },
   {
     label: "Exportar Lista de Asistencia a Excel",

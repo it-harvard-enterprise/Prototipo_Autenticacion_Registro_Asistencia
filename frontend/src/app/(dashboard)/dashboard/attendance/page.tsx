@@ -66,11 +66,11 @@ const attendanceSchema = z.object({
 type AttendanceFormValues = z.infer<typeof attendanceSchema>;
 type SaldoValue = "cancelado" | "debe" | null;
 type MetodoPagoValue =
-  | "efectivo"
-  | "transferencia"
-  | "nequi"
-  | "daviplata"
-  | "otro"
+  | "EFECTIVO"
+  | "TRANSFERENCIA"
+  | "NEQUI"
+  | "DAVIPLATA"
+  | "OTRO"
   | null;
 
 function createAttendanceTimestamp(selectedDate: string): string {
@@ -455,10 +455,13 @@ export default function AttendancePage() {
       }
     }
 
+    const savePressedAtIso = new Date().toISOString();
+
     setIsSaving(true);
     const result = await saveAttendanceForCourseAndDate({
       idCurso: Number(values.idCurso),
       date: values.fecha,
+      saveTimestampIso: savePressedAtIso,
       rows: students.map((student) => ({
         numero_identificacion: student.numero_identificacion,
         asistio: student.asistio,
@@ -541,7 +544,7 @@ export default function AttendancePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Filtro de asistencia</CardTitle>
+          <CardTitle>Filtro de Asistencia</CardTitle>
           <CardDescription>
             El selector de cursos se carga consultando id_curso y nombre_curso
             en la base de datos.
@@ -682,11 +685,11 @@ export default function AttendancePage() {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base text-[#982725] flex items-center gap-2">
                     <Fingerprint className="h-4 w-4" />
-                    Asistencia por huella
+                    Asistencia por Huella
                   </CardTitle>
                   <CardDescription>
                     Captura de huellas digitales con el sensor para
-                    autenticacion biometrica y marcado automatico de asistencia.
+                    autenticación biométrica y marcado automático de asistencia.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -730,16 +733,16 @@ export default function AttendancePage() {
                     </div>
                   </div>
 
-                  {lastFingerprintMatch && (
+                  {/* {lastFingerprintMatch && (
                     <p className="text-xs text-[#982725]">
-                      Ultima coincidencia:{" "}
+                      Última coincidencia:{" "}
                       {lastFingerprintMatch.numero_identificacion}
                       {typeof lastFingerprintMatch.confidence === "number" &&
                         ` (confianza ${(lastFingerprintMatch.confidence * 100).toFixed(1)}%)`}
                       {lastFingerprintMatch.source &&
                         ` - fuente ${lastFingerprintMatch.source}`}
                     </p>
-                  )}
+                  )} */}
                 </CardContent>
               </Card>
 
@@ -791,7 +794,7 @@ export default function AttendancePage() {
                           </TableCell>
                           <TableCell>
                             <select
-                              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:bg-input/50"
+                              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
                               value={student.saldo ?? ""}
                               disabled={!student.asistio}
                               onChange={(event) =>
@@ -813,7 +816,7 @@ export default function AttendancePage() {
                           </TableCell>
                           <TableCell>
                             <select
-                              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:bg-input/50"
+                              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
                               value={student.metodo_pago ?? ""}
                               disabled={
                                 !student.asistio ||
@@ -825,24 +828,24 @@ export default function AttendancePage() {
                                   {
                                     metodo_pago: (event.target.value ||
                                       null) as
-                                      | "efectivo"
-                                      | "transferencia"
-                                      | "nequi"
-                                      | "daviplata"
-                                      | "otro"
+                                      | "EFECTIVO"
+                                      | "TRANSFERENCIA"
+                                      | "NEQUI"
+                                      | "DAVIPLATA"
+                                      | "OTRO"
                                       | null,
                                   },
                                 )
                               }
                             >
                               <option value="">Seleccione</option>
-                              <option value="efectivo">Efectivo</option>
-                              <option value="transferencia">
-                                Transferencia
+                              <option value="EFECTIVO">EFECTIVO</option>
+                              <option value="TRANSFERENCIA">
+                                TRANSFERENCIA
                               </option>
-                              <option value="nequi">Nequi</option>
-                              <option value="daviplata">Daviplata</option>
-                              <option value="otro">Otro</option>
+                              <option value="NEQUI">NEQUI</option>
+                              <option value="DAVIPLATA">DAVIPLATA</option>
+                              <option value="OTRO">OTRO</option>
                             </select>
                           </TableCell>
                         </TableRow>

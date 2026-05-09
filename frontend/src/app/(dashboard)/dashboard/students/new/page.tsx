@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
@@ -88,6 +88,7 @@ const studentSchema = z
     no_matricula: z.string().max(20).optional(),
     nombres: z.string().min(2, "Los nombres son requeridos").max(100),
     apellidos: z.string().min(2, "Los apellidos son requeridos").max(100),
+    email: z.string().email("Ingrese un correo electrónico válido"),
     grado: z.enum(STUDENT_GRADE_OPTIONS, {
       message: "Debe seleccionar un grado válido",
     }),
@@ -118,11 +119,11 @@ const studentSchema = z
       }),
     medio_pago_matricula: z.enum(
       PAYMENT_METHOD_OPTIONS.map((item) => item.value) as [
-        "efectivo",
-        "transferencia",
-        "nequi",
-        "daviplata",
-        "otro",
+        "EFECTIVO",
+        "TRANSFERENCIA",
+        "NEQUI",
+        "DAVIPLATA",
+        "OTRO",
       ],
       {
         message: "Debe seleccionar el medio de pago de matrícula",
@@ -134,14 +135,8 @@ const studentSchema = z
       .refine((val) => (parseCurrencyToNumber(val) ?? 0) > 0, {
         message: "El valor de apoyo semanal debe ser mayor que 0",
       }),
-    huella_indice_derecho: z
-      .string()
-      .trim()
-      .min(1, "Debe capturar la huella indice derecha"),
-    huella_indice_izquierdo: z
-      .string()
-      .trim()
-      .min(1, "Debe capturar la huella indice izquierda"),
+    huella_indice_derecho: z.string().trim().optional(),
+    huella_indice_izquierdo: z.string().trim().optional(),
   })
   .superRefine((data, ctx) => {
     if (
@@ -182,25 +177,32 @@ export default function NewStudentPage() {
       no_matricula: "",
       nombres: "",
       apellidos: "",
+      email: "",
       grado: "1",
       telefono: "",
       direccion: "",
       barrio: "",
       nombre_acudiente: "",
       telefono_acudiente: "",
-      eps_select: "Nueva EPS",
+      eps_select: "NUEVA EPS",
       eps_otra: "",
-      coordinador_academico: "Nicol Delgado",
+      coordinador_academico: "NICOL DELGADO",
       huella_indice_derecho: "",
       huella_indice_izquierdo: "",
       programa: "",
       fecha_inicio: "",
       fecha_matricula: "",
       valor_matricula: "",
-      medio_pago_matricula: "efectivo",
+      medio_pago_matricula: "EFECTIVO",
       valor_apoyo_semanal: "",
     },
   });
+
+  useEffect(() => {
+    void fetch("/api/start-service").catch(() => {
+      // Keep this fire-and-forget on page load.
+    });
+  }, []);
 
   async function onSubmit(values: StudentFormValues) {
     const epsValue =
@@ -215,12 +217,6 @@ export default function NewStudentPage() {
 
     const rightFingerprint = values.huella_indice_derecho?.trim() ?? "";
     const leftFingerprint = values.huella_indice_izquierdo?.trim() ?? "";
-    if (!rightFingerprint || !leftFingerprint) {
-      toast.error(
-        "Debe capturar la huella indice derecha e izquierda antes de guardar",
-      );
-      return;
-    }
 
     setIsLoading(true);
 
@@ -230,12 +226,12 @@ export default function NewStudentPage() {
         "student-biometric-default-key",
       );
 
-      // Encrypt both fingerprints
-      const rightEncrypted = await encryptAESGCM(
-        rightFingerprint,
-        encryptionKey,
-      );
-      const leftEncrypted = await encryptAESGCM(leftFingerprint, encryptionKey);
+      const rightEncrypted: EncryptedPayload | null = rightFingerprint
+        ? await encryptAESGCM(rightFingerprint, encryptionKey)
+        : null;
+      const leftEncrypted: EncryptedPayload | null = leftFingerprint
+        ? await encryptAESGCM(leftFingerprint, encryptionKey)
+        : null;
 
       const res = await fetch(`/api/students/create`, {
         method: "POST",
@@ -246,6 +242,7 @@ export default function NewStudentPage() {
           no_matricula: values.no_matricula || null,
           nombres: values.nombres,
           apellidos: values.apellidos,
+          email: values.email,
           grado: values.grado,
           telefono: values.telefono,
           direccion: values.direccion,
@@ -261,8 +258,12 @@ export default function NewStudentPage() {
           medio_pago_matricula: values.medio_pago_matricula,
           valor_apoyo_semanal:
             parseCurrencyToNumber(values.valor_apoyo_semanal) ?? 0,
-          huella_indice_derecho_encrypted: rightEncrypted,
-          huella_indice_izquierdo_encrypted: leftEncrypted,
+          ...(rightEncrypted && {
+            huella_indice_derecho_encrypted: rightEncrypted,
+          }),
+          ...(leftEncrypted && {
+            huella_indice_izquierdo_encrypted: leftEncrypted,
+          }),
         }),
       });
 
@@ -317,8 +318,8 @@ export default function NewStudentPage() {
     toast.success("Huella capturada correctamente");
   }
 
-  const rightFingerprintValue = form.watch("huella_indice_derecho");
-  const leftFingerprintValue = form.watch("huella_indice_izquierdo");
+  const rightFingerprintValue = form.watch("huella_indice_derecho") ?? "";
+  const leftFingerprintValue = form.watch("huella_indice_izquierdo") ?? "";
   const hasBothFingerprints =
     rightFingerprintValue.trim().length > 0 &&
     leftFingerprintValue.trim().length > 0;
@@ -361,7 +362,7 @@ export default function NewStudentPage() {
                           onBlur={field.onBlur}
                           name={field.name}
                           ref={field.ref}
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
                         >
                           {IDENTIFICATION_TYPE_OPTIONS.map((option) => (
                             <option key={option.value} value={option.value}>
@@ -432,6 +433,25 @@ export default function NewStudentPage() {
                     </FormItem>
                   )}
                 />
+
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Correo electrónico</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="email"
+                          placeholder="estudiante@correo.com"
+                          autoComplete="email"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -448,7 +468,7 @@ export default function NewStudentPage() {
                           onBlur={field.onBlur}
                           name={field.name}
                           ref={field.ref}
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
                         >
                           {STUDENT_GRADE_OPTIONS.map((grade) => (
                             <option key={grade} value={grade}>
@@ -558,7 +578,7 @@ export default function NewStudentPage() {
                           onBlur={field.onBlur}
                           name={field.name}
                           ref={field.ref}
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
                         >
                           {COLOMBIA_EPS_OPTIONS.map((eps) => (
                             <option key={eps} value={eps}>
@@ -584,7 +604,7 @@ export default function NewStudentPage() {
                           onBlur={field.onBlur}
                           name={field.name}
                           ref={field.ref}
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
                         >
                           {STUDENT_COORDINATOR_OPTIONS.map((coordinator) => (
                             <option key={coordinator} value={coordinator}>
@@ -726,7 +746,7 @@ export default function NewStudentPage() {
                           onBlur={field.onBlur}
                           name={field.name}
                           ref={field.ref}
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
                         >
                           {PAYMENT_METHOD_OPTIONS.map((option) => (
                             <option key={option.value} value={option.value}>
@@ -881,10 +901,7 @@ export default function NewStudentPage() {
                 >
                   <Link href="/dashboard/students">Cancelar</Link>
                 </Button>
-                <Button
-                  type="submit"
-                  disabled={isLoading || !hasBothFingerprints}
-                >
+                <Button type="submit" disabled={isLoading}>
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />

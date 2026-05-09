@@ -52,6 +52,10 @@ const courseSchema = z
 
 type CourseFormValues = z.infer<typeof courseSchema>;
 
+function toUpperInput(value: string): string {
+  return value.toUpperCase();
+}
+
 export default function NewCoursePage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -121,7 +125,13 @@ export default function NewCoursePage() {
                   <FormItem>
                     <FormLabel>Nombre del curso *</FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <Input
+                        {...field}
+                        value={field.value ?? ""}
+                        onChange={(event) =>
+                          field.onChange(toUpperInput(event.target.value))
+                        }
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -139,6 +149,10 @@ export default function NewCoursePage() {
                         <Input
                           placeholder="Ej: Básico, Intermedio, Avanzado"
                           {...field}
+                          value={field.value ?? ""}
+                          onChange={(event) =>
+                            field.onChange(toUpperInput(event.target.value))
+                          }
                         />
                       </FormControl>
                       <FormMessage />
@@ -152,7 +166,14 @@ export default function NewCoursePage() {
                     <FormItem>
                       <FormLabel>Salón</FormLabel>
                       <FormControl>
-                        <Input placeholder="Ej: Salón 3" {...field} />
+                        <Input
+                          placeholder="Ej: SALON 3"
+                          {...field}
+                          value={field.value ?? ""}
+                          onChange={(event) =>
+                            field.onChange(toUpperInput(event.target.value))
+                          }
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

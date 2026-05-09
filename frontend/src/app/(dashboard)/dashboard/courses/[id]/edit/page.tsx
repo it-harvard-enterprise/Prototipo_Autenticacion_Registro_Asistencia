@@ -54,6 +54,10 @@ const courseSchema = z
 
 type CourseFormValues = z.infer<typeof courseSchema>;
 
+function toUpperInput(value: string): string {
+  return value.toUpperCase();
+}
+
 export default function EditCoursePage() {
   const router = useRouter();
   const params = useParams();
@@ -95,11 +99,11 @@ export default function EditCoursePage() {
       const c = data as Course;
       setCourse(c);
       form.reset({
-        nombre_curso: c.nombre_curso,
-        nivel_curso: c.nivel_curso,
+        nombre_curso: (c.nombre_curso ?? "").toUpperCase(),
+        nivel_curso: (c.nivel_curso ?? "").toUpperCase(),
         hora_inicio: c.hora_inicio,
         hora_fin: c.hora_fin,
-        salon: c.salon ?? "",
+        salon: (c.salon ?? "").toUpperCase(),
         fecha_inicio: c.fecha_inicio,
         fecha_fin: c.fecha_fin,
       });
@@ -128,9 +132,8 @@ export default function EditCoursePage() {
       }
 
       toast.success("Curso actualizado correctamente");
-      const nextId = result.data?.id_curso ?? Number(id);
-      router.push(`/dashboard/courses/${nextId}`);
-      router.refresh();
+      const nextId = result.data?.id_curso ?? id;
+      router.replace(`/dashboard/courses/${nextId}`);
     } catch {
       toast.error("Error inesperado al actualizar el curso");
     } finally {
@@ -186,7 +189,13 @@ export default function EditCoursePage() {
                   <FormItem>
                     <FormLabel>Nombre del curso *</FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <Input
+                        {...field}
+                        value={field.value ?? ""}
+                        onChange={(event) =>
+                          field.onChange(toUpperInput(event.target.value))
+                        }
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -201,7 +210,13 @@ export default function EditCoursePage() {
                     <FormItem>
                       <FormLabel>Nivel del curso *</FormLabel>
                       <FormControl>
-                        <Input {...field} />
+                        <Input
+                          {...field}
+                          value={field.value ?? ""}
+                          onChange={(event) =>
+                            field.onChange(toUpperInput(event.target.value))
+                          }
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -214,7 +229,13 @@ export default function EditCoursePage() {
                     <FormItem>
                       <FormLabel>Salón</FormLabel>
                       <FormControl>
-                        <Input {...field} />
+                        <Input
+                          {...field}
+                          value={field.value ?? ""}
+                          onChange={(event) =>
+                            field.onChange(toUpperInput(event.target.value))
+                          }
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
