@@ -218,6 +218,12 @@ export default function EditStudentPage() {
       const epsInList = COLOMBIA_EPS_OPTIONS.includes(
         s.eps as (typeof COLOMBIA_EPS_OPTIONS)[number],
       );
+      const normalizedPaymentMethod = (s.medio_pago_matricula ?? "")
+        .trim()
+        .toUpperCase();
+      const paymentMethodInList = PAYMENT_METHOD_OPTIONS.some(
+        (option) => option.value === normalizedPaymentMethod,
+      );
 
       form.reset({
         tipo_identificacion: tipoIdentificacion,
@@ -243,7 +249,9 @@ export default function EditStudentPage() {
         fecha_inicio: s.fecha_inicio,
         fecha_matricula: s.fecha_matricula,
         valor_matricula: String(s.valor_matricula),
-        medio_pago_matricula: s.medio_pago_matricula,
+        medio_pago_matricula: paymentMethodInList
+          ? (normalizedPaymentMethod as StudentFormValues["medio_pago_matricula"])
+          : "EFECTIVO",
         valor_apoyo_semanal: String(s.valor_apoyo_semanal),
       });
       setCapturedFingerprintSides({ right: false, left: false });

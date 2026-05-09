@@ -3,7 +3,6 @@ export interface Administrador {
   nombres: string;
   apellidos: string;
   role: string;
-  aprobado: boolean;
   created_at: string;
 }
 
