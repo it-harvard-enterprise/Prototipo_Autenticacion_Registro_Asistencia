@@ -38,6 +38,10 @@ export async function signUp(
     options: {
       emailRedirectTo,
       data: {
+        rol: "administrador",
+        role: "administrador",
+        tipo_identificacion: tipoIdentificacion ?? "CC",
+        numero_identificacion: numeroIdentificacion ?? "12345",
         nombres: firstName,
         apellidos: lastName,
         first_name: firstName,
@@ -48,18 +52,6 @@ export async function signUp(
 
   if (error) {
     return { success: false, error: error.message };
-  }
-
-  if (data.user) {
-    await supabase.from("administrador").upsert({
-      id: data.user.id,
-      tipo_identificacion: tipoIdentificacion ?? "CC",
-      numero_identificacion: numeroIdentificacion ?? "12345",
-      nombres: firstName,
-      apellidos: lastName,
-      email,
-      aprobado: false,
-    });
   }
 
   return { success: true, user: data.user };
