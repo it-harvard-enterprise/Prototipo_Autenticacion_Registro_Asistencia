@@ -84,6 +84,10 @@ export default function RegisterPage() {
       password: values.password,
       options: {
         data: {
+          rol: "administrador",
+          role: "administrador",
+          tipo_identificacion: values.tipo_identificacion,
+          numero_identificacion: values.numero_identificacion,
           nombres: values.firstName,
           apellidos: values.lastName,
           first_name: values.firstName,
@@ -93,22 +97,16 @@ export default function RegisterPage() {
     });
 
     if (error) {
-      setServerError(error.message);
+      const friendlyMessage =
+        error.message === "Database error saving new user"
+          ? "No se pudo crear la cuenta por una inconsistencia de base de datos. Intente nuevamente en unos segundos."
+          : error.message;
+      setServerError(friendlyMessage);
       setIsLoading(false);
       return;
     }
 
     if (data.user) {
-      await supabase.from("administrador").upsert({
-        id: data.user.id,
-        tipo_identificacion: values.tipo_identificacion,
-        numero_identificacion: values.numero_identificacion,
-        nombres: values.firstName,
-        apellidos: values.lastName,
-        email: values.email,
-        aprobado: false,
-      });
-
       // If user is immediately logged in (email confirmation disabled)
       if (data.session) {
         router.push("/dashboard");

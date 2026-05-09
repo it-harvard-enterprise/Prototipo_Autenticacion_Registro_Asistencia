@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { resolveCurrentUserAccess } from "@/lib/auth/resolved-access";
 import {
   Card,
   CardContent,
@@ -14,28 +14,27 @@ export const metadata: Metadata = {
 };
 
 export default async function WelcomePage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const access = await resolveCurrentUserAccess();
+  const user = access.user;
 
   if (!user) {
     redirect("/login");
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("nombre, apellido, role")
-    .eq("id", user.id)
-    .single();
+  if (access.role === "administrador") {
+    if (access.approved) {
+      redirect("/dashboard");
+    }
+    redirect("/not-approved");
+  }
 
-  const displayName = profile
-    ? `${profile.nombre} ${profile.apellido}`
+  const displayName = access.fullName
+    ? access.fullName
     : user.user_metadata?.first_name
       ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
       : user.email;
 
-  const roleLabel = profile?.role === "profesor" ? "profesor" : "estudiante";
+  const roleLabel = access.role === "profesor" ? "profesor" : "estudiante";
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
