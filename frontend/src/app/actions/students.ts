@@ -5,12 +5,25 @@ import { ensureApprovedAdmin } from "@/lib/auth/approved-admin";
 import { resolveBiometricBackendBaseUrl } from "@/lib/biometric-backend";
 import { Student } from "@/lib/types";
 
+function upper(value: string): string {
+  return value.trim().toUpperCase();
+}
+
+function upperOrNull(value?: string | null): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+
+  const normalized = value.trim();
+  return normalized ? normalized.toUpperCase() : null;
+}
+
 export interface StudentFormData {
   tipo_identificacion: string;
   numero_identificacion: string;
   no_matricula?: string | null;
   nombres: string;
   apellidos: string;
+  email?: string | null;
   grado: string;
   telefono: string;
   direccion: string;
@@ -24,11 +37,11 @@ export interface StudentFormData {
   fecha_matricula: string;
   valor_matricula: number;
   medio_pago_matricula:
-    | "efectivo"
-    | "transferencia"
-    | "nequi"
-    | "daviplata"
-    | "otro";
+    | "EFECTIVO"
+    | "TRANSFERENCIA"
+    | "NEQUI"
+    | "DAVIPLATA"
+    | "OTRO";
   valor_apoyo_semanal: number;
   huella_indice_derecho?: string | null;
   huella_indice_izquierdo?: string | null;
@@ -55,6 +68,7 @@ export async function createStudent(
     const frontendOrigin =
       process.env.FRONTEND_ORIGIN?.split(",")[0]?.trim() ||
       "http://localhost:3000";
+    const normalizedNumeroIdentificacion = upper(data.numero_identificacion);
 
     const response = await fetch(`${backendUrl}/api/students/enroll`, {
       method: "POST",
@@ -63,24 +77,25 @@ export async function createStudent(
         "X-Frontend-Origin": frontendOrigin,
       },
       body: JSON.stringify({
-        tipo_identificacion: data.tipo_identificacion,
-        numero_identificacion: data.numero_identificacion,
-        no_matricula: data.no_matricula || null,
-        nombres: data.nombres,
-        apellidos: data.apellidos,
-        grado: data.grado,
-        telefono: data.telefono,
-        direccion: data.direccion,
-        barrio: data.barrio,
-        nombre_acudiente: data.nombre_acudiente,
-        telefono_acudiente: data.telefono_acudiente,
-        eps: data.eps,
-        coordinador_academico: data.coordinador_academico,
-        programa: data.programa,
+        tipo_identificacion: upper(data.tipo_identificacion),
+        numero_identificacion: normalizedNumeroIdentificacion,
+        no_matricula: upperOrNull(data.no_matricula) ?? null,
+        nombres: upper(data.nombres),
+        apellidos: upper(data.apellidos),
+        email: data.email?.trim() || null,
+        grado: upper(data.grado),
+        telefono: upper(data.telefono),
+        direccion: upper(data.direccion),
+        barrio: upper(data.barrio),
+        nombre_acudiente: upper(data.nombre_acudiente),
+        telefono_acudiente: upper(data.telefono_acudiente),
+        eps: upper(data.eps),
+        coordinador_academico: upper(data.coordinador_academico),
+        programa: upper(data.programa),
         fecha_inicio: data.fecha_inicio,
         fecha_matricula: data.fecha_matricula,
         valor_matricula: data.valor_matricula,
-        medio_pago_matricula: data.medio_pago_matricula,
+        medio_pago_matricula: upper(data.medio_pago_matricula),
         valor_apoyo_semanal: data.valor_apoyo_semanal,
         huella_indice_derecho: data.huella_indice_derecho || null,
         huella_indice_izquierdo: data.huella_indice_izquierdo || null,
@@ -108,7 +123,7 @@ export async function createStudent(
     const { data: student, error } = await supabase
       .from("estudiantes")
       .select("*")
-      .eq("numero_identificacion", data.numero_identificacion)
+      .eq("numero_identificacion", normalizedNumeroIdentificacion)
       .single();
 
     if (error || !student) {
@@ -142,33 +157,36 @@ export async function updateStudent(
     .from("estudiantes")
     .update({
       ...(data.tipo_identificacion !== undefined && {
-        tipo_identificacion: data.tipo_identificacion,
+        tipo_identificacion: upper(data.tipo_identificacion),
       }),
       ...(data.numero_identificacion !== undefined && {
-        numero_identificacion: data.numero_identificacion,
+        numero_identificacion: upper(data.numero_identificacion),
       }),
       ...(data.no_matricula !== undefined && {
-        no_matricula: data.no_matricula,
+        no_matricula: upperOrNull(data.no_matricula),
       }),
-      ...(data.nombres !== undefined && { nombres: data.nombres }),
-      ...(data.apellidos !== undefined && { apellidos: data.apellidos }),
-      ...(data.grado !== undefined && { grado: data.grado }),
-      ...(data.telefono !== undefined && { telefono: data.telefono }),
-      ...(data.direccion !== undefined && { direccion: data.direccion }),
-      ...(data.barrio !== undefined && { barrio: data.barrio }),
+      ...(data.nombres !== undefined && { nombres: upper(data.nombres) }),
+      ...(data.apellidos !== undefined && { apellidos: upper(data.apellidos) }),
+      ...(data.email !== undefined && {
+        email: data.email === null ? null : data.email.trim(),
+      }),
+      ...(data.grado !== undefined && { grado: upper(data.grado) }),
+      ...(data.telefono !== undefined && { telefono: upper(data.telefono) }),
+      ...(data.direccion !== undefined && { direccion: upper(data.direccion) }),
+      ...(data.barrio !== undefined && { barrio: upper(data.barrio) }),
       ...(data.nombre_acudiente !== undefined && {
-        nombre_acudiente: data.nombre_acudiente,
+        nombre_acudiente: upper(data.nombre_acudiente),
       }),
       ...(data.telefono_acudiente !== undefined && {
-        telefono_acudiente: data.telefono_acudiente,
+        telefono_acudiente: upper(data.telefono_acudiente),
       }),
       ...(data.eps !== undefined && {
-        eps: data.eps,
+        eps: upper(data.eps),
       }),
       ...(data.coordinador_academico !== undefined && {
-        coordinador_academico: data.coordinador_academico,
+        coordinador_academico: upper(data.coordinador_academico),
       }),
-      ...(data.programa !== undefined && { programa: data.programa }),
+      ...(data.programa !== undefined && { programa: upper(data.programa) }),
       ...(data.fecha_inicio !== undefined && {
         fecha_inicio: data.fecha_inicio,
       }),
@@ -179,7 +197,7 @@ export async function updateStudent(
         valor_matricula: data.valor_matricula,
       }),
       ...(data.medio_pago_matricula !== undefined && {
-        medio_pago_matricula: data.medio_pago_matricula,
+        medio_pago_matricula: upper(data.medio_pago_matricula),
       }),
       ...(data.valor_apoyo_semanal !== undefined && {
         valor_apoyo_semanal: data.valor_apoyo_semanal,
@@ -192,7 +210,7 @@ export async function updateStudent(
       }),
       updated_at: new Date().toISOString(),
     })
-    .eq("numero_identificacion", numeroIdentificacion)
+    .eq("numero_identificacion", upper(numeroIdentificacion))
     .select()
     .single();
 

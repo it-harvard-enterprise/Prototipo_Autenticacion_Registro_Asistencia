@@ -3,15 +3,25 @@ export interface Administrador {
   nombres: string;
   apellidos: string;
   role: string;
-  aprobado: boolean;
   created_at: string;
 }
 
-export type Profile = Administrador;
+export interface Profile {
+  id: string;
+  nombre: string;
+  apellido: string;
+  email: string;
+  role: "administrador" | "estudiante" | "profesor";
+  approved: boolean;
+  created_at: string;
+  updated_at?: string;
+}
 
 export interface Student {
   id?: string;
   cedula?: string;
+  auth_user_id?: string | null;
+  email?: string | null;
   tipo_identificacion: string | null;
   numero_identificacion: string;
   no_matricula: string | null;
@@ -31,16 +41,33 @@ export interface Student {
   fecha_matricula: string;
   valor_matricula: number;
   medio_pago_matricula:
-    | "efectivo"
-    | "transferencia"
-    | "nequi"
-    | "daviplata"
-    | "otro";
+    | "EFECTIVO"
+    | "TRANSFERENCIA"
+    | "NEQUI"
+    | "DAVIPLATA"
+    | "OTRO";
   valor_apoyo_semanal: number;
   fingerprint_right?: string | null;
   fingerprint_left?: string | null;
   huella_indice_derecho: string | null;
   huella_indice_izquierdo: string | null;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface Professor {
+  auth_user_id?: string | null;
+  tipo_identificacion: string;
+  numero_identificacion: string;
+  nombres: string;
+  apellidos: string;
+  telefono: string;
+  direccion: string;
+  barrio: string;
+  nombre_contacto_emergencia: string;
+  telefono_contacto_emergencia: string;
+  eps: string;
+  email: string;
   created_at: string;
   updated_at?: string;
 }

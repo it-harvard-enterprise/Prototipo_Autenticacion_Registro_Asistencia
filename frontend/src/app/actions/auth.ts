@@ -23,6 +23,8 @@ export async function signUp(
   password: string,
   firstName: string,
   lastName: string,
+  tipoIdentificacion?: string,
+  numeroIdentificacion?: string,
 ) {
   const supabase = await createClient();
   const frontendOrigin =
@@ -36,6 +38,10 @@ export async function signUp(
     options: {
       emailRedirectTo,
       data: {
+        rol: "administrador",
+        role: "administrador",
+        tipo_identificacion: tipoIdentificacion ?? "CC",
+        numero_identificacion: numeroIdentificacion ?? "12345",
         nombres: firstName,
         apellidos: lastName,
         first_name: firstName,
@@ -46,15 +52,6 @@ export async function signUp(
 
   if (error) {
     return { success: false, error: error.message };
-  }
-
-  if (data.user) {
-    await supabase.from("administrador").upsert({
-      id: data.user.id,
-      nombres: firstName,
-      apellidos: lastName,
-      aprobado: false,
-    });
   }
 
   return { success: true, user: data.user };

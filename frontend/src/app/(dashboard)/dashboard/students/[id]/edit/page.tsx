@@ -59,6 +59,7 @@ const studentSchema = z
     no_matricula: z.string().max(20).optional(),
     nombres: z.string().min(2, "Los nombres son requeridos").max(100),
     apellidos: z.string().min(2, "Los apellidos son requeridos").max(100),
+    email: z.string().email("Ingrese un correo electrónico válido"),
     grado: z.enum(STUDENT_GRADE_OPTIONS, {
       message: "Debe seleccionar un grado válido",
     }),
@@ -89,11 +90,11 @@ const studentSchema = z
       }),
     medio_pago_matricula: z.enum(
       PAYMENT_METHOD_OPTIONS.map((item) => item.value) as [
-        "efectivo",
-        "transferencia",
-        "nequi",
-        "daviplata",
-        "otro",
+        "EFECTIVO",
+        "TRANSFERENCIA",
+        "NEQUI",
+        "DAVIPLATA",
+        "OTRO",
       ],
       {
         message: "Debe seleccionar el medio de pago de matrícula",
@@ -105,14 +106,8 @@ const studentSchema = z
       .refine((val) => !Number.isNaN(Number(val)) && Number(val) > 0, {
         message: "El valor de apoyo semanal debe ser mayor que 0",
       }),
-    huella_indice_derecho: z
-      .string()
-      .trim()
-      .min(1, "Debe capturar la huella indice derecha"),
-    huella_indice_izquierdo: z
-      .string()
-      .trim()
-      .min(1, "Debe capturar la huella indice izquierda"),
+    huella_indice_derecho: z.string().trim().optional(),
+    huella_indice_izquierdo: z.string().trim().optional(),
   })
   .superRefine((data, ctx) => {
     if (
@@ -141,15 +136,30 @@ export default function EditStudentPage() {
   const [capturingSide, setCapturingSide] = useState<
     "huella_indice_derecho" | "huella_indice_izquierdo" | null
   >(null);
+  const [capturedFingerprintSides, setCapturedFingerprintSides] = useState({
+    right: false,
+    left: false,
+  });
 
   const {
     ready: readerReady,
     isCapturing,
+    isReconnecting,
     deviceStatus,
     captureStatus,
     lastQuality,
     capture,
+    reconnect,
   } = useDigitalPersonaFingerprintReader();
+
+  async function handleReconnectReader() {
+    const reconnected = await reconnect();
+    if (reconnected) {
+      toast.success("Lector reconectado correctamente");
+    } else {
+      toast.error("No fue posible reconectar el lector");
+    }
+  }
 
   const form = useForm<StudentFormValues>({
     resolver: zodResolver(studentSchema),
@@ -159,25 +169,32 @@ export default function EditStudentPage() {
       no_matricula: "",
       nombres: "",
       apellidos: "",
+      email: "",
       grado: "1",
       telefono: "",
       direccion: "",
       barrio: "",
       nombre_acudiente: "",
       telefono_acudiente: "",
-      eps_select: "Nueva EPS",
+      eps_select: "NUEVA EPS",
       eps_otra: "",
-      coordinador_academico: "Nicol Delgado",
+      coordinador_academico: "NICOL DELGADO",
       huella_indice_derecho: "",
       huella_indice_izquierdo: "",
       programa: "",
       fecha_inicio: "",
       fecha_matricula: "",
       valor_matricula: "",
-      medio_pago_matricula: "efectivo",
+      medio_pago_matricula: "EFECTIVO",
       valor_apoyo_semanal: "",
     },
   });
+
+  useEffect(() => {
+    void fetch("/api/start-service").catch(() => {
+      // Keep this fire-and-forget on page load.
+    });
+  }, []);
 
   useEffect(() => {
     async function fetchStudent() {
@@ -202,8 +219,21 @@ export default function EditStudentPage() {
         ? (s.tipo_identificacion as StudentFormValues["tipo_identificacion"])
         : "CC";
 
+      const normalizedCoordinator = (s.coordinador_academico ?? "")
+        .trim()
+        .toUpperCase();
+      const coordinatorInList = STUDENT_COORDINATOR_OPTIONS.includes(
+        normalizedCoordinator as (typeof STUDENT_COORDINATOR_OPTIONS)[number],
+      );
+
       const epsInList = COLOMBIA_EPS_OPTIONS.includes(
         s.eps as (typeof COLOMBIA_EPS_OPTIONS)[number],
+      );
+      const normalizedPaymentMethod = (s.medio_pago_matricula ?? "")
+        .trim()
+        .toUpperCase();
+      const paymentMethodInList = PAYMENT_METHOD_OPTIONS.some(
+        (option) => option.value === normalizedPaymentMethod,
       );
 
       form.reset({
@@ -212,6 +242,7 @@ export default function EditStudentPage() {
         no_matricula: s.no_matricula ?? "",
         nombres: s.nombres,
         apellidos: s.apellidos,
+        email: s.email ?? "",
         grado: s.grado as StudentFormValues["grado"],
         telefono: s.telefono,
         direccion: s.direccion,
@@ -220,17 +251,21 @@ export default function EditStudentPage() {
         telefono_acudiente: s.telefono_acudiente,
         eps_select: epsInList ? s.eps : EPS_OTHER_OPTION,
         eps_otra: epsInList ? "" : s.eps,
-        coordinador_academico:
-          s.coordinador_academico as StudentFormValues["coordinador_academico"],
-        huella_indice_derecho: s.huella_indice_derecho ?? "",
-        huella_indice_izquierdo: s.huella_indice_izquierdo ?? "",
+        coordinador_academico: coordinatorInList
+          ? (normalizedCoordinator as StudentFormValues["coordinador_academico"])
+          : "NICOL DELGADO",
+        huella_indice_derecho: "",
+        huella_indice_izquierdo: "",
         programa: s.programa,
         fecha_inicio: s.fecha_inicio,
         fecha_matricula: s.fecha_matricula,
         valor_matricula: String(s.valor_matricula),
-        medio_pago_matricula: s.medio_pago_matricula,
+        medio_pago_matricula: paymentMethodInList
+          ? (normalizedPaymentMethod as StudentFormValues["medio_pago_matricula"])
+          : "EFECTIVO",
         valor_apoyo_semanal: String(s.valor_apoyo_semanal),
       });
+      setCapturedFingerprintSides({ right: false, left: false });
       setIsFetching(false);
     }
 
@@ -248,14 +283,12 @@ export default function EditStudentPage() {
       return;
     }
 
-    const rightFingerprint = values.huella_indice_derecho?.trim() ?? "";
-    const leftFingerprint = values.huella_indice_izquierdo?.trim() ?? "";
-    if (!rightFingerprint || !leftFingerprint) {
-      toast.error(
-        "Debe capturar la huella indice derecha e izquierda antes de guardar",
-      );
-      return;
-    }
+    const rightFingerprint = capturedFingerprintSides.right
+      ? (values.huella_indice_derecho?.trim() ?? "")
+      : "";
+    const leftFingerprint = capturedFingerprintSides.left
+      ? (values.huella_indice_izquierdo?.trim() ?? "")
+      : "";
 
     setIsLoading(true);
 
@@ -265,24 +298,25 @@ export default function EditStudentPage() {
         "student-biometric-default-key",
       );
 
-      // Encrypt both fingerprints
-      const rightEncrypted = await encryptAESGCM(
-        rightFingerprint,
-        encryptionKey,
-      );
-      const leftEncrypted = await encryptAESGCM(leftFingerprint, encryptionKey);
+      const rightEncrypted: EncryptedPayload | null = rightFingerprint
+        ? await encryptAESGCM(rightFingerprint, encryptionKey)
+        : null;
+      const leftEncrypted: EncryptedPayload | null = leftFingerprint
+        ? await encryptAESGCM(leftFingerprint, encryptionKey)
+        : null;
 
       const res = await fetch(`/api/students/update`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id,
+          numero_identificacion: id,
           data: {
             tipo_identificacion: values.tipo_identificacion,
             numero_identificacion: values.numero_identificacion,
             no_matricula: values.no_matricula || null,
             nombres: values.nombres,
             apellidos: values.apellidos,
+            email: values.email,
             grado: values.grado,
             telefono: values.telefono,
             direccion: values.direccion,
@@ -297,8 +331,12 @@ export default function EditStudentPage() {
             valor_matricula: Number(values.valor_matricula),
             medio_pago_matricula: values.medio_pago_matricula,
             valor_apoyo_semanal: Number(values.valor_apoyo_semanal),
-            huella_indice_derecho_encrypted: rightEncrypted,
-            huella_indice_izquierdo_encrypted: leftEncrypted,
+            ...(rightEncrypted && {
+              huella_indice_derecho_encrypted: rightEncrypted,
+            }),
+            ...(leftEncrypted && {
+              huella_indice_izquierdo_encrypted: leftEncrypted,
+            }),
           },
         }),
       });
@@ -351,15 +389,25 @@ export default function EditStudentPage() {
       shouldTouch: true,
       shouldValidate: true,
     });
+    setCapturedFingerprintSides((prev) => ({
+      ...prev,
+      right: side === "huella_indice_derecho" ? true : prev.right,
+      left: side === "huella_indice_izquierdo" ? true : prev.left,
+    }));
 
     toast.success("Huella capturada correctamente");
   }
 
-  const rightFingerprintValue = form.watch("huella_indice_derecho");
-  const leftFingerprintValue = form.watch("huella_indice_izquierdo");
-  const hasBothFingerprints =
-    rightFingerprintValue.trim().length > 0 &&
-    leftFingerprintValue.trim().length > 0;
+  const rightFingerprintValue = form.watch("huella_indice_derecho") ?? "";
+  const leftFingerprintValue = form.watch("huella_indice_izquierdo") ?? "";
+  const hasStoredRightFingerprint =
+    (student?.huella_indice_derecho ?? "").trim().length > 0;
+  const hasStoredLeftFingerprint =
+    (student?.huella_indice_izquierdo ?? "").trim().length > 0;
+  const hasRightFingerprint =
+    rightFingerprintValue.trim().length > 0 || hasStoredRightFingerprint;
+  const hasLeftFingerprint =
+    leftFingerprintValue.trim().length > 0 || hasStoredLeftFingerprint;
 
   if (isFetching) {
     return (
@@ -420,7 +468,7 @@ export default function EditStudentPage() {
                           onBlur={field.onBlur}
                           name={field.name}
                           ref={field.ref}
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
                         >
                           {IDENTIFICATION_TYPE_OPTIONS.map((option) => (
                             <option key={option.value} value={option.value}>
@@ -488,6 +536,19 @@ export default function EditStudentPage() {
                     </FormItem>
                   )}
                 />
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Correo electrónico *</FormLabel>
+                      <FormControl>
+                        <Input type="email" autoComplete="email" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -504,7 +565,7 @@ export default function EditStudentPage() {
                           onBlur={field.onBlur}
                           name={field.name}
                           ref={field.ref}
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
                         >
                           {STUDENT_GRADE_OPTIONS.map((grade) => (
                             <option key={grade} value={grade}>
@@ -614,7 +675,7 @@ export default function EditStudentPage() {
                           onBlur={field.onBlur}
                           name={field.name}
                           ref={field.ref}
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
                         >
                           {COLOMBIA_EPS_OPTIONS.map((eps) => (
                             <option key={eps} value={eps}>
@@ -640,7 +701,7 @@ export default function EditStudentPage() {
                           onBlur={field.onBlur}
                           name={field.name}
                           ref={field.ref}
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
                         >
                           {STUDENT_COORDINATOR_OPTIONS.map((coordinator) => (
                             <option key={coordinator} value={coordinator}>
@@ -742,7 +803,7 @@ export default function EditStudentPage() {
                           onBlur={field.onBlur}
                           name={field.name}
                           ref={field.ref}
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
                         >
                           {PAYMENT_METHOD_OPTIONS.map((option) => (
                             <option key={option.value} value={option.value}>
@@ -792,14 +853,14 @@ export default function EditStudentPage() {
                     <CardContent className="pt-6 flex flex-col items-center text-center gap-3">
                       <div
                         className={`rounded-full p-3 ${
-                          rightFingerprintValue
+                          hasRightFingerprint
                             ? "bg-green-500/10"
                             : "bg-[#b92f2d]/10"
                         }`}
                       >
                         <Fingerprint
                           className={`h-7 w-7 ${
-                            rightFingerprintValue
+                            hasRightFingerprint
                               ? "text-green-600"
                               : "text-[#b92f2d]"
                           }`}
@@ -812,7 +873,9 @@ export default function EditStudentPage() {
                         <p className="text-xs text-gray-500 mt-1">
                           {rightFingerprintValue
                             ? "Huella capturada"
-                            : "Sin captura"}
+                            : hasStoredRightFingerprint
+                              ? "Huella registrada"
+                              : "Sin captura"}
                         </p>
                       </div>
                       <Button
@@ -823,6 +886,7 @@ export default function EditStudentPage() {
                         }
                         disabled={
                           isLoading ||
+                          isReconnecting ||
                           isCapturing ||
                           capturingSide === "huella_indice_izquierdo"
                         }
@@ -830,7 +894,7 @@ export default function EditStudentPage() {
                         {isCapturing &&
                         capturingSide === "huella_indice_derecho"
                           ? "Capturando..."
-                          : rightFingerprintValue
+                          : hasRightFingerprint
                             ? "Capturar Huella Otra vez"
                             : "Capturar Huella"}
                       </Button>
@@ -841,14 +905,14 @@ export default function EditStudentPage() {
                     <CardContent className="pt-6 flex flex-col items-center text-center gap-3">
                       <div
                         className={`rounded-full p-3 ${
-                          leftFingerprintValue
+                          hasLeftFingerprint
                             ? "bg-green-500/10"
                             : "bg-[#b92f2d]/10"
                         }`}
                       >
                         <Fingerprint
                           className={`h-7 w-7 ${
-                            leftFingerprintValue
+                            hasLeftFingerprint
                               ? "text-green-600"
                               : "text-[#b92f2d]"
                           }`}
@@ -861,7 +925,9 @@ export default function EditStudentPage() {
                         <p className="text-xs text-gray-500 mt-1">
                           {leftFingerprintValue
                             ? "Huella capturada"
-                            : "Sin captura"}
+                            : hasStoredLeftFingerprint
+                              ? "Huella registrada"
+                              : "Sin captura"}
                         </p>
                       </div>
                       <Button
@@ -872,6 +938,7 @@ export default function EditStudentPage() {
                         }
                         disabled={
                           isLoading ||
+                          isReconnecting ||
                           isCapturing ||
                           capturingSide === "huella_indice_derecho"
                         }
@@ -879,12 +946,30 @@ export default function EditStudentPage() {
                         {isCapturing &&
                         capturingSide === "huella_indice_izquierdo"
                           ? "Capturando..."
-                          : leftFingerprintValue
+                          : hasLeftFingerprint
                             ? "Capturar Huella Otra vez"
                             : "Capturar Huella"}
                       </Button>
                     </CardContent>
                   </Card>
+                </div>
+
+                <div className="flex justify-start">
+                  <Button
+                    type="button"
+                    className="bg-[#b92f2d] hover:bg-[#982725] text-white"
+                    onClick={handleReconnectReader}
+                    disabled={isLoading || isCapturing || isReconnecting}
+                  >
+                    {isReconnecting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Reconectando...
+                      </>
+                    ) : (
+                      "Reconectar lector"
+                    )}
+                  </Button>
                 </div>
               </div>
 
@@ -897,10 +982,7 @@ export default function EditStudentPage() {
                 >
                   <Link href={`/dashboard/students/${id}`}>Cancelar</Link>
                 </Button>
-                <Button
-                  type="submit"
-                  disabled={isLoading || !hasBothFingerprints}
-                >
+                <Button type="submit" disabled={isLoading}>
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />

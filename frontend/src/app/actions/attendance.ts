@@ -9,11 +9,11 @@ import {
 
 type Saldo = "cancelado" | "debe" | null;
 type MetodoPago =
-  | "efectivo"
-  | "transferencia"
-  | "nequi"
-  | "daviplata"
-  | "otro"
+  | "EFECTIVO"
+  | "TRANSFERENCIA"
+  | "NEQUI"
+  | "DAVIPLATA"
+  | "OTRO"
   | null;
 
 export interface CourseOption {
@@ -308,6 +308,7 @@ export async function saveAttendanceForCourseAndDate(params: {
   idCurso: number;
   date: string;
   rows: AttendanceSaveRow[];
+  saveTimestampIso?: string;
 }): Promise<{ success: boolean; error?: string; savedCount?: number }> {
   const approval = await ensureApprovedAdmin();
   if (!approval.ok) {
@@ -315,6 +316,7 @@ export async function saveAttendanceForCourseAndDate(params: {
   }
 
   const supabase = await createClient();
+  const manualSaveTimestamp = params.saveTimestampIso?.trim() || null;
 
   const normalizedRows = params.rows
     .map((row) => {
@@ -411,15 +413,27 @@ export async function saveAttendanceForCourseAndDate(params: {
         : (row.marcado_en ?? getBogotaTimestampForDate(params.date))
       : existing.fecha;
 
+    const payload: {
+      fecha: string;
+      asistio: boolean;
+      saldo: Saldo;
+      metodo_pago: MetodoPago;
+      created_at?: string;
+    } = {
+      fecha: fechaMarcado,
+      asistio: row.asistio,
+      saldo: row.asistio ? row.saldo : null,
+      metodo_pago:
+        row.asistio && row.saldo === "cancelado" ? row.metodo_pago : null,
+    };
+
+    if (!row.asistio && manualSaveTimestamp) {
+      payload.created_at = manualSaveTimestamp;
+    }
+
     const { error } = await supabase
       .from("registro_asistencia")
-      .update({
-        fecha: fechaMarcado,
-        asistio: row.asistio,
-        saldo: row.asistio ? row.saldo : null,
-        metodo_pago:
-          row.asistio && row.saldo === "cancelado" ? row.metodo_pago : null,
-      })
+      .update(payload)
       .eq("id", existing.id);
 
     if (error) {
@@ -428,17 +442,33 @@ export async function saveAttendanceForCourseAndDate(params: {
   }
 
   if (toInsert.length > 0) {
-    const payload = toInsert.map((row) => ({
-      numero_identificacion: row.numero_identificacion,
-      id_curso: params.idCurso,
-      fecha: row.asistio
-        ? (row.marcado_en ?? getBogotaTimestampForDate(params.date))
-        : startIso,
-      asistio: row.asistio,
-      saldo: row.asistio ? row.saldo : null,
-      metodo_pago:
-        row.asistio && row.saldo === "cancelado" ? row.metodo_pago : null,
-    }));
+    const payload = toInsert.map((row) => {
+      const insertRow: {
+        numero_identificacion: string;
+        id_curso: number;
+        fecha: string;
+        asistio: boolean;
+        saldo: Saldo;
+        metodo_pago: MetodoPago;
+        created_at?: string;
+      } = {
+        numero_identificacion: row.numero_identificacion,
+        id_curso: params.idCurso,
+        fecha: row.asistio
+          ? (row.marcado_en ?? getBogotaTimestampForDate(params.date))
+          : startIso,
+        asistio: row.asistio,
+        saldo: row.asistio ? row.saldo : null,
+        metodo_pago:
+          row.asistio && row.saldo === "cancelado" ? row.metodo_pago : null,
+      };
+
+      if (!row.asistio && manualSaveTimestamp) {
+        insertRow.created_at = manualSaveTimestamp;
+      }
+
+      return insertRow;
+    });
 
     const { error } = await supabase
       .from("registro_asistencia")

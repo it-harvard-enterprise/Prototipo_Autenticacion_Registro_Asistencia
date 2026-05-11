@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
-import { createClient } from "@/lib/supabase/server";
 import { signOut } from "@/app/actions/auth";
+import { resolveCurrentUserAccess } from "@/lib/auth/resolved-access";
 import {
   Card,
   CardContent,
@@ -16,23 +16,18 @@ export const metadata: Metadata = {
 };
 
 export default async function NotApprovedPage() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const access = await resolveCurrentUserAccess();
+  const user = access.user;
 
   if (!user) {
     redirect("/login");
   }
 
-  const { data: admin } = await supabase
-    .from("administrador")
-    .select("aprobado")
-    .eq("id", user.id)
-    .single();
+  if (access.role !== "administrador") {
+    redirect("/welcome");
+  }
 
-  if (admin?.aprobado) {
+  if (access.approved) {
     redirect("/dashboard");
   }
 

@@ -1,0 +1,11 @@
+<h2>Invitacion a la plataforma</h2>
+<p>Has sido invitado a crear tu cuenta.</p>
+<p>Haz clic en el siguiente enlace para establecer tu contrasena:</p>
+<p>
+  <a
+    href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite&next=/accept-invitation"
+  >
+    Aceptar invitacion
+  </a>
+</p>
+<p>Si no solicitaste esta invitacion, puedes ignorar este correo.</p>

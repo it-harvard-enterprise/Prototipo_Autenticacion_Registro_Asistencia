@@ -18,14 +18,14 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: admin } = await supabase
-    .from("administrador")
-    .select("nombres, apellidos")
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("nombre, apellido")
     .eq("id", user?.id ?? "")
     .single();
 
-  const displayName = admin
-    ? `${admin.nombres} ${admin.apellidos}`
+  const displayName = profile
+    ? `${profile.nombre} ${profile.apellido}`
     : user?.user_metadata?.first_name
       ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
       : user?.email;

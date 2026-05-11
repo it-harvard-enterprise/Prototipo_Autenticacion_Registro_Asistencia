@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { DashboardLayoutClient } from "./layout-client";
+import { resolveCurrentUserAccess } from "@/lib/auth/resolved-access";
 
 export const metadata: Metadata = {
   title: "SysAsistencia - Dashboard",
@@ -12,30 +12,26 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const access = await resolveCurrentUserAccess();
+  const user = access.user;
 
   if (!user) {
     redirect("/login");
   }
 
-  const { data: admin } = await supabase
-    .from("administrador")
-    .select("nombres, apellidos, aprobado")
-    .eq("id", user.id)
-    .single();
-
-  const userName = admin
-    ? `${admin.nombres} ${admin.apellidos}`
+  const userName = access.fullName
+    ? access.fullName
     : user.user_metadata?.first_name
       ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
       : undefined;
 
   const userEmail = user.email;
 
-  if (!admin?.aprobado) {
+  if (access.role !== "administrador") {
+    redirect("/welcome");
+  }
+
+  if (!access.approved) {
     redirect("/not-approved");
   }
 

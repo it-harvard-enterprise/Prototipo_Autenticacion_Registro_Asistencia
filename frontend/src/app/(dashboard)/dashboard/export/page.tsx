@@ -59,6 +59,7 @@ function toExcelIdentificationValue(value: string): string | number {
 }
 
 function toDisplayLabel(value: string | null): string {
+  if (value === null) return "NULL";
   if (!value) return "";
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
@@ -134,8 +135,19 @@ export default function ExportPage() {
     setIsExporting(true);
 
     try {
+      const safeCourseName =
+        selectedCourseName
+          .replace(/[^a-zA-Z0-9_-]/g, "_")
+          .replace(/_+/g, "_")
+          .slice(0, 40) || "curso";
+
+      const fileBaseName = `asistencia_${safeCourseName}_${selectedDate}`;
+      const fileName = `${fileBaseName}.xlsx`;
+      const worksheetName = fileBaseName.slice(0, 31) || "asistencia";
+
       const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet("Asistencia");
+
+      const worksheet = workbook.addWorksheet(worksheetName);
 
       worksheet.columns = [
         { header: "ID Registro", key: "id", width: 12 },
@@ -164,7 +176,7 @@ export default function ExportPage() {
           id: row.id,
           id_curso: row.id_curso,
           nombre_curso: row.nombre_curso,
-          tipo_identificacion: row.tipo_identificacion ?? "",
+          tipo_identificacion: row.tipo_identificacion ?? "NULL",
           numero_identificacion: toExcelIdentificationValue(
             row.numero_identificacion,
           ),
@@ -177,7 +189,22 @@ export default function ExportPage() {
         });
       }
 
-      const headerRow = worksheet.getRow(1);
+      worksheet.insertRow(1, [fileBaseName]);
+      worksheet.mergeCells(1, 1, 1, worksheet.columns.length);
+
+      const titleRow = worksheet.getRow(1);
+      titleRow.height = 28;
+      titleRow.getCell(1).font = {
+        bold: true,
+        size: 14,
+        color: { argb: "FF982725" },
+      };
+      titleRow.getCell(1).alignment = {
+        vertical: "middle",
+        horizontal: "center",
+      };
+
+      const headerRow = worksheet.getRow(2);
       headerRow.font = { bold: true };
       headerRow.alignment = { vertical: "middle", horizontal: "center" };
       headerRow.height = 22;
@@ -197,18 +224,11 @@ export default function ExportPage() {
         };
       });
 
-      const safeCourseName =
-        selectedCourseName
-          .replace(/[^a-zA-Z0-9_-]/g, "_")
-          .replace(/_+/g, "_")
-          .slice(0, 40) || "curso";
-
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
 
-      const fileName = `asistencia_${safeCourseName}_${selectedDate}.xlsx`;
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -250,7 +270,7 @@ export default function ExportPage() {
             <div className="space-y-2">
               <label className="text-sm font-medium">Curso *</label>
               <select
-                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
                 value={selectedCourseId}
                 onChange={(event) => setSelectedCourseId(event.target.value)}
                 disabled={isLoadingCourses}
