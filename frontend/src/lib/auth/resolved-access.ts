@@ -10,6 +10,7 @@ export interface ResolvedAccess {
   } | null;
   role: ResolvedRole | null;
   approved: boolean;
+  mustChangePassword: boolean;
   fullName?: string;
   profileFound: boolean;
 }
@@ -26,9 +27,12 @@ export async function resolveCurrentUserAccess(): Promise<ResolvedAccess> {
       user: null,
       role: null,
       approved: false,
+      mustChangePassword: false,
       profileFound: false,
     };
   }
+
+  const mustChangePassword = Boolean(user.user_metadata?.must_change_password);
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -41,6 +45,7 @@ export async function resolveCurrentUserAccess(): Promise<ResolvedAccess> {
       user,
       role: profile.role,
       approved: Boolean(profile.approved),
+      mustChangePassword,
       fullName: `${profile.nombre} ${profile.apellido}`.trim(),
       profileFound: true,
     };
@@ -57,6 +62,7 @@ export async function resolveCurrentUserAccess(): Promise<ResolvedAccess> {
       user,
       role: "administrador",
       approved: false,
+      mustChangePassword,
       fullName: `${admin.nombres} ${admin.apellidos}`.trim(),
       profileFound: false,
     };
@@ -66,6 +72,7 @@ export async function resolveCurrentUserAccess(): Promise<ResolvedAccess> {
     user,
     role: null,
     approved: false,
+    mustChangePassword,
     profileFound: false,
   };
 }

@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { resolveCurrentUserAccess } from "@/lib/auth/resolved-access";
+import { signOut } from "@/app/actions/auth";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -19,6 +22,10 @@ export default async function WelcomePage() {
 
   if (!user) {
     redirect("/login");
+  }
+
+  if (access.mustChangePassword) {
+    redirect("/reset-password?forced=1");
   }
 
   if (access.role === "administrador") {
@@ -53,6 +60,13 @@ export default async function WelcomePage() {
             sistema.
           </p>
         </CardContent>
+        <CardFooter>
+          <form action={signOut} className="w-full">
+            <Button type="submit" variant="outline" className="w-full">
+              Cerrar sesión
+            </Button>
+          </form>
+        </CardFooter>
       </Card>
     </div>
   );

@@ -25,7 +25,7 @@ function bytesToBase64(bytes: Uint8Array): string {
 
 /**
  * Derive a stable AES-256 key from a passphrase using PBKDF2.
- * Used for session or hardcoded passphrases; KMS integration can replace this.
+ * If used in production, prefer server-side key management (KMS/HSM).
  */
 export async function deriveKeyFromPassphrase(
   passphrase: string,

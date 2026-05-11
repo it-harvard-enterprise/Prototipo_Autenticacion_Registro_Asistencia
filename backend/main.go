@@ -34,6 +34,11 @@ func main() {
 		}
 	}
 
+	// Require biometric passphrases to be provided via env vars
+	if strings.TrimSpace(os.Getenv("BIOMETRIC_PASSPHRASE_PNG")) == "" || strings.TrimSpace(os.Getenv("BIOMETRIC_PASSPHRASE_TEMPLATE")) == "" {
+		log.Fatal("Missing BIOMETRIC_PASSPHRASE_PNG or BIOMETRIC_PASSPHRASE_TEMPLATE in backend/.env")
+	}
+
 	app := services.NewApp(supabaseURL, serviceKey, strings.TrimSpace(os.Getenv("FRONTEND_HEALTH_URL")), threshold)
 
 	router := gin.Default()

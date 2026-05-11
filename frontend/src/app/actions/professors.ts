@@ -2,6 +2,10 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { ensureApprovedAdmin } from "@/lib/auth/approved-admin";
+import {
+  createManagedAuthUser,
+  deleteAuthUserById,
+} from "@/lib/supabase/admin";
 
 function upper(value: string): string {
   return value.trim().toUpperCase();
@@ -31,9 +35,30 @@ export async function createProfessor(
 
   const supabase = await createClient();
 
+  const numeroIdentificacion = upper(data.numero_identificacion);
+  const createdAuthUser = await createManagedAuthUser({
+    email: data.email,
+    password: numeroIdentificacion,
+    role: "profesor",
+    nombres: upper(data.nombres),
+    apellidos: upper(data.apellidos),
+    tipoIdentificacion: upper(data.tipo_identificacion),
+    numeroIdentificacion,
+    approvedByAdmin: true,
+  });
+
+  if (!createdAuthUser.ok) {
+    return {
+      success: false,
+      error: createdAuthUser.alreadyRegistered
+        ? "El correo ya está registrado en autenticación."
+        : createdAuthUser.error,
+    };
+  }
+
   const { error } = await supabase.from("profesores").insert({
     tipo_identificacion: upper(data.tipo_identificacion),
-    numero_identificacion: upper(data.numero_identificacion),
+    numero_identificacion: numeroIdentificacion,
     nombres: upper(data.nombres),
     apellidos: upper(data.apellidos),
     telefono: upper(data.telefono),
@@ -42,10 +67,12 @@ export async function createProfessor(
     nombre_contacto_emergencia: upper(data.nombre_contacto_emergencia),
     telefono_contacto_emergencia: upper(data.telefono_contacto_emergencia),
     eps: upper(data.eps),
-    email: data.email.trim(),
+    email: data.email.trim().toLowerCase(),
+    auth_user_id: createdAuthUser.userId,
   });
 
   if (error) {
+    await deleteAuthUserById(createdAuthUser.userId);
     return { success: false, error: error.message };
   }
 

@@ -23,6 +23,10 @@ export default async function NotApprovedPage() {
     redirect("/login");
   }
 
+  if (access.mustChangePassword) {
+    redirect("/reset-password?forced=1");
+  }
+
   if (access.role !== "administrador") {
     redirect("/welcome");
   }

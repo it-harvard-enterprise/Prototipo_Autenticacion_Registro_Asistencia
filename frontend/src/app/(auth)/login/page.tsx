@@ -53,7 +53,7 @@ export default function LoginPage() {
     setServerError(null);
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email: values.email,
       password: values.password,
     });
@@ -67,6 +67,12 @@ export default function LoginPage() {
             : error.message,
       );
       setIsLoading(false);
+      return;
+    }
+
+    if (data.user?.user_metadata?.must_change_password) {
+      router.push("/reset-password?forced=1");
+      router.refresh();
       return;
     }
 
@@ -147,6 +153,15 @@ export default function LoginPage() {
                 "Iniciar sesión"
               )}
             </Button>
+
+            <div className="text-center">
+              <Link
+                href="/recover-password"
+                className="text-sm font-medium text-[#b92f2d] hover:text-[#982725] hover:underline"
+              >
+                ¿Olvidó su contraseña? Recupérela aquí.
+              </Link>
+            </div>
           </form>
         </Form>
       </CardContent>

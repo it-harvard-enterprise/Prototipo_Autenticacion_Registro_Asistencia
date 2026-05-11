@@ -232,11 +232,17 @@ export default function NewStudentPage() {
     setIsLoading(true);
 
     try {
-      // Derive encryption key from a static passphrase (in production, use KMS or secure key exchange)
-      const encryptionKey = await deriveKeyFromPassphrase(
-        "student-biometric-default-key",
-      );
+      const frontendPassphrase =
+        process.env.NEXT_PUBLIC_BIOMETRIC_PASSPHRASE_PNG?.trim() ?? "";
+      if (!frontendPassphrase) {
+        toast.error(
+          "Falta NEXT_PUBLIC_BIOMETRIC_PASSPHRASE_PNG en el entorno del frontend.",
+        );
+        setIsLoading(false);
+        return;
+      }
 
+      const encryptionKey = await deriveKeyFromPassphrase(frontendPassphrase);
       const rightEncrypted: EncryptedPayload | null = rightFingerprint
         ? await encryptAESGCM(rightFingerprint, encryptionKey)
         : null;
@@ -292,8 +298,8 @@ export default function NewStudentPage() {
     } catch (err) {
       toast.error(
         err instanceof Error
-          ? `Error de encriptación: ${err.message}`
-          : "Error desconocido durante encriptación",
+          ? `Error creando estudiante: ${err.message}`
+          : "Error desconocido creando estudiante",
       );
       setIsLoading(false);
     }

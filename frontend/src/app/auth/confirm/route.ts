@@ -55,7 +55,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const tokenHash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
-  const nextPath = sanitizeNextPath(searchParams.get("next"));
 
   if (!tokenHash || !type) {
     return NextResponse.redirect(
@@ -66,6 +65,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       ),
     );
   }
+
+  const requestedNext = searchParams.get("next");
+  const fallbackNext = type === "recovery" ? "/reset-password" : "/";
+  const nextPath = sanitizeNextPath(requestedNext ?? fallbackNext);
 
   const supabase = await createClient();
   const { data, error } = await supabase.auth.verifyOtp({
@@ -84,9 +87,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   const redirectUrl = new URL(nextPath, appOrigin);
-  redirectUrl.searchParams.set("invite", "1");
-  if (data.user?.email) {
-    redirectUrl.searchParams.set("invited_email", data.user.email);
+  if (type === "invite") {
+    redirectUrl.searchParams.set("invite", "1");
+    if (data.user?.email) {
+      redirectUrl.searchParams.set("invited_email", data.user.email);
+    }
   }
 
   return NextResponse.redirect(redirectUrl);
