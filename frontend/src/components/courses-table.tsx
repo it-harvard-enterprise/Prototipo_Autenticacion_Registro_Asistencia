@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Eye, Pencil, Trash2 } from "lucide-react";
+import { BookOpen, Eye, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Course } from "@/lib/types";
@@ -102,7 +102,15 @@ export function CoursesTable({ courses }: CoursesTableProps) {
                   )}
                 </TableCell>
                 <TableCell className="text-right">
-                  <div className="flex justify-end gap-1">
+                  <div className="flex flex-wrap justify-end gap-1">
+                    <Button variant="outline" size="sm" className="h-8" asChild>
+                      <Link
+                        href={`/dashboard/courses/${course.id_curso}/materials`}
+                      >
+                        <BookOpen className="mr-1 h-4 w-4" />
+                        Material del Curso
+                      </Link>
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"

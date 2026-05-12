@@ -90,7 +90,11 @@ export default function LoginPage() {
       </CardHeader>
       <CardContent>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+          <form
+            method="post"
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="space-y-5"
+          >
             {serverError && (
               <div className="rounded-md bg-red-50 border border-red-200 p-3">
                 <p className="text-sm text-red-700">{serverError}</p>

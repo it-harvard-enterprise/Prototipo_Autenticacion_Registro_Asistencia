@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Pencil } from "lucide-react";
+import { ArrowLeft, BookOpen, Pencil } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Course } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -65,6 +65,12 @@ export default async function CourseDetailPage({
           <h1 className="text-2xl font-bold text-gray-900">{c.nombre_curso}</h1>
           <p className="text-gray-500 mt-0.5 text-sm">Detalle del curso</p>
         </div>
+        <Button variant="outline" asChild>
+          <Link href={`/dashboard/courses/${c.id_curso}/materials`}>
+            <BookOpen className="mr-2 h-4 w-4" />
+            Material del Curso
+          </Link>
+        </Button>
         <Button asChild>
           <Link href={`/dashboard/courses/${c.id_curso}/edit`}>
             <Pencil className="mr-2 h-4 w-4" />
