@@ -9,8 +9,7 @@ import { z } from "zod";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { createClient } from "@/lib/supabase/client";
-import { updateCourse } from "@/app/actions/courses";
+import { getCourseById, updateCourse } from "@/app/actions/courses";
 import { Course } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -83,20 +82,15 @@ export default function EditCoursePage() {
 
   useEffect(() => {
     async function fetchCourse() {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("cursos")
-        .select("*")
-        .eq("id_curso", Number(id))
-        .single();
+      const result = await getCourseById(Number(id));
 
-      if (error || !data) {
+      if (!result.success || !result.data) {
         setFetchError("No se encontró el curso");
         setIsFetching(false);
         return;
       }
 
-      const c = data as Course;
+      const c = result.data as Course;
       setCourse(c);
       form.reset({
         nombre_curso: (c.nombre_curso ?? "").toUpperCase(),

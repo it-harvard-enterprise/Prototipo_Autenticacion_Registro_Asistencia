@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { ensureApprovedAdmin } from "@/lib/auth/approved-admin";
-import {
-  biometricBackendConfigHint,
-  resolveBiometricBackendBaseUrl,
-} from "@/lib/biometric-backend";
-import { createClient } from "@/lib/supabase/server";
+import { callBackend } from "@/lib/backend/server-api";
 
 type IdentifyMode = "id" | "fingerprint";
 
@@ -13,13 +9,6 @@ type IdentifyRequestBody = {
   mode?: IdentifyMode;
   numeroIdentificacion?: string;
   fingerprintTemplate?: string;
-};
-
-type BackendFingerprintResponse = {
-  success: boolean;
-  numero_identificacion?: string;
-  confidence?: number;
-  error?: string;
 };
 
 type CourseInfo = {
@@ -42,225 +31,69 @@ type PersonRecord = {
   cursos: CourseInfo[];
 };
 
-type PersonLookupResult = {
+type PersonLookupPayload = {
   found: boolean;
   numero_identificacion: string;
   records: PersonRecord[];
+};
+
+type BackendEnvelope<T> = {
+  success: boolean;
+  data?: T;
+  error?: string;
+};
+
+type BackendFingerprintResponse = {
+  success: boolean;
+  numero_identificacion?: string;
+  confidence?: number;
+  error?: string;
 };
 
 function normalizeId(value: string | undefined): string {
   return (value ?? "").trim().toUpperCase();
 }
 
-function normalizeCourse(raw: unknown): CourseInfo | null {
-  if (!raw || typeof raw !== "object") return null;
-
-  const row = raw as {
-    id_curso?: unknown;
-    nombre_curso?: unknown;
-    nivel_curso?: unknown;
-    salon?: unknown;
-    hora_inicio?: unknown;
-    hora_fin?: unknown;
-    fecha_inicio?: unknown;
-    fecha_fin?: unknown;
-  };
-
-  if (
-    typeof row.id_curso !== "number" ||
-    typeof row.nombre_curso !== "string" ||
-    typeof row.nivel_curso !== "string" ||
-    typeof row.hora_inicio !== "string" ||
-    typeof row.hora_fin !== "string" ||
-    typeof row.fecha_inicio !== "string" ||
-    typeof row.fecha_fin !== "string"
-  ) {
-    return null;
-  }
-
-  return {
-    id_curso: row.id_curso,
-    nombre_curso: row.nombre_curso,
-    nivel_curso: row.nivel_curso,
-    salon: typeof row.salon === "string" ? row.salon : null,
-    hora_inicio: row.hora_inicio,
-    hora_fin: row.hora_fin,
-    fecha_inicio: row.fecha_inicio,
-    fecha_fin: row.fecha_fin,
-  };
-}
-
-function normalizeEmbeddedCourse(raw: unknown): CourseInfo | null {
-  if (Array.isArray(raw)) {
-    return normalizeCourse(raw[0]);
-  }
-
-  return normalizeCourse(raw);
-}
-
-function sortCourses(courses: CourseInfo[]): CourseInfo[] {
-  return [...courses].sort((a, b) => {
-    if (a.id_curso !== b.id_curso) return a.id_curso - b.id_curso;
-    return a.nombre_curso.localeCompare(b.nombre_curso);
-  });
-}
-
 async function lookupPersonById(
   numeroIdentificacion: string,
-): Promise<PersonLookupResult> {
-  const supabase = await createClient();
+): Promise<PersonLookupPayload> {
+  const payload = await callBackend<BackendEnvelope<PersonLookupPayload>>(
+    `/api/person/by-id/${encodeURIComponent(numeroIdentificacion)}`,
+    {
+      method: "GET",
+    },
+  );
 
-  const [
-    studentQuery,
-    professorQuery,
-    studentCoursesQuery,
-    professorCoursesQuery,
-  ] = await Promise.all([
-    supabase
-      .from("estudiantes")
-      .select("numero_identificacion, tipo_identificacion, nombres, apellidos")
-      .eq("numero_identificacion", numeroIdentificacion)
-      .maybeSingle(),
-    supabase
-      .from("profesores")
-      .select("numero_identificacion, tipo_identificacion, nombres, apellidos")
-      .eq("numero_identificacion", numeroIdentificacion)
-      .maybeSingle(),
-    supabase
-      .from("cursos_x_estudiantes")
-      .select(
-        "id_curso, cursos(id_curso, nombre_curso, nivel_curso, salon, hora_inicio, hora_fin, fecha_inicio, fecha_fin)",
-      )
-      .eq("numero_identificacion", numeroIdentificacion),
-    supabase
-      .from("cursos_x_profesores")
-      .select(
-        "id_curso, cursos(id_curso, nombre_curso, nivel_curso, salon, hora_inicio, hora_fin, fecha_inicio, fecha_fin)",
-      )
-      .eq("numero_identificacion", numeroIdentificacion),
-  ]);
-
-  if (studentQuery.error) {
-    throw new Error(studentQuery.error.message);
+  if (!payload.success || !payload.data) {
+    throw new Error(payload.error ?? "No fue posible consultar la persona");
   }
 
-  if (professorQuery.error) {
-    throw new Error(professorQuery.error.message);
-  }
-
-  if (studentCoursesQuery.error) {
-    throw new Error(studentCoursesQuery.error.message);
-  }
-
-  if (professorCoursesQuery.error) {
-    throw new Error(professorCoursesQuery.error.message);
-  }
-
-  const records: PersonRecord[] = [];
-
-  if (studentQuery.data) {
-    const courses = (studentCoursesQuery.data ?? [])
-      .map((row) =>
-        normalizeEmbeddedCourse((row as { cursos?: unknown }).cursos),
-      )
-      .filter((course): course is CourseInfo => Boolean(course));
-
-    records.push({
-      role: "ESTUDIANTE",
-      tipo_identificacion: studentQuery.data.tipo_identificacion ?? null,
-      numero_identificacion: studentQuery.data.numero_identificacion,
-      nombres: studentQuery.data.nombres,
-      apellidos: studentQuery.data.apellidos,
-      cursos: sortCourses(courses),
-    });
-  }
-
-  if (professorQuery.data) {
-    const courses = (professorCoursesQuery.data ?? [])
-      .map((row) =>
-        normalizeEmbeddedCourse((row as { cursos?: unknown }).cursos),
-      )
-      .filter((course): course is CourseInfo => Boolean(course));
-
-    records.push({
-      role: "PROFESOR",
-      tipo_identificacion: professorQuery.data.tipo_identificacion ?? null,
-      numero_identificacion: professorQuery.data.numero_identificacion,
-      nombres: professorQuery.data.nombres,
-      apellidos: professorQuery.data.apellidos,
-      cursos: sortCourses(courses),
-    });
-  }
-
-  return {
-    found: records.length > 0,
-    numero_identificacion: numeroIdentificacion,
-    records,
-  };
+  return payload.data;
 }
 
-async function identifyByFingerprint(
-  request: NextRequest,
-  fingerprintTemplate: string,
-): Promise<{
+async function identifyByFingerprint(fingerprintTemplate: string): Promise<{
   success: boolean;
   found: boolean;
   confidence?: number;
   numero_identificacion?: string;
   error?: string;
 }> {
-  const backendUrl = resolveBiometricBackendBaseUrl();
-  if (!backendUrl) {
-    return {
-      success: false,
-      found: false,
-      error: `No se ha configurado la URL del backend biometrico. ${biometricBackendConfigHint()}`,
-    };
-  }
-
-  const backendAccessKey = process.env.BIOMETRIC_BACKEND_ACCESS_KEY?.trim();
-  const frontendOrigin = request.nextUrl.origin;
-
   try {
-    const response = await fetch(
-      `${backendUrl}/api/person/identify-by-fingerprint`,
+    const payload = await callBackend<BackendFingerprintResponse>(
+      "/api/person/identify-by-fingerprint",
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Frontend-Origin": frontendOrigin,
-          ...(backendAccessKey
-            ? {
-                "X-Backend-Access-Key": backendAccessKey,
-              }
-            : {}),
-        },
         body: JSON.stringify({
           fingerprint_template: fingerprintTemplate,
         }),
-        cache: "no-store",
-        signal: AbortSignal.timeout(15000),
       },
     );
 
-    const payload = (await response
-      .json()
-      .catch(() => null)) as BackendFingerprintResponse | null;
-
-    if (!response.ok) {
+    if (!payload.success) {
       return {
         success: false,
         found: false,
-        error:
-          payload?.error ?? `Error del backend biometrico: ${response.status}`,
-      };
-    }
-
-    if (!payload?.success) {
-      return {
-        success: false,
-        found: false,
-        error: payload?.error ?? "No fue posible validar la huella",
+        error: payload.error ?? "No fue posible validar la huella",
       };
     }
 
@@ -278,11 +111,14 @@ async function identifyByFingerprint(
       numero_identificacion: payload.numero_identificacion,
       confidence: payload.confidence,
     };
-  } catch {
+  } catch (error) {
     return {
       success: false,
       found: false,
-      error: `No fue posible conectar con el backend biometrico configurado (${backendUrl}).`,
+      error:
+        error instanceof Error
+          ? error.message
+          : "No fue posible validar la huella",
     };
   }
 }
@@ -351,10 +187,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const identifyResult = await identifyByFingerprint(
-      request,
-      fingerprintTemplate,
-    );
+    const identifyResult = await identifyByFingerprint(fingerprintTemplate);
     if (!identifyResult.success) {
       return NextResponse.json(
         {

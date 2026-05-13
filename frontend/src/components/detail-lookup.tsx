@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { toast } from "sonner";
 
-import { createClient } from "@/lib/supabase/client";
+import { courseExists } from "@/app/actions/courses";
+import { professorExists } from "@/app/actions/professors";
+import { studentExists } from "@/app/actions/students";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -17,7 +19,6 @@ interface DetailLookupProps {
 
 export function DetailLookup({ type }: DetailLookupProps) {
   const router = useRouter();
-  const supabase = createClient();
   const [value, setValue] = useState("");
   const [isChecking, setIsChecking] = useState(false);
 
@@ -47,35 +48,35 @@ export function DetailLookup({ type }: DetailLookupProps) {
 
     try {
       if (type === "course") {
-        const { data, error } = await supabase
-          .from("cursos")
-          .select("id_curso")
-          .eq("id_curso", Number(trimmedValue))
-          .limit(1);
+        const result = await courseExists(Number(trimmedValue));
+        if (!result.success) {
+          toast.error(result.error ?? "No fue posible validar el curso.");
+          return;
+        }
 
-        if (error || !data || data.length === 0) {
+        if (!result.exists) {
           toast.error("El ID de curso ingresado no existe.");
           return;
         }
       } else if (type === "professor") {
-        const { data, error } = await supabase
-          .from("profesores")
-          .select("numero_identificacion")
-          .eq("numero_identificacion", trimmedValue)
-          .limit(1);
+        const result = await professorExists(trimmedValue);
+        if (!result.success) {
+          toast.error(result.error ?? "No fue posible validar el profesor.");
+          return;
+        }
 
-        if (error || !data || data.length === 0) {
+        if (!result.exists) {
           toast.error("El número de identificación ingresado no existe.");
           return;
         }
       } else {
-        const { data, error } = await supabase
-          .from("estudiantes")
-          .select("numero_identificacion")
-          .eq("numero_identificacion", trimmedValue)
-          .limit(1);
+        const result = await studentExists(trimmedValue);
+        if (!result.success) {
+          toast.error(result.error ?? "No fue posible validar el estudiante.");
+          return;
+        }
 
-        if (error || !data || data.length === 0) {
+        if (!result.exists) {
           toast.error("El número de identificación ingresado no existe.");
           return;
         }

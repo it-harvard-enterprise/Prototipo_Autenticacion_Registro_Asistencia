@@ -1,21 +1,79 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { callBackend } from "@/lib/backend/server-api";
 import { createClient } from "@/lib/supabase/server";
 
-export async function signIn(email: string, password: string) {
-  const supabase = await createClient();
+type BackendAuthResponse = {
+  success: boolean;
+  data?: Record<string, unknown>;
+  error?: string;
+};
 
-  const { error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
+type SessionTokens = {
+  accessToken: string;
+  refreshToken: string;
+};
 
-  if (error) {
-    return { success: false, error: error.message };
+function extractSessionTokens(
+  data: Record<string, unknown> | undefined,
+): SessionTokens | null {
+  if (!data) {
+    return null;
   }
 
-  return { success: true };
+  const sessionCandidate =
+    (data.session as Record<string, unknown> | undefined) ?? data;
+  const accessToken = String(sessionCandidate.access_token ?? "").trim();
+  const refreshToken = String(sessionCandidate.refresh_token ?? "").trim();
+
+  if (!accessToken || !refreshToken) {
+    return null;
+  }
+
+  return { accessToken, refreshToken };
+}
+
+export async function signIn(email: string, password: string) {
+  try {
+    const backendPayload = await callBackend<BackendAuthResponse>(
+      "/api/auth/sign-in",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          password,
+        }),
+      },
+    );
+
+    if (!backendPayload.success) {
+      return {
+        success: false,
+        error: backendPayload.error ?? "No fue posible iniciar sesión",
+      };
+    }
+
+    const supabase = await createClient();
+    const tokens = extractSessionTokens(backendPayload.data);
+    if (tokens) {
+      const { error: setSessionError } = await supabase.auth.setSession({
+        access_token: tokens.accessToken,
+        refresh_token: tokens.refreshToken,
+      });
+
+      if (setSessionError) {
+        return { success: false, error: setSessionError.message };
+      }
+    }
+
+    return { success: true, data: backendPayload.data };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Unknown error",
+    };
+  }
 }
 
 export async function signUp(
@@ -32,33 +90,81 @@ export async function signUp(
     "http://localhost:3000";
   const emailRedirectTo = new URL("/login", frontendOrigin).toString();
 
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      emailRedirectTo,
-      data: {
-        rol: "administrador",
-        role: "administrador",
-        tipo_identificacion: tipoIdentificacion ?? "CC",
-        numero_identificacion: numeroIdentificacion ?? "12345",
-        nombres: firstName,
-        apellidos: lastName,
-        first_name: firstName,
-        last_name: lastName,
+  try {
+    const backendPayload = await callBackend<BackendAuthResponse>(
+      "/api/auth/sign-up",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          password,
+          email_redirect_to: emailRedirectTo,
+          metadata: {
+            rol: "administrador",
+            role: "administrador",
+            tipo_identificacion: tipoIdentificacion ?? "CC",
+            numero_identificacion: numeroIdentificacion ?? "12345",
+            nombres: firstName,
+            apellidos: lastName,
+            first_name: firstName,
+            last_name: lastName,
+          },
+        }),
       },
-    },
-  });
+    );
 
-  if (error) {
-    return { success: false, error: error.message };
+    if (!backendPayload.success) {
+      return {
+        success: false,
+        error: backendPayload.error ?? "No fue posible registrar la cuenta",
+      };
+    }
+
+    const supabase = await createClient();
+    const tokens = extractSessionTokens(backendPayload.data);
+    if (tokens) {
+      const { error: setSessionError } = await supabase.auth.setSession({
+        access_token: tokens.accessToken,
+        refresh_token: tokens.refreshToken,
+      });
+
+      if (setSessionError) {
+        return { success: false, error: setSessionError.message };
+      }
+    }
+
+    const user =
+      (backendPayload.data?.user as Record<string, unknown> | undefined) ??
+      undefined;
+
+    return { success: true, user };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Unknown error",
+    };
   }
-
-  return { success: true, user: data.user };
 }
 
 export async function signOut() {
   const supabase = await createClient();
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  const accessToken = session?.access_token?.trim();
+  if (accessToken) {
+    try {
+      await callBackend<BackendAuthResponse>("/api/auth/sign-out", {
+        method: "POST",
+        body: JSON.stringify({ access_token: accessToken }),
+      });
+    } catch {
+      // Continue local signout even if remote session revoke fails.
+    }
+  }
+
   await supabase.auth.signOut();
   redirect("/login");
 }

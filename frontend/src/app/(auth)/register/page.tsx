@@ -54,6 +54,12 @@ const registerSchema = z.object({
 
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
+type AuthApiResponse = {
+  success: boolean;
+  data?: Record<string, unknown>;
+  error?: string;
+};
+
 export default function RegisterPage() {
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
@@ -77,38 +83,64 @@ export default function RegisterPage() {
     setServerError(null);
     setSuccessMessage(null);
 
-    const supabase = createClient();
-
-    const { data, error } = await supabase.auth.signUp({
-      email: values.email,
-      password: values.password,
-      options: {
-        data: {
-          rol: "administrador",
-          role: "administrador",
-          tipo_identificacion: values.tipo_identificacion,
-          numero_identificacion: values.numero_identificacion,
-          nombres: values.firstName,
-          apellidos: values.lastName,
-          first_name: values.firstName,
-          last_name: values.lastName,
+    try {
+      const emailRedirectTo = `${window.location.origin}/login`;
+      const response = await fetch("/api/auth/sign-up", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      },
-    });
+        body: JSON.stringify({
+          email: values.email,
+          password: values.password,
+          email_redirect_to: emailRedirectTo,
+          metadata: {
+            rol: "administrador",
+            role: "administrador",
+            tipo_identificacion: values.tipo_identificacion,
+            numero_identificacion: values.numero_identificacion,
+            nombres: values.firstName,
+            apellidos: values.lastName,
+            first_name: values.firstName,
+            last_name: values.lastName,
+          },
+        }),
+      });
 
-    if (error) {
-      const friendlyMessage =
-        error.message === "Database error saving new user"
-          ? "No se pudo crear la cuenta por una inconsistencia de base de datos. Intente nuevamente en unos segundos."
-          : error.message;
-      setServerError(friendlyMessage);
-      setIsLoading(false);
-      return;
-    }
+      const payload = (await response
+        .json()
+        .catch(() => null)) as AuthApiResponse | null;
 
-    if (data.user) {
-      // If user is immediately logged in (email confirmation disabled)
-      if (data.session) {
+      if (!response.ok || !payload?.success || !payload.data) {
+        const rawMessage = payload?.error ?? "No fue posible crear la cuenta";
+        const friendlyMessage =
+          rawMessage === "Database error saving new user"
+            ? "No se pudo crear la cuenta por una inconsistencia de base de datos. Intente nuevamente en unos segundos."
+            : rawMessage;
+        setServerError(friendlyMessage);
+        setIsLoading(false);
+        return;
+      }
+
+      const sessionCandidate =
+        (payload.data.session as Record<string, unknown> | undefined) ??
+        payload.data;
+      const accessToken = String(sessionCandidate.access_token ?? "").trim();
+      const refreshToken = String(sessionCandidate.refresh_token ?? "").trim();
+
+      if (accessToken && refreshToken) {
+        const supabase = createClient();
+        const { error: setSessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+
+        if (setSessionError) {
+          setServerError(setSessionError.message);
+          setIsLoading(false);
+          return;
+        }
+
         router.push("/dashboard");
         router.refresh();
         return;
@@ -116,6 +148,10 @@ export default function RegisterPage() {
 
       setSuccessMessage(
         "Revise su correo electrónico para confirmar su cuenta antes de iniciar sesión.",
+      );
+    } catch (err) {
+      setServerError(
+        err instanceof Error ? err.message : "No fue posible crear la cuenta",
       );
     }
 

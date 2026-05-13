@@ -9,8 +9,7 @@ import { z } from "zod";
 import { ArrowLeft, Fingerprint, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { createClient } from "@/lib/supabase/client";
-// Use API route instead of importing server action into client
+import { getStudentById } from "@/app/actions/students";
 import { useDigitalPersonaFingerprintReader } from "@/lib/biometrics/digitalpersona";
 import {
   deriveKeyFromPassphrase,
@@ -198,20 +197,15 @@ export default function EditStudentPage() {
 
   useEffect(() => {
     async function fetchStudent() {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("estudiantes")
-        .select("*")
-        .eq("numero_identificacion", id)
-        .single();
+      const result = await getStudentById(id);
 
-      if (error || !data) {
+      if (!result.success || !result.data) {
         setFetchError("No se encontró el estudiante");
         setIsFetching(false);
         return;
       }
 
-      const s = data as Student;
+      const s = result.data as Student;
       setStudent(s);
       const tipoIdentificacion = IDENTIFICATION_TYPE_VALUES.includes(
         s.tipo_identificacion as (typeof IDENTIFICATION_TYPE_VALUES)[number],

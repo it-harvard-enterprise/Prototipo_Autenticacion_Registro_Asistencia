@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+
 import { ensureApprovedAdmin } from "@/lib/auth/approved-admin";
-import { resolveBiometricBackendBaseUrl } from "@/lib/biometric-backend";
-import {
-  createManagedAuthUser,
-  deleteAuthUserById,
-} from "@/lib/supabase/admin";
+import { callBackend } from "@/lib/backend/server-api";
 
 function upper(value: string): string {
   return value.trim().toUpperCase();
 }
+
+type BackendCreateStudentResponse = {
+  success: boolean;
+  data?: unknown;
+  error?: string;
+  auth_user_id?: string;
+  requires_password_change?: boolean;
+};
 
 export async function POST(req: Request) {
   try {
@@ -21,14 +25,14 @@ export async function POST(req: Request) {
       );
     }
 
-    const payload = await req.json();
+    const payload = (await req.json()) as Record<string, unknown>;
     const numeroIdentificacion = upper(
-      String(payload?.numero_identificacion ?? ""),
+      String(payload.numero_identificacion ?? ""),
     );
     const tipoIdentificacion = upper(
-      String(payload?.tipo_identificacion ?? "CC"),
+      String(payload.tipo_identificacion ?? "CC"),
     );
-    const email = String(payload?.email ?? "")
+    const email = String(payload.email ?? "")
       .trim()
       .toLowerCase();
 
@@ -52,101 +56,30 @@ export async function POST(req: Request) {
       );
     }
 
-    const createdAuthUser = await createManagedAuthUser({
-      email,
-      password: numeroIdentificacion,
-      role: "estudiante",
-      nombres: upper(String(payload?.nombres ?? "")),
-      apellidos: upper(String(payload?.apellidos ?? "")),
-      tipoIdentificacion,
-      numeroIdentificacion,
-      approvedByAdmin: true,
-    });
+    const backendPayload = await callBackend<BackendCreateStudentResponse>(
+      "/api/students/create",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ...payload,
+          numero_identificacion: numeroIdentificacion,
+          tipo_identificacion: tipoIdentificacion,
+          email,
+        }),
+      },
+    );
 
-    if (!createdAuthUser.ok) {
+    if (!backendPayload.success) {
       return NextResponse.json(
         {
           success: false,
-          error: createdAuthUser.alreadyRegistered
-            ? "El correo ya está registrado en autenticación."
-            : createdAuthUser.error,
+          error: backendPayload.error ?? "No fue posible crear el estudiante",
         },
         { status: 400 },
       );
     }
 
-    const payloadForEnrollment = {
-      ...payload,
-      numero_identificacion: numeroIdentificacion,
-      tipo_identificacion: tipoIdentificacion,
-      email,
-    };
-
-    const frontendOrigin = req.headers.get("origin") ?? new URL(req.url).origin;
-
-    const backendUrl = resolveBiometricBackendBaseUrl();
-    if (!backendUrl) {
-      return NextResponse.json(
-        { success: false, error: "Backend URL not configured" },
-        { status: 500 },
-      );
-    }
-
-    const res = await fetch(`${backendUrl}/api/students/enroll`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Frontend-Origin": frontendOrigin,
-      },
-      body: JSON.stringify(payloadForEnrollment),
-    });
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => null);
-
-      const rollback = await deleteAuthUserById(createdAuthUser.userId);
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            body?.error ||
-            `Backend error ${res.status}${rollback.ok ? "" : " (y falló rollback auth)"}`,
-        },
-        { status: 502 },
-      );
-    }
-
-    const supabase = await createClient();
-    const { data: linkedStudent, error: linkError } = await supabase
-      .from("estudiantes")
-      .update({ auth_user_id: createdAuthUser.userId })
-      .eq("numero_identificacion", numeroIdentificacion)
-      .select("numero_identificacion")
-      .maybeSingle();
-
-    if (linkError || !linkedStudent) {
-      await deleteAuthUserById(createdAuthUser.userId);
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "No se pudo vincular el usuario auth con el estudiante recién creado.",
-        },
-        { status: 500 },
-      );
-    }
-
-    const body = await res.json().catch(() => null);
-
-    return NextResponse.json(
-      {
-        ...body,
-        success: true,
-        auth_user_id: createdAuthUser.userId,
-        requires_password_change: true,
-      },
-      { status: 200 },
-    );
+    return NextResponse.json(backendPayload, { status: 200 });
   } catch (err) {
     return NextResponse.json(
       {

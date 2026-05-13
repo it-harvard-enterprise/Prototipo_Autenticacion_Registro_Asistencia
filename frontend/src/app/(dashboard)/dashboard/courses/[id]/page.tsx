@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, BookOpen, Pencil } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { getCourseById, getStudentsByCourseId } from "@/app/actions/courses";
 import { Course } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,24 +14,18 @@ export default async function CourseDetailPage({
   params,
 }: CourseDetailPageProps) {
   const { id } = await params;
-  const supabase = await createClient();
+  const idCurso = Number(id);
+  const courseResult = await getCourseById(idCurso);
+  const linkedStudentsResult = await getStudentsByCourseId(idCurso);
 
-  const { data: course, error } = await supabase
-    .from("cursos")
-    .select("*")
-    .eq("id_curso", Number(id))
-    .single();
-
-  const { data: linkedStudents } = await supabase
-    .from("cursos_x_estudiantes")
-    .select("numero_identificacion, estudiantes(nombres, apellidos)")
-    .eq("id_curso", Number(id));
-
-  if (error || !course) {
+  if (!courseResult.success || !courseResult.data) {
     notFound();
   }
 
-  const c = course as Course;
+  const c = courseResult.data as Course;
+  const linkedStudents = linkedStudentsResult.success
+    ? (linkedStudentsResult.data ?? [])
+    : [];
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return "N/A";
@@ -164,6 +158,11 @@ export default async function CourseDetailPage({
           <CardTitle className="text-lg">Estudiantes Asociados</CardTitle>
         </CardHeader>
         <CardContent>
+          {!linkedStudentsResult.success ? (
+            <p className="text-sm text-red-600">
+              Error cargando estudiantes asociados: {linkedStudentsResult.error}
+            </p>
+          ) : null}
           {!linkedStudents || linkedStudents.length === 0 ? (
             <p className="text-sm text-gray-500">
               Este curso no tiene estudiantes asociados.
@@ -171,16 +170,13 @@ export default async function CourseDetailPage({
           ) : (
             <ul className="space-y-2">
               {linkedStudents.map((row, index) => {
-                const student = Array.isArray(row.estudiantes)
-                  ? row.estudiantes[0]
-                  : row.estudiantes;
                 return (
                   <li
                     key={`${row.numero_identificacion}-${index}`}
                     className="rounded-md border px-3 py-2 text-sm"
                   >
                     <span className="font-medium text-gray-900">
-                      {student?.apellidos ?? ""}, {student?.nombres ?? ""}
+                      {row.apellidos ?? ""}, {row.nombres ?? ""}
                     </span>
                     <span className="ml-2 text-gray-500">
                       ({row.numero_identificacion})

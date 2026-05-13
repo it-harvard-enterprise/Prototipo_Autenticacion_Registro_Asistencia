@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Pencil, Fingerprint } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { getStudentById } from "@/app/actions/students";
 import { IDENTIFICATION_TYPE_OPTIONS } from "@/lib/identification-types";
 import { Student } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -21,19 +21,12 @@ export default async function StudentDetailPage({
   params,
 }: StudentDetailPageProps) {
   const { id } = await params;
-  const supabase = await createClient();
-
-  const { data: student, error } = await supabase
-    .from("estudiantes")
-    .select("*")
-    .eq("numero_identificacion", id)
-    .single();
-
-  if (error || !student) {
+  const result = await getStudentById(id);
+  if (!result.success || !result.data) {
     notFound();
   }
 
-  const s = student as Student;
+  const s = result.data as Student;
 
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return "N/A";

@@ -7,7 +7,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Loader2 } from "lucide-react";
 
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -33,6 +32,12 @@ const recoverSchema = z.object({
 
 type RecoverFormValues = z.infer<typeof recoverSchema>;
 
+type AuthApiResponse = {
+  success: boolean;
+  data?: Record<string, unknown>;
+  error?: string;
+};
+
 export default function RecoverPasswordPage() {
   const [serverError, setServerError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -51,19 +56,28 @@ export default function RecoverPasswordPage() {
     setSuccessMessage(null);
 
     try {
-      const supabase = createClient();
       const redirectUrl = new URL("/auth/confirm", window.location.origin);
       redirectUrl.searchParams.set("next", "/reset-password");
 
-      const { error } = await supabase.auth.resetPasswordForEmail(
-        values.email,
-        {
-          redirectTo: redirectUrl.toString(),
+      const response = await fetch("/api/auth/recover", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      );
+        body: JSON.stringify({
+          email: values.email,
+          redirect_to: redirectUrl.toString(),
+        }),
+      });
 
-      if (error) {
-        setServerError(error.message);
+      const payload = (await response
+        .json()
+        .catch(() => null)) as AuthApiResponse | null;
+
+      if (!response.ok || !payload?.success) {
+        setServerError(
+          payload?.error ?? "No fue posible enviar el enlace de recuperación",
+        );
         setIsLoading(false);
         return;
       }

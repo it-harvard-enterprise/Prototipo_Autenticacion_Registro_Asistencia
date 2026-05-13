@@ -9,7 +9,7 @@ import { z } from "zod";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { createClient } from "@/lib/supabase/client";
+import { getProfessorById } from "@/app/actions/professors";
 import {
   IDENTIFICATION_TYPE_OPTIONS,
   IDENTIFICATION_TYPE_VALUES,
@@ -105,20 +105,15 @@ export default function EditProfessorPage() {
 
   useEffect(() => {
     async function fetchProfessor() {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("profesores")
-        .select("*")
-        .eq("numero_identificacion", id)
-        .single();
+      const result = await getProfessorById(id);
 
-      if (error || !data) {
+      if (!result.success || !result.data) {
         setFetchError("No se encontró el profesor");
         setIsFetching(false);
         return;
       }
 
-      const p = data as Professor;
+      const p = result.data as Professor;
       setProfessor(p);
 
       const tipoIdentificacion = IDENTIFICATION_TYPE_VALUES.includes(

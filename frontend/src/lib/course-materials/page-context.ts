@@ -1,23 +1,18 @@
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getCourseById } from "@/app/actions/courses";
 import { resolveCurrentUserAccess } from "@/lib/auth/resolved-access";
 import { Course } from "@/lib/types";
 
 export async function getCourseMaterialsPageContext(courseId: string) {
-  const supabase = await createClient();
   const access = await resolveCurrentUserAccess();
 
-  const { data: course, error } = await supabase
-    .from("cursos")
-    .select("*")
-    .eq("id_curso", Number(courseId))
-    .single();
+  const courseResult = await getCourseById(Number(courseId));
 
-  if (error || !course) {
+  if (!courseResult.success || !courseResult.data) {
     notFound();
   }
 
-  const typedCourse = course as Course;
+  const typedCourse = courseResult.data as Course;
   const canManage =
     access.role === "administrador" || access.role === "profesor";
 

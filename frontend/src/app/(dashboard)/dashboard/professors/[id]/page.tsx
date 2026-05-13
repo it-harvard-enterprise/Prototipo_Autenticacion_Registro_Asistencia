@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Pencil } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { getProfessorById } from "@/app/actions/professors";
 import { IDENTIFICATION_TYPE_OPTIONS } from "@/lib/identification-types";
 import { Professor } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -15,19 +15,12 @@ export default async function ProfessorDetailPage({
   params,
 }: ProfessorDetailPageProps) {
   const { id } = await params;
-  const supabase = await createClient();
-
-  const { data: professor, error } = await supabase
-    .from("profesores")
-    .select("*")
-    .eq("numero_identificacion", id)
-    .single();
-
-  if (error || !professor) {
+  const result = await getProfessorById(id);
+  if (!result.success || !result.data) {
     notFound();
   }
 
-  const p = professor as Professor;
+  const p = result.data as Professor;
 
   const identificationTypeLabel =
     IDENTIFICATION_TYPE_OPTIONS.find(
