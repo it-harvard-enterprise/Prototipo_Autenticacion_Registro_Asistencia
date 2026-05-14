@@ -47,6 +47,12 @@ export interface Student {
     | "DAVIPLATA"
     | "OTRO";
   valor_apoyo_semanal: number;
+  clases_adelantadas?: number;
+  clases_adeudadas?: number;
+  total_pagado?: number;
+  deuda_actual?: number;
+  estado_pago?: "DEBE" | "ADELANTADO" | "AL_DIA" | string;
+  ultima_actualizacion_saldo?: string | null;
   fingerprint_right?: string | null;
   fingerprint_left?: string | null;
   huella_indice_derecho: string | null;

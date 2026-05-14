@@ -2,7 +2,14 @@ import { callBackend } from "@/lib/backend/server-api";
 import { resolveCurrentUserAccess } from "@/lib/auth/resolved-access";
 import Link from "next/link";
 import Image from "next/image";
-import { Users, BookOpen, ClipboardList, FileSpreadsheet } from "lucide-react";
+import {
+  Users,
+  BookOpen,
+  ClipboardList,
+  FileSpreadsheet,
+  HandCoins,
+  BarChart3,
+} from "lucide-react";
 import {
   Card,
   CardContent,
@@ -159,6 +166,50 @@ export default async function DashboardPage() {
               className="bg-[#b92f2d] hover:bg-[#982725] text-white"
             >
               <Link href="/dashboard/export">Ir a Exportar</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Procesar Pago
+            </CardTitle>
+            <div className="p-2 rounded-lg bg-emerald-50">
+              <HandCoins className="h-4 w-4 text-emerald-600" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <CardDescription className="mb-3">
+              Registre pagos de deuda o pagos adelantados por estudiante.
+            </CardDescription>
+            <Button
+              asChild
+              className="bg-[#b92f2d] hover:bg-[#982725] text-white"
+            >
+              <Link href="/dashboard/payments/process">Ir a Procesar Pago</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Reporte de Pagos
+            </CardTitle>
+            <div className="p-2 rounded-lg bg-sky-50">
+              <BarChart3 className="h-4 w-4 text-sky-700" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <CardDescription className="mb-3">
+              Consulte comparativos y totales de recaudo por periodo.
+            </CardDescription>
+            <Button
+              asChild
+              className="bg-[#b92f2d] hover:bg-[#982725] text-white"
+            >
+              <Link href="/dashboard/payments/report">Ir al Reporte</Link>
             </Button>
           </CardContent>
         </Card>

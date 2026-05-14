@@ -1,6 +1,7 @@
 "use server";
 
 import { ensureApprovedAdmin } from "@/lib/auth/approved-admin";
+import { resolveCurrentUserAccess } from "@/lib/auth/resolved-access";
 import { callBackend } from "@/lib/backend/server-api";
 
 type Saldo = "cancelado" | "debe" | null;
@@ -232,6 +233,9 @@ export async function saveAttendanceForCourseAndDate(params: {
     return { success: false, error: "No hay estudiantes para registrar" };
   }
 
+  const access = await resolveCurrentUserAccess();
+  const registradoPor = access.user?.id?.trim() || null;
+
   try {
     const payload = await callBackend<
       BackendResponse<{
@@ -244,6 +248,7 @@ export async function saveAttendanceForCourseAndDate(params: {
         date: params.date,
         rows: normalizedRows,
         save_timestamp_iso: params.saveTimestampIso?.trim() || null,
+        registrado_por: registradoPor,
       }),
     });
 

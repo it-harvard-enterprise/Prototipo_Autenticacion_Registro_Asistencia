@@ -576,17 +576,138 @@ func (a *App) DeleteManagedAuthUser(ctx context.Context, userID string) error {
 	return err
 }
 
+func extractEmbeddedRow(raw any) map[string]any {
+	if raw == nil {
+		return map[string]any{}
+	}
+
+	switch typed := raw.(type) {
+	case map[string]any:
+		return typed
+	case []any:
+		if len(typed) == 0 {
+			return map[string]any{}
+		}
+		if first, ok := typed[0].(map[string]any); ok {
+			return first
+		}
+	}
+
+	return map[string]any{}
+}
+
+func attachPaymentStatusFields(student map[string]any) {
+	saldoRow := extractEmbeddedRow(student["saldo_estudiantes"])
+
+	clasesAdelantadas, ok := asInt(saldoRow["clases_adelantadas"])
+	if !ok || clasesAdelantadas < 0 {
+		clasesAdelantadas = 0
+	}
+
+	clasesAdeudadas, ok := asInt(saldoRow["clases_adeudadas"])
+	if !ok || clasesAdeudadas < 0 {
+		clasesAdeudadas = 0
+	}
+
+	totalPagado, ok := asFloat(saldoRow["total_pagado"])
+	if !ok || totalPagado < 0 {
+		totalPagado = 0
+	}
+
+	valorApoyoSemanal, ok := asFloat(student["valor_apoyo_semanal"])
+	if !ok || valorApoyoSemanal < 0 {
+		valorApoyoSemanal = 0
+	}
+
+	deudaActual := float64(clasesAdeudadas) * valorApoyoSemanal
+
+	estadoPago := "AL_DIA"
+	if clasesAdeudadas > 0 {
+		estadoPago = "DEBE"
+	} else if clasesAdelantadas > 0 {
+		estadoPago = "ADELANTADO"
+	}
+
+	student["clases_adelantadas"] = clasesAdelantadas
+	student["clases_adeudadas"] = clasesAdeudadas
+	student["total_pagado"] = totalPagado
+	student["deuda_actual"] = deudaActual
+	student["estado_pago"] = estadoPago
+
+	if ultimaActualizacion, ok := asString(saldoRow["ultima_actualizacion"]); ok {
+		student["ultima_actualizacion_saldo"] = nullableString(ultimaActualizacion)
+	} else {
+		student["ultima_actualizacion_saldo"] = nil
+	}
+
+	delete(student, "saldo_estudiantes")
+}
+
+func (a *App) fillStudentEmailFromProfile(ctx context.Context, student map[string]any) {
+	email, _ := asString(student["email"])
+	if strings.TrimSpace(email) != "" {
+		return
+	}
+
+	authUserID, _ := asString(student["auth_user_id"])
+	if strings.TrimSpace(authUserID) == "" {
+		return
+	}
+
+	query := url.Values{}
+	query.Set("select", "email")
+	query.Set("id", fmt.Sprintf("eq.%s", strings.TrimSpace(authUserID)))
+	query.Set("limit", "1")
+
+	body, _, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/profiles", query, nil, false)
+	if err != nil {
+		return
+	}
+
+	rows, err := unmarshalRows(body)
+	if err != nil || len(rows) == 0 {
+		return
+	}
+
+	resolvedEmail, _ := asString(rows[0]["email"])
+	if strings.TrimSpace(resolvedEmail) == "" {
+		return
+	}
+
+	student["email"] = strings.TrimSpace(resolvedEmail)
+}
+
 func (a *App) ListStudents(ctx context.Context) ([]map[string]any, error) {
 	query := url.Values{}
-	query.Set("select", "*")
+	query.Set("select", "*,saldo_estudiantes(clases_adelantadas,clases_adeudadas,total_pagado,ultima_actualizacion)")
 	query.Set("order", "apellidos.asc")
 
-	body, _, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/estudiantes", query, nil, false)
+	body, status, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/estudiantes", query, nil, false)
+	if err != nil {
+		if status != http.StatusBadRequest {
+			return nil, err
+		}
+
+		fallbackQuery := url.Values{}
+		fallbackQuery.Set("select", "*")
+		fallbackQuery.Set("order", "apellidos.asc")
+
+		body, _, err = a.CallSupabase(ctx, http.MethodGet, "/rest/v1/estudiantes", fallbackQuery, nil, false)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	rows, err := unmarshalRows(body)
 	if err != nil {
 		return nil, err
 	}
 
-	return unmarshalRows(body)
+	for _, row := range rows {
+		attachPaymentStatusFields(row)
+	}
+
+	return rows, nil
 }
 
 func (a *App) GetStudentByNumero(ctx context.Context, numeroIdentificacion string) (map[string]any, int, error) {
@@ -596,12 +717,23 @@ func (a *App) GetStudentByNumero(ctx context.Context, numeroIdentificacion strin
 	}
 
 	query := url.Values{}
-	query.Set("select", "*")
+	query.Set("select", "*,saldo_estudiantes(clases_adelantadas,clases_adeudadas,total_pagado,ultima_actualizacion)")
 	query.Set("numero_identificacion", fmt.Sprintf("eq.%s", numero))
 
 	body, status, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/estudiantes", query, nil, false)
 	if err != nil {
-		return nil, status, err
+		if status != http.StatusBadRequest {
+			return nil, status, err
+		}
+
+		fallbackQuery := url.Values{}
+		fallbackQuery.Set("select", "*")
+		fallbackQuery.Set("numero_identificacion", fmt.Sprintf("eq.%s", numero))
+
+		body, status, err = a.CallSupabase(ctx, http.MethodGet, "/rest/v1/estudiantes", fallbackQuery, nil, false)
+		if err != nil {
+			return nil, status, err
+		}
 	}
 
 	rows, err := unmarshalRows(body)
@@ -612,7 +744,11 @@ func (a *App) GetStudentByNumero(ctx context.Context, numeroIdentificacion strin
 		return nil, http.StatusNotFound, errors.New("no se encontró el estudiante")
 	}
 
-	return rows[0], http.StatusOK, nil
+	student := rows[0]
+	attachPaymentStatusFields(student)
+	a.fillStudentEmailFromProfile(ctx, student)
+
+	return student, http.StatusOK, nil
 }
 
 func (a *App) StudentExists(ctx context.Context, numeroIdentificacion string) (bool, error) {
@@ -624,6 +760,395 @@ func (a *App) StudentExists(ctx context.Context, numeroIdentificacion string) (b
 		return false, err
 	}
 	return true, nil
+}
+
+func (a *App) ensureSaldoEstudiante(ctx context.Context, numeroIdentificacion string) error {
+	numero := normalizeUpper(numeroIdentificacion)
+	if numero == "" {
+		return errors.New("numero_identificacion es requerido")
+	}
+
+	payload := map[string]any{
+		"numero_identificacion": numero,
+	}
+
+	_, status, err := a.CallSupabase(ctx, http.MethodPost, "/rest/v1/saldo_estudiantes", nil, payload, false)
+	if err != nil && status != http.StatusConflict {
+		return err
+	}
+
+	return nil
+}
+
+func (a *App) getSaldoEstudiante(ctx context.Context, numeroIdentificacion string) (map[string]any, int, error) {
+	numero := normalizeUpper(numeroIdentificacion)
+	if numero == "" {
+		return nil, http.StatusBadRequest, errors.New("numero_identificacion es requerido")
+	}
+
+	query := url.Values{}
+	query.Set("select", "numero_identificacion,clases_adelantadas,clases_adeudadas,total_pagado,ultima_actualizacion")
+	query.Set("numero_identificacion", fmt.Sprintf("eq.%s", numero))
+
+	body, status, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/saldo_estudiantes", query, nil, false)
+	if err != nil {
+		return nil, status, err
+	}
+
+	rows, err := unmarshalRows(body)
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+	if len(rows) == 0 {
+		return map[string]any{
+			"numero_identificacion": numero,
+			"clases_adelantadas":    0,
+			"clases_adeudadas":      0,
+			"total_pagado":          0,
+			"ultima_actualizacion":  nil,
+		}, http.StatusOK, nil
+	}
+
+	return rows[0], http.StatusOK, nil
+}
+
+func normalizeMetodoPagoValue(value string) (string, error) {
+	trimmed := normalizeUpper(value)
+	allowed := map[string]bool{
+		"EFECTIVO":      true,
+		"TRANSFERENCIA": true,
+		"NEQUI":         true,
+		"DAVIPLATA":     true,
+		"OTRO":          true,
+	}
+
+	if !allowed[trimmed] {
+		return "", errors.New("metodo_pago invalido")
+	}
+
+	return trimmed, nil
+}
+
+func normalizePaymentMode(value string) (string, error) {
+	mode := normalizeUpper(value)
+	switch mode {
+	case "DEUDA_TOTAL", "DEUDA_PARCIAL", "ADELANTO":
+		return mode, nil
+	default:
+		return "", errors.New("modalidad de pago invalida")
+	}
+}
+
+type PaymentReportFilters struct {
+	NumeroIdentificacion string
+	Limit                int
+	FromDate             string
+	ToDate               string
+	Scope                string
+}
+
+func normalizePaymentReportScope(value string) string {
+	switch normalizeUpper(value) {
+	case "ASISTENCIA":
+		return "asistencia"
+	case "PROCESADOR":
+		return "procesador"
+	default:
+		return ""
+	}
+}
+
+func (a *App) GetStudentPaymentStatus(ctx context.Context, numeroIdentificacion string) (map[string]any, int, error) {
+	student, status, err := a.GetStudentByNumero(ctx, numeroIdentificacion)
+	if err != nil {
+		return nil, status, err
+	}
+
+	recentPayments, status, err := a.ListPaymentsReport(ctx, PaymentReportFilters{
+		NumeroIdentificacion: numeroIdentificacion,
+		Limit:                10,
+		Scope:                "AMBOS",
+	})
+	if err != nil {
+		return nil, status, err
+	}
+
+	return map[string]any{
+		"student":         student,
+		"recent_payments": recentPayments,
+	}, http.StatusOK, nil
+}
+
+func (a *App) ProcessStudentPayment(ctx context.Context, req models.ProcessStudentPaymentRequest) (map[string]any, int, error) {
+	numero := normalizeUpper(req.NumeroIdentificacion)
+	if numero == "" {
+		return nil, http.StatusBadRequest, errors.New("numero_identificacion es requerido")
+	}
+
+	registradoPor := strings.TrimSpace(req.RegistradoPor)
+	if registradoPor == "" {
+		return nil, http.StatusBadRequest, errors.New("registrado_por es requerido")
+	}
+
+	metodoPago, err := normalizeMetodoPagoValue(req.MetodoPago)
+	if err != nil {
+		return nil, http.StatusBadRequest, err
+	}
+
+	modalidad, err := normalizePaymentMode(req.Modalidad)
+	if err != nil {
+		return nil, http.StatusBadRequest, err
+	}
+
+	student, status, err := a.GetStudentByNumero(ctx, numero)
+	if err != nil {
+		return nil, status, err
+	}
+
+	valorApoyoSemanal, ok := asFloat(student["valor_apoyo_semanal"])
+	if !ok || valorApoyoSemanal <= 0 {
+		return nil, http.StatusBadRequest, errors.New("el estudiante no tiene un valor_apoyo_semanal valido")
+	}
+
+	if err := a.ensureSaldoEstudiante(ctx, numero); err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+
+	saldo, status, err := a.getSaldoEstudiante(ctx, numero)
+	if err != nil {
+		return nil, status, err
+	}
+
+	clasesAdeudadas, ok := asInt(saldo["clases_adeudadas"])
+	if !ok || clasesAdeudadas < 0 {
+		clasesAdeudadas = 0
+	}
+
+	clases := req.Clases
+	tipoPago := "pago_deuda"
+	clasesAdelantadas := 0
+	autoNotas := ""
+
+	switch modalidad {
+	case "DEUDA_TOTAL":
+		if clasesAdeudadas <= 0 {
+			return nil, http.StatusBadRequest, errors.New("el estudiante no tiene clases adeudadas")
+		}
+		clases = clasesAdeudadas
+		autoNotas = fmt.Sprintf("PAGO DE DEUDA TOTAL (%d CLASES)", clases)
+	case "DEUDA_PARCIAL":
+		if clasesAdeudadas <= 0 {
+			return nil, http.StatusBadRequest, errors.New("el estudiante no tiene clases adeudadas")
+		}
+		if clases <= 0 {
+			return nil, http.StatusBadRequest, errors.New("debe indicar cuantas clases adeudadas desea pagar")
+		}
+		if clases > clasesAdeudadas {
+			return nil, http.StatusBadRequest, errors.New("no puede pagar mas clases de las adeudadas")
+		}
+		autoNotas = fmt.Sprintf("PAGO DE DEUDA PARCIAL (%d CLASES)", clases)
+	case "ADELANTO":
+		if clases <= 0 {
+			return nil, http.StatusBadRequest, errors.New("debe indicar cuantas clases desea adelantar")
+		}
+		tipoPago = "adelanto"
+		clasesAdelantadas = clases
+		autoNotas = fmt.Sprintf("PAGO ADELANTADO (%d CLASES)", clases)
+	}
+
+	valor := float64(clases) * valorApoyoSemanal
+
+	notasUsuario := ""
+	if req.Notas != nil {
+		notasUsuario = strings.TrimSpace(*req.Notas)
+	}
+
+	notas := autoNotas
+	if notasUsuario != "" {
+		notas = notas + " | " + notasUsuario
+	}
+
+	pagoPayload := map[string]any{
+		"numero_identificacion": numero,
+		"registrado_por":        registradoPor,
+		"origen_pago":           "procesador",
+		"tipo_pago":             tipoPago,
+		"metodo_pago":           metodoPago,
+		"valor":                 valor,
+		"clases_adelantadas":    clasesAdelantadas,
+		"notas":                 notas,
+	}
+
+	if req.IDCurso != nil && *req.IDCurso > 0 {
+		pagoPayload["id_curso"] = *req.IDCurso
+	}
+
+	pagoQuery := url.Values{}
+	pagoQuery.Set("select", "*")
+
+	pagoBody, status, err := a.CallSupabase(ctx, http.MethodPost, "/rest/v1/pagos", pagoQuery, pagoPayload, true)
+	if err != nil {
+		return nil, status, err
+	}
+
+	pagoRows, err := unmarshalRows(pagoBody)
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+
+	var pago map[string]any
+	if len(pagoRows) > 0 {
+		pago = pagoRows[0]
+	}
+
+	if modalidad == "DEUDA_TOTAL" || modalidad == "DEUDA_PARCIAL" {
+		nuevoSaldoAdeudado := clasesAdeudadas - clases
+		if nuevoSaldoAdeudado < 0 {
+			nuevoSaldoAdeudado = 0
+		}
+
+		updatePayload := map[string]any{
+			"clases_adeudadas":     nuevoSaldoAdeudado,
+			"ultima_actualizacion": time.Now().UTC().Format(time.RFC3339Nano),
+		}
+
+		updateQuery := url.Values{}
+		updateQuery.Set("numero_identificacion", fmt.Sprintf("eq.%s", numero))
+
+		_, status, err = a.CallSupabase(ctx, http.MethodPatch, "/rest/v1/saldo_estudiantes", updateQuery, updatePayload, false)
+		if err != nil {
+			return nil, status, err
+		}
+	}
+
+	updatedStudent, status, err := a.GetStudentByNumero(ctx, numero)
+	if err != nil {
+		return nil, status, err
+	}
+
+	return map[string]any{
+		"payment": pago,
+		"student": updatedStudent,
+	}, http.StatusOK, nil
+}
+
+func (a *App) UpdateStudentPaymentStatusManual(ctx context.Context, req models.ManualStudentPaymentStatusUpdateRequest) (map[string]any, int, error) {
+	numero := normalizeUpper(req.NumeroIdentificacion)
+	if numero == "" {
+		return nil, http.StatusBadRequest, errors.New("numero_identificacion es requerido")
+	}
+
+	if req.ClasesAdeudadas < 0 {
+		return nil, http.StatusBadRequest, errors.New("clases_adeudadas no puede ser negativa")
+	}
+
+	if req.ClasesAdelantadas < 0 {
+		return nil, http.StatusBadRequest, errors.New("clases_adelantadas no puede ser negativa")
+	}
+
+	if _, status, err := a.GetStudentByNumero(ctx, numero); err != nil {
+		return nil, status, err
+	}
+
+	if err := a.ensureSaldoEstudiante(ctx, numero); err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+
+	payload := map[string]any{
+		"clases_adeudadas":     req.ClasesAdeudadas,
+		"clases_adelantadas":   req.ClasesAdelantadas,
+		"ultima_actualizacion": time.Now().UTC().Format(time.RFC3339Nano),
+	}
+
+	query := url.Values{}
+	query.Set("numero_identificacion", fmt.Sprintf("eq.%s", numero))
+	query.Set("select", "*")
+
+	body, status, err := a.CallSupabase(ctx, http.MethodPatch, "/rest/v1/saldo_estudiantes", query, payload, true)
+	if err != nil {
+		return nil, status, err
+	}
+
+	rows, err := unmarshalRows(body)
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+
+	updatedStudent, status, err := a.GetStudentByNumero(ctx, numero)
+	if err != nil {
+		return nil, status, err
+	}
+
+	var saldoActualizado map[string]any
+	if len(rows) > 0 {
+		saldoActualizado = rows[0]
+	}
+
+	return map[string]any{
+		"student":           updatedStudent,
+		"saldo_actualizado": saldoActualizado,
+	}, http.StatusOK, nil
+}
+
+func (a *App) ListPaymentsReport(ctx context.Context, filters PaymentReportFilters) ([]map[string]any, int, error) {
+	limit := filters.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 5000 {
+		limit = 5000
+	}
+
+	query := url.Values{}
+	query.Set("select", "*")
+	query.Set("order", "fecha_pago.desc")
+	query.Set("limit", strconv.Itoa(limit))
+
+	numero := normalizeUpper(filters.NumeroIdentificacion)
+	if numero != "" {
+		query.Set("numero_identificacion", fmt.Sprintf("eq.%s", numero))
+	}
+
+	scope := normalizePaymentReportScope(filters.Scope)
+	if scope != "" {
+		query.Set("origen_pago", fmt.Sprintf("eq.%s", scope))
+	}
+
+	fromDate := strings.TrimSpace(filters.FromDate)
+	toDate := strings.TrimSpace(filters.ToDate)
+	if fromDate == "" && toDate != "" {
+		fromDate = toDate
+	}
+	if toDate == "" && fromDate != "" {
+		toDate = fromDate
+	}
+
+	if fromDate != "" {
+		startISO, _, err := getBogotaDayBounds(fromDate)
+		if err != nil {
+			return nil, http.StatusBadRequest, errors.New("fecha inicial invalida")
+		}
+
+		_, endISO, err := getBogotaDayBounds(toDate)
+		if err != nil {
+			return nil, http.StatusBadRequest, errors.New("fecha final invalida")
+		}
+
+		query.Set("fecha_pago", fmt.Sprintf("gte.%s", startISO))
+		query.Add("fecha_pago", fmt.Sprintf("lt.%s", endISO))
+	}
+
+	body, status, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/vista_reporte_pagos", query, nil, false)
+	if err != nil {
+		return nil, status, err
+	}
+
+	rows, err := unmarshalRows(body)
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+
+	return rows, http.StatusOK, nil
 }
 
 func buildStudentUpdatePayload(data map[string]any) map[string]any {
@@ -1840,6 +2365,11 @@ func (a *App) SaveAttendance(ctx context.Context, req models.AttendanceSaveReque
 		return nil, http.StatusBadRequest, errors.New("date es requerido")
 	}
 
+	registradoPor := ""
+	if req.RegistradoPor != nil {
+		registradoPor = strings.TrimSpace(*req.RegistradoPor)
+	}
+
 	normalizedRows := make([]models.AttendanceSaveRow, 0, len(req.Rows))
 	for _, row := range req.Rows {
 		id := normalizeUpper(row.NumeroIdentificacion)
@@ -1858,7 +2388,7 @@ func (a *App) SaveAttendance(ctx context.Context, req models.AttendanceSaveReque
 		} else {
 			if normalizedSaldo != nil && *normalizedSaldo == "debe" {
 				normalizedMetodo = nil
-			} else if normalizedSaldo == nil || *normalizedSaldo != "cancelado" || normalizedMetodo == nil {
+			} else if normalizedSaldo == nil || *normalizedSaldo != "cancelado" {
 				normalizedSaldo = nil
 				normalizedMetodo = nil
 			}
@@ -1887,8 +2417,10 @@ func (a *App) SaveAttendance(ctx context.Context, req models.AttendanceSaveReque
 		studentIDs = append(studentIDs, row.NumeroIdentificacion)
 	}
 
+	studentIDs = normalizeIdentificationIDs(studentIDs)
+
 	existingQuery := url.Values{}
-	existingQuery.Set("select", "id,numero_identificacion,asistio,fecha")
+	existingQuery.Set("select", "id,numero_identificacion,asistio,fecha,id_pago")
 	existingQuery.Set("id_curso", fmt.Sprintf("eq.%d", req.IDCurso))
 	existingQuery.Set("numero_identificacion", buildStringInFilter(studentIDs))
 	existingQuery.Set("fecha", fmt.Sprintf("gte.%s", startISO))
@@ -1912,10 +2444,58 @@ func (a *App) SaveAttendance(ctx context.Context, req models.AttendanceSaveReque
 		}
 	}
 
-	toInsert := make([]map[string]any, 0)
+	supportByStudent := map[string]float64{}
+	if registradoPor != "" {
+		supportQuery := url.Values{}
+		supportQuery.Set("select", "numero_identificacion,valor_apoyo_semanal")
+		supportQuery.Set("numero_identificacion", buildStringInFilter(studentIDs))
+
+		supportBody, status, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/estudiantes", supportQuery, nil, false)
+		if err != nil {
+			return nil, status, err
+		}
+
+		supportRows, err := unmarshalRows(supportBody)
+		if err != nil {
+			return nil, http.StatusInternalServerError, err
+		}
+
+		for _, supportRow := range supportRows {
+			numero, _ := asString(supportRow["numero_identificacion"])
+			if numero == "" {
+				continue
+			}
+			valorApoyoSemanal, ok := asFloat(supportRow["valor_apoyo_semanal"])
+			if !ok || valorApoyoSemanal <= 0 {
+				continue
+			}
+			supportByStudent[numero] = valorApoyoSemanal
+		}
+	}
+
+	savedCount := 0
 
 	for _, row := range normalizedRows {
 		existing := existingByStudent[row.NumeroIdentificacion]
+		existingPagoID := ""
+		if existing != nil {
+			if value, ok := asString(existing["id_pago"]); ok {
+				existingPagoID = strings.TrimSpace(value)
+			}
+		}
+
+		hadAdvanceBefore := false
+		if row.Asistio && row.Saldo != nil && *row.Saldo == "cancelado" {
+			saldoSnapshot, _, saldoErr := a.getSaldoEstudiante(ctx, row.NumeroIdentificacion)
+			if saldoErr == nil {
+				clasesAdelantadas, ok := asInt(saldoSnapshot["clases_adelantadas"])
+				if ok && clasesAdelantadas > 0 {
+					hadAdvanceBefore = true
+				}
+			}
+		}
+
+		attendanceID := 0
 		if existing == nil {
 			insertDate := startISO
 			if row.Asistio {
@@ -1945,63 +2525,154 @@ func (a *App) SaveAttendance(ctx context.Context, req models.AttendanceSaveReque
 				insertPayload["created_at"] = strings.TrimSpace(*req.SaveTimestampISO)
 			}
 
-			toInsert = append(toInsert, insertPayload)
-			continue
-		}
+			insertQuery := url.Values{}
+			insertQuery.Set("select", "id,id_pago")
 
-		existingID, ok := asInt(existing["id"])
-		if !ok {
-			continue
-		}
+			insertBody, status, err := a.CallSupabase(ctx, http.MethodPost, "/rest/v1/registro_asistencia", insertQuery, insertPayload, true)
+			if err != nil {
+				return nil, status, err
+			}
 
-		existingAsistio, _ := asBool(existing["asistio"])
-		existingFecha, _ := asString(existing["fecha"])
+			insertedRows, err := unmarshalRows(insertBody)
+			if err != nil {
+				return nil, http.StatusInternalServerError, err
+			}
+			if len(insertedRows) == 0 {
+				continue
+			}
 
-		fechaMarcado := existingFecha
-		if row.Asistio {
-			if !existingAsistio {
-				if row.MarcadoEn != nil && strings.TrimSpace(*row.MarcadoEn) != "" {
-					fechaMarcado = strings.TrimSpace(*row.MarcadoEn)
-				} else {
-					fechaMarcado = getBogotaTimestampForDate(req.Date)
+			insertedID, ok := asInt(insertedRows[0]["id"])
+			if ok {
+				attendanceID = insertedID
+			}
+			if value, ok := asString(insertedRows[0]["id_pago"]); ok {
+				existingPagoID = strings.TrimSpace(value)
+			}
+
+			savedCount += 1
+		} else {
+			existingID, ok := asInt(existing["id"])
+			if !ok {
+				continue
+			}
+			attendanceID = existingID
+
+			existingAsistio, _ := asBool(existing["asistio"])
+			existingFecha, _ := asString(existing["fecha"])
+
+			fechaMarcado := existingFecha
+			if row.Asistio {
+				if !existingAsistio {
+					if row.MarcadoEn != nil && strings.TrimSpace(*row.MarcadoEn) != "" {
+						fechaMarcado = strings.TrimSpace(*row.MarcadoEn)
+					} else {
+						fechaMarcado = getBogotaTimestampForDate(req.Date)
+					}
 				}
 			}
-		}
 
-		updatePayload := map[string]any{
-			"fecha":       fechaMarcado,
-			"asistio":     row.Asistio,
-			"saldo":       nil,
-			"metodo_pago": nil,
-		}
-		if row.Asistio {
-			if row.Saldo != nil {
-				updatePayload["saldo"] = *row.Saldo
+			updatePayload := map[string]any{
+				"fecha":       fechaMarcado,
+				"asistio":     row.Asistio,
+				"saldo":       nil,
+				"metodo_pago": nil,
 			}
-			if row.Saldo != nil && *row.Saldo == "cancelado" && row.MetodoPago != nil {
-				updatePayload["metodo_pago"] = *row.MetodoPago
+			if row.Asistio {
+				if row.Saldo != nil {
+					updatePayload["saldo"] = *row.Saldo
+				}
+				if row.Saldo != nil && *row.Saldo == "cancelado" && row.MetodoPago != nil {
+					updatePayload["metodo_pago"] = *row.MetodoPago
+				}
+			} else if req.SaveTimestampISO != nil && strings.TrimSpace(*req.SaveTimestampISO) != "" {
+				updatePayload["created_at"] = strings.TrimSpace(*req.SaveTimestampISO)
 			}
-		} else if req.SaveTimestampISO != nil && strings.TrimSpace(*req.SaveTimestampISO) != "" {
-			updatePayload["created_at"] = strings.TrimSpace(*req.SaveTimestampISO)
+
+			updateQuery := url.Values{}
+			updateQuery.Set("id", fmt.Sprintf("eq.%d", existingID))
+			updateQuery.Set("select", "id,id_pago")
+
+			updateBody, status, err := a.CallSupabase(ctx, http.MethodPatch, "/rest/v1/registro_asistencia", updateQuery, updatePayload, true)
+			if err != nil {
+				return nil, status, err
+			}
+
+			updatedRows, err := unmarshalRows(updateBody)
+			if err != nil {
+				return nil, http.StatusInternalServerError, err
+			}
+			if len(updatedRows) > 0 {
+				if value, ok := asString(updatedRows[0]["id_pago"]); ok {
+					existingPagoID = strings.TrimSpace(value)
+				}
+			}
+
+			savedCount += 1
 		}
 
-		updateQuery := url.Values{}
-		updateQuery.Set("id", fmt.Sprintf("eq.%d", existingID))
+		if registradoPor == "" || attendanceID <= 0 {
+			continue
+		}
 
-		_, status, err := a.CallSupabase(ctx, http.MethodPatch, "/rest/v1/registro_asistencia", updateQuery, updatePayload, false)
+		if !row.Asistio || row.Saldo == nil || *row.Saldo != "cancelado" || row.MetodoPago == nil {
+			continue
+		}
+		if hadAdvanceBefore {
+			continue
+		}
+		if existingPagoID != "" {
+			continue
+		}
+
+		valorApoyoSemanal, ok := supportByStudent[row.NumeroIdentificacion]
+		if !ok || valorApoyoSemanal <= 0 {
+			continue
+		}
+
+		pagoPayload := map[string]any{
+			"numero_identificacion": row.NumeroIdentificacion,
+			"id_curso":              req.IDCurso,
+			"id_asistencia":         attendanceID,
+			"registrado_por":        registradoPor,
+			"origen_pago":           "asistencia",
+			"tipo_pago":             "clase_presencial",
+			"metodo_pago":           *row.MetodoPago,
+			"valor":                 valorApoyoSemanal,
+			"clases_adelantadas":    0,
+			"notas":                 fmt.Sprintf("PAGO REGISTRADO EN ASISTENCIA %s", req.Date),
+		}
+
+		pagoQuery := url.Values{}
+		pagoQuery.Set("select", "id")
+
+		pagoBody, status, err := a.CallSupabase(ctx, http.MethodPost, "/rest/v1/pagos", pagoQuery, pagoPayload, true)
+		if err != nil {
+			return nil, status, err
+		}
+
+		pagoRows, err := unmarshalRows(pagoBody)
+		if err != nil {
+			return nil, http.StatusInternalServerError, err
+		}
+		if len(pagoRows) == 0 {
+			continue
+		}
+
+		pagoID, _ := asString(pagoRows[0]["id"])
+		if strings.TrimSpace(pagoID) == "" {
+			continue
+		}
+
+		linkQuery := url.Values{}
+		linkQuery.Set("id", fmt.Sprintf("eq.%d", attendanceID))
+
+		_, status, err = a.CallSupabase(ctx, http.MethodPatch, "/rest/v1/registro_asistencia", linkQuery, map[string]any{"id_pago": strings.TrimSpace(pagoID)}, false)
 		if err != nil {
 			return nil, status, err
 		}
 	}
 
-	if len(toInsert) > 0 {
-		_, status, err := a.CallSupabase(ctx, http.MethodPost, "/rest/v1/registro_asistencia", nil, toInsert, false)
-		if err != nil {
-			return nil, status, err
-		}
-	}
-
-	return map[string]any{"savedCount": len(normalizedRows)}, http.StatusOK, nil
+	return map[string]any{"savedCount": savedCount}, http.StatusOK, nil
 }
 
 func (a *App) DeleteAttendance(ctx context.Context, idCurso int, date string) (map[string]any, int, error) {

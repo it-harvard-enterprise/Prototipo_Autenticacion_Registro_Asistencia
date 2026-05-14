@@ -705,6 +705,88 @@ func ExportAttendanceHandler(app *services.App) gin.HandlerFunc {
 	}
 }
 
+func GetStudentPaymentStatusHandler(app *services.App) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		numero := c.Param("numero_identificacion")
+		statusData, status, err := app.GetStudentPaymentStatus(c.Request.Context(), numero)
+		if err != nil {
+			jsonError(c, status, err.Error())
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"success": true, "data": statusData})
+	}
+}
+
+func ProcessStudentPaymentHandler(app *services.App) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req models.ProcessStudentPaymentRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			jsonError(c, http.StatusBadRequest, "Invalid JSON payload")
+			return
+		}
+
+		result, status, err := app.ProcessStudentPayment(c.Request.Context(), req)
+		if err != nil {
+			jsonError(c, status, err.Error())
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"success": true, "data": result})
+	}
+}
+
+func UpdateStudentPaymentStatusManualHandler(app *services.App) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req models.ManualStudentPaymentStatusUpdateRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			jsonError(c, http.StatusBadRequest, "Invalid JSON payload")
+			return
+		}
+
+		result, status, err := app.UpdateStudentPaymentStatusManual(c.Request.Context(), req)
+		if err != nil {
+			jsonError(c, status, err.Error())
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"success": true, "data": result})
+	}
+}
+
+func ListPaymentsReportHandler(app *services.App) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		numero := strings.TrimSpace(c.Query("numero_identificacion"))
+		fromDate := strings.TrimSpace(c.Query("from"))
+		toDate := strings.TrimSpace(c.Query("to"))
+		scope := strings.TrimSpace(c.Query("scope"))
+		limit := 50
+
+		if rawLimit := strings.TrimSpace(c.Query("limit")); rawLimit != "" {
+			parsed, err := strconv.Atoi(rawLimit)
+			if err != nil {
+				jsonError(c, http.StatusBadRequest, "limit invalido")
+				return
+			}
+			limit = parsed
+		}
+
+		rows, status, err := app.ListPaymentsReport(c.Request.Context(), services.PaymentReportFilters{
+			NumeroIdentificacion: numero,
+			Limit:                limit,
+			FromDate:             fromDate,
+			ToDate:               toDate,
+			Scope:                scope,
+		})
+		if err != nil {
+			jsonError(c, status, err.Error())
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"success": true, "data": rows})
+	}
+}
+
 func DashboardSummaryHandler(app *services.App) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		summary, err := app.GetDashboardSummary(c.Request.Context())

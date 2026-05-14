@@ -72,6 +72,22 @@ export default async function StudentDetailPage({
   );
   const hasFingerprints = hasFingerprintRight && hasFingerprintLeft;
 
+  const clasesAdeudadas = Number(s.clases_adeudadas ?? 0);
+  const clasesAdelantadas = Number(s.clases_adelantadas ?? 0);
+  const deudaActual = Number(
+    s.deuda_actual ?? clasesAdeudadas * Number(s.valor_apoyo_semanal ?? 0),
+  );
+  const estadoPagoTexto =
+    clasesAdeudadas > 0
+      ? `Debe - ${formatCurrency(deudaActual)}`
+      : clasesAdelantadas > 0
+        ? `Adelantado (${clasesAdelantadas} clases)`
+        : "Al día";
+  const estadoPagoClassName =
+    clasesAdeudadas > 0
+      ? "text-red-600 bg-red-50 border-red-200"
+      : "text-emerald-700 bg-emerald-50 border-emerald-200";
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -137,6 +153,14 @@ export default async function StudentDetailPage({
                 Apellidos
               </dt>
               <dd className="mt-1 text-sm text-gray-900">{s.apellidos}</dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Correo electrónico
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900">
+                {renderValue(s.email)}
+              </dd>
             </div>
             <div>
               <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -249,6 +273,48 @@ export default async function StudentDetailPage({
               </dt>
               <dd className="mt-1 text-sm text-gray-900">
                 {formatCurrency(s.valor_apoyo_semanal)}
+              </dd>
+            </div>
+          </dl>
+        </CardContent>
+      </Card>
+
+      <Card className="max-w-4xl mx-auto">
+        <CardHeader>
+          <CardTitle className="text-lg">Estado de Pagos</CardTitle>
+          <CardDescription>
+            Balance actual de clases adeudadas, adelantadas y pagos acumulados.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <span
+              className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${estadoPagoClassName}`}
+            >
+              {estadoPagoTexto}
+            </span>
+          </div>
+          <dl className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Clases adeudadas
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900">{clasesAdeudadas}</dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Clases adelantadas
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900">
+                {clasesAdelantadas}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Total pagado
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900">
+                {formatCurrency(Number(s.total_pagado ?? 0))}
               </dd>
             </div>
           </dl>

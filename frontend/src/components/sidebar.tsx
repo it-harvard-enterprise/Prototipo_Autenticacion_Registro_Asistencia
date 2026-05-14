@@ -8,6 +8,8 @@ import {
   BookOpen,
   Link2,
   ClipboardList,
+  HandCoins,
+  BarChart3,
   Fingerprint,
   FileSpreadsheet,
   LogOut,
@@ -65,6 +67,16 @@ const navItems: NavItem[] = [
     label: "Tomar Asistencia",
     href: "/dashboard/attendance",
     icon: ClipboardList,
+  },
+  {
+    label: "Procesar pago",
+    href: "/dashboard/payments/process",
+    icon: HandCoins,
+  },
+  {
+    label: "Reporte de Pagos",
+    href: "/dashboard/payments/report",
+    icon: BarChart3,
   },
   {
     label: "Identificar Persona",

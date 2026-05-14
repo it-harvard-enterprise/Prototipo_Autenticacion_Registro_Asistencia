@@ -118,6 +118,10 @@ func main() {
 	router.POST("/api/attendance/delete", handlers.DeleteAttendanceHandler(app))
 	router.GET("/api/attendance/export", handlers.ExportAttendanceHandler(app))
 	router.POST("/api/attendance/identify", handlers.IdentifyAttendanceHandler(app))
+	router.GET("/api/payments/student/:numero_identificacion/status", handlers.GetStudentPaymentStatusHandler(app))
+	router.POST("/api/payments/process", handlers.ProcessStudentPaymentHandler(app))
+	router.POST("/api/payments/manual-status", handlers.UpdateStudentPaymentStatusManualHandler(app))
+	router.GET("/api/payments/report", handlers.ListPaymentsReportHandler(app))
 
 	router.GET("/api/dashboard/summary", handlers.DashboardSummaryHandler(app))
 	router.GET("/api/person/by-id/:numero_identificacion", handlers.PersonLookupByIDHandler(app))

@@ -10,6 +10,7 @@ import { ArrowLeft, Fingerprint, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { getStudentById } from "@/app/actions/students";
+import { updateStudentPaymentStatusManual } from "@/app/actions/payments";
 import { useDigitalPersonaFingerprintReader } from "@/lib/biometrics/digitalpersona";
 import {
   deriveKeyFromPassphrase,
@@ -139,6 +140,11 @@ export default function EditStudentPage() {
     right: false,
     left: false,
   });
+  const [manualClasesAdeudadas, setManualClasesAdeudadas] = useState(0);
+  const [manualClasesAdelantadas, setManualClasesAdelantadas] = useState(0);
+  const [manualNotasPago, setManualNotasPago] = useState("");
+  const [isSavingManualPaymentStatus, setIsSavingManualPaymentStatus] =
+    useState(false);
 
   const {
     ready: readerReady,
@@ -259,6 +265,11 @@ export default function EditStudentPage() {
           : "EFECTIVO",
         valor_apoyo_semanal: String(s.valor_apoyo_semanal),
       });
+      setManualClasesAdeudadas(Math.max(0, Number(s.clases_adeudadas ?? 0)));
+      setManualClasesAdelantadas(
+        Math.max(0, Number(s.clases_adelantadas ?? 0)),
+      );
+      setManualNotasPago("");
       setCapturedFingerprintSides({ right: false, left: false });
       setIsFetching(false);
     }
@@ -396,6 +407,47 @@ export default function EditStudentPage() {
     }));
 
     toast.success("Huella capturada correctamente");
+  }
+
+  async function handleSaveManualPaymentStatus() {
+    if (!student) {
+      toast.error("No hay estudiante cargado para actualizar");
+      return;
+    }
+
+    if (manualClasesAdeudadas < 0 || manualClasesAdelantadas < 0) {
+      toast.error("Las clases adeudadas y adelantadas no pueden ser negativas");
+      return;
+    }
+
+    setIsSavingManualPaymentStatus(true);
+
+    const result = await updateStudentPaymentStatusManual({
+      numeroIdentificacion: student.numero_identificacion,
+      clasesAdeudadas: manualClasesAdeudadas,
+      clasesAdelantadas: manualClasesAdelantadas,
+      notas: manualNotasPago,
+    });
+
+    setIsSavingManualPaymentStatus(false);
+
+    if (!result.success || !result.data?.student) {
+      toast.error(
+        result.error ?? "No fue posible actualizar el estado de pagos",
+      );
+      return;
+    }
+
+    const updatedStudent = result.data.student;
+    setStudent(updatedStudent);
+    setManualClasesAdeudadas(
+      Math.max(0, Number(updatedStudent.clases_adeudadas ?? 0)),
+    );
+    setManualClasesAdelantadas(
+      Math.max(0, Number(updatedStudent.clases_adelantadas ?? 0)),
+    );
+    setManualNotasPago("");
+    toast.success("Estado de pagos actualizado correctamente");
   }
 
   const rightFingerprintValue = form.watch("huella_indice_derecho") ?? "";
@@ -995,6 +1047,82 @@ export default function EditStudentPage() {
               </div>
             </form>
           </Form>
+        </CardContent>
+      </Card>
+
+      <Card className="max-w-4xl mx-auto">
+        <CardHeader>
+          <CardTitle className="text-lg">
+            Ajuste Manual de Estado de Pagos
+          </CardTitle>
+          <CardDescription>
+            Utilice esta sección para corregir clases adeudadas o adelantadas en
+            pagos no registrados electrónicamente.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="text-sm font-medium text-gray-700">
+                Clases adeudadas
+              </label>
+              <Input
+                type="number"
+                min={0}
+                step={1}
+                value={manualClasesAdeudadas}
+                onChange={(event) =>
+                  setManualClasesAdeudadas(
+                    Math.max(0, Number(event.target.value || 0)),
+                  )
+                }
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700">
+                Clases adelantadas
+              </label>
+              <Input
+                type="number"
+                min={0}
+                step={1}
+                value={manualClasesAdelantadas}
+                onChange={(event) =>
+                  setManualClasesAdelantadas(
+                    Math.max(0, Number(event.target.value || 0)),
+                  )
+                }
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700">
+                Nota de ajuste (opcional)
+              </label>
+              <Input
+                value={manualNotasPago}
+                onChange={(event) => setManualNotasPago(event.target.value)}
+                placeholder="Motivo del ajuste"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              className="bg-[#b92f2d] hover:bg-[#982725] text-white"
+              onClick={handleSaveManualPaymentStatus}
+              disabled={isSavingManualPaymentStatus}
+            >
+              {isSavingManualPaymentStatus ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Guardando estado...
+                </>
+              ) : (
+                "Guardar estado de pagos"
+              )}
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -79,6 +79,24 @@ type AttendanceSaveRequest struct {
 	Date             string              `json:"date"`
 	Rows             []AttendanceSaveRow `json:"rows"`
 	SaveTimestampISO *string             `json:"save_timestamp_iso"`
+	RegistradoPor    *string             `json:"registrado_por"`
+}
+
+type ProcessStudentPaymentRequest struct {
+	NumeroIdentificacion string  `json:"numero_identificacion"`
+	RegistradoPor        string  `json:"registrado_por"`
+	MetodoPago           string  `json:"metodo_pago"`
+	Modalidad            string  `json:"modalidad"`
+	Clases               int     `json:"clases"`
+	Notas                *string `json:"notas"`
+	IDCurso              *int    `json:"id_curso"`
+}
+
+type ManualStudentPaymentStatusUpdateRequest struct {
+	NumeroIdentificacion string  `json:"numero_identificacion"`
+	ClasesAdeudadas      int     `json:"clases_adeudadas"`
+	ClasesAdelantadas    int     `json:"clases_adelantadas"`
+	Notas                *string `json:"notas"`
 }
 
 type AttendanceDeleteRequest struct {
