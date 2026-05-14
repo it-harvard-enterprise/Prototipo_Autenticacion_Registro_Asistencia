@@ -46,6 +46,12 @@ const passwordSchema = z
 
 type PasswordFormValues = z.infer<typeof passwordSchema>;
 
+type AuthApiResponse = {
+  success: boolean;
+  data?: Record<string, unknown>;
+  error?: string;
+};
+
 export default function ResetPasswordPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -53,6 +59,8 @@ export default function ResetPasswordPage() {
   const [serverError, setServerError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [userMetadata, setUserMetadata] = useState<Record<string, unknown>>({});
 
   const form = useForm<PasswordFormValues>({
     resolver: zodResolver(passwordSchema),
@@ -69,15 +77,15 @@ export default function ResetPasswordPage() {
       try {
         const supabase = createClient();
         const {
-          data: { user },
-          error,
-        } = await supabase.auth.getUser();
+          data: { session },
+        } = await supabase.auth.getSession();
 
         if (cancelled) {
           return;
         }
 
-        if (error || !user) {
+        const currentAccessToken = session?.access_token?.trim() ?? "";
+        if (!currentAccessToken) {
           setServerError(
             "El enlace de recuperación es inválido o expiró. Solicite uno nuevo.",
           );
@@ -85,7 +93,32 @@ export default function ResetPasswordPage() {
           return;
         }
 
-        setUserEmail(user.email ?? null);
+        const response = await fetch("/api/auth/session-user", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ access_token: currentAccessToken }),
+        });
+
+        const payload = (await response
+          .json()
+          .catch(() => null)) as AuthApiResponse | null;
+        if (!response.ok || !payload?.success || !payload.data) {
+          setServerError(
+            payload?.error ??
+              "El enlace de recuperación es inválido o expiró. Solicite uno nuevo.",
+          );
+          setIsCheckingSession(false);
+          return;
+        }
+
+        setAccessToken(currentAccessToken);
+        setUserEmail(String(payload.data.email ?? "").trim() || null);
+        setUserMetadata(
+          (payload.data.user_metadata as Record<string, unknown> | undefined) ??
+            {},
+        );
         setIsCheckingSession(false);
       } catch (err) {
         if (cancelled) {
@@ -113,26 +146,48 @@ export default function ResetPasswordPage() {
     setServerError(null);
 
     try {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      const existingMetadata =
-        (user?.user_metadata as Record<string, unknown> | undefined) ?? {};
-      const { error } = await supabase.auth.updateUser({
-        password: values.password,
-        data: {
-          ...existingMetadata,
-          must_change_password: false,
-        },
-      });
-
-      if (error) {
-        setServerError(error.message || "No se pudo actualizar la contraseña");
+      const currentAccessToken = accessToken?.trim() ?? "";
+      if (!currentAccessToken) {
+        setServerError(
+          "No se pudo validar la sesión de recuperación. Solicite un nuevo enlace.",
+        );
         setIsLoading(false);
         return;
       }
+
+      const response = await fetch("/api/auth/update-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          access_token: currentAccessToken,
+          password: values.password,
+          data: {
+            ...userMetadata,
+            must_change_password: false,
+          },
+        }),
+      });
+
+      const payload = (await response
+        .json()
+        .catch(() => null)) as AuthApiResponse | null;
+      if (!response.ok || !payload?.success) {
+        setServerError(payload?.error || "No se pudo actualizar la contraseña");
+        setIsLoading(false);
+        return;
+      }
+
+      const supabase = createClient();
+      await fetch("/api/auth/sign-out", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ access_token: currentAccessToken }),
+      }).catch(() => undefined);
+      await supabase.auth.signOut().catch(() => undefined);
 
       setSuccessMessage("Contraseña actualizada correctamente.");
       setIsLoading(false);

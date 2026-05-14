@@ -1,18 +1,13 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { getCourses } from "@/app/actions/courses";
 import { Button } from "@/components/ui/button";
 import { DetailLookup } from "@/components/detail-lookup";
 import { CoursesTable } from "@/components/courses-table";
 import { Course } from "@/lib/types";
 
 export default async function CoursesPage() {
-  const supabase = await createClient();
-
-  const { data: courses, error } = await supabase
-    .from("cursos")
-    .select("*")
-    .order("nombre_curso", { ascending: true });
+  const result = await getCourses();
 
   return (
     <div className="space-y-6">
@@ -33,14 +28,14 @@ export default async function CoursesPage() {
 
       <DetailLookup type="course" />
 
-      {error ? (
+      {!result.success ? (
         <div className="rounded-md bg-red-50 border border-red-200 p-4">
           <p className="text-sm text-red-700">
-            Error al cargar los cursos: {error.message}
+            Error al cargar los cursos: {result.error}
           </p>
         </div>
       ) : (
-        <CoursesTable courses={(courses ?? []) as Course[]} />
+        <CoursesTable courses={(result.data ?? []) as Course[]} />
       )}
     </div>
   );

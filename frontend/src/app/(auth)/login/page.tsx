@@ -35,6 +35,22 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
+type AuthApiResponse = {
+  success: boolean;
+  data?: Record<string, unknown>;
+  error?: string;
+};
+
+function getFriendlyLoginError(message: string): string {
+  if (message === "Invalid login credentials") {
+    return "Correo electrónico o contraseña incorrectos";
+  }
+  if (message === "Email not confirmed") {
+    return "Correo electrónico no confirmado";
+  }
+  return message;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
@@ -52,32 +68,79 @@ export default function LoginPage() {
     setIsLoading(true);
     setServerError(null);
 
-    const supabase = createClient();
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: values.email,
-      password: values.password,
-    });
+    try {
+      const response = await fetch("/api/auth/sign-in", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: values.email,
+          password: values.password,
+        }),
+      });
 
-    if (error) {
+      const payload = (await response
+        .json()
+        .catch(() => null)) as AuthApiResponse | null;
+
+      if (!response.ok || !payload?.success || !payload.data) {
+        setServerError(
+          getFriendlyLoginError(
+            payload?.error ?? "No fue posible iniciar sesión",
+          ),
+        );
+        setIsLoading(false);
+        return;
+      }
+
+      const sessionCandidate =
+        (payload.data.session as Record<string, unknown> | undefined) ??
+        payload.data;
+
+      const accessToken = String(sessionCandidate.access_token ?? "").trim();
+      const refreshToken = String(sessionCandidate.refresh_token ?? "").trim();
+      if (!accessToken || !refreshToken) {
+        setServerError("No se recibió una sesión válida desde el backend");
+        setIsLoading(false);
+        return;
+      }
+
+      const supabase = createClient();
+      const { error: setSessionError } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+      if (setSessionError) {
+        setServerError(setSessionError.message);
+        setIsLoading(false);
+        return;
+      }
+
+      const user =
+        (sessionCandidate.user as Record<string, unknown> | undefined) ??
+        undefined;
+      const metadata =
+        (user?.user_metadata as Record<string, unknown> | undefined) ??
+        undefined;
+
+      if (metadata?.must_change_password === true) {
+        router.push("/reset-password?forced=1");
+        router.refresh();
+        return;
+      }
+
+      router.push("/dashboard");
+      router.refresh();
+    } catch (err) {
       setServerError(
-        error.message === "Invalid login credentials"
-          ? "Correo electrónico o contraseña incorrectos"
-          : error.message === "Email not confirmed"
-            ? "Correo electrónico no confirmado"
-            : error.message,
+        err instanceof Error
+          ? getFriendlyLoginError(err.message)
+          : "No fue posible iniciar sesión",
       );
       setIsLoading(false);
       return;
     }
-
-    if (data.user?.user_metadata?.must_change_password) {
-      router.push("/reset-password?forced=1");
-      router.refresh();
-      return;
-    }
-
-    router.push("/dashboard");
-    router.refresh();
   }
 
   return (

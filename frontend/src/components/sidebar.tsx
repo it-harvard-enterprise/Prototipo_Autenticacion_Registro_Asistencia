@@ -95,6 +95,21 @@ export function Sidebar({ userEmail, userName, onClose }: SidebarProps) {
 
   async function handleSignOut() {
     const supabase = createClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    const accessToken = session?.access_token?.trim();
+    if (accessToken) {
+      await fetch("/api/auth/sign-out", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ access_token: accessToken }),
+      }).catch(() => undefined);
+    }
+
     await supabase.auth.signOut();
     router.push("/login");
     router.refresh();

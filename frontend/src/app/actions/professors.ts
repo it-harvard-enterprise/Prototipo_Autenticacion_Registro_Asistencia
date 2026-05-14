@@ -1,15 +1,26 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
 import { ensureApprovedAdmin } from "@/lib/auth/approved-admin";
-import {
-  createManagedAuthUser,
-  deleteAuthUserById,
-} from "@/lib/supabase/admin";
+import { callBackend } from "@/lib/backend/server-api";
+import { Professor } from "@/lib/types";
 
 function upper(value: string): string {
   return value.trim().toUpperCase();
 }
+
+function toErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return "Error desconocido";
+}
+
+type BackendResponse<T> = {
+  success: boolean;
+  data?: T;
+  error?: string;
+  exists?: boolean;
+};
 
 export interface ProfessorFormData {
   tipo_identificacion: string;
@@ -27,100 +38,103 @@ export interface ProfessorFormData {
 
 export async function createProfessor(
   data: ProfessorFormData,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; data?: Professor }> {
   const approval = await ensureApprovedAdmin();
   if (!approval.ok) {
     return { success: false, error: approval.error };
   }
 
-  const supabase = await createClient();
+  try {
+    const payload = await callBackend<BackendResponse<Professor>>(
+      "/api/professors/create",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          tipo_identificacion: upper(data.tipo_identificacion),
+          numero_identificacion: upper(data.numero_identificacion),
+          nombres: upper(data.nombres),
+          apellidos: upper(data.apellidos),
+          telefono: upper(data.telefono),
+          direccion: upper(data.direccion),
+          barrio: upper(data.barrio),
+          nombre_contacto_emergencia: upper(data.nombre_contacto_emergencia),
+          telefono_contacto_emergencia: upper(
+            data.telefono_contacto_emergencia,
+          ),
+          eps: upper(data.eps),
+          email: data.email.trim().toLowerCase(),
+        }),
+      },
+    );
 
-  const numeroIdentificacion = upper(data.numero_identificacion);
-  const createdAuthUser = await createManagedAuthUser({
-    email: data.email,
-    password: numeroIdentificacion,
-    role: "profesor",
-    nombres: upper(data.nombres),
-    apellidos: upper(data.apellidos),
-    tipoIdentificacion: upper(data.tipo_identificacion),
-    numeroIdentificacion,
-    approvedByAdmin: true,
-  });
+    if (!payload.success) {
+      return { success: false, error: payload.error || "Error desconocido" };
+    }
 
-  if (!createdAuthUser.ok) {
-    return {
-      success: false,
-      error: createdAuthUser.alreadyRegistered
-        ? "El correo ya está registrado en autenticación."
-        : createdAuthUser.error,
-    };
+    return { success: true, data: payload.data };
+  } catch (err) {
+    return { success: false, error: toErrorMessage(err) };
   }
-
-  const { error } = await supabase.from("profesores").insert({
-    tipo_identificacion: upper(data.tipo_identificacion),
-    numero_identificacion: numeroIdentificacion,
-    nombres: upper(data.nombres),
-    apellidos: upper(data.apellidos),
-    telefono: upper(data.telefono),
-    direccion: upper(data.direccion),
-    barrio: upper(data.barrio),
-    nombre_contacto_emergencia: upper(data.nombre_contacto_emergencia),
-    telefono_contacto_emergencia: upper(data.telefono_contacto_emergencia),
-    eps: upper(data.eps),
-    email: data.email.trim().toLowerCase(),
-    auth_user_id: createdAuthUser.userId,
-  });
-
-  if (error) {
-    await deleteAuthUserById(createdAuthUser.userId);
-    return { success: false, error: error.message };
-  }
-
-  return { success: true };
 }
 
 export async function updateProfessor(
   numeroIdentificacion: string,
   data: Partial<ProfessorFormData>,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; data?: Professor }> {
   const approval = await ensureApprovedAdmin();
   if (!approval.ok) {
     return { success: false, error: approval.error };
   }
+  try {
+    const payload = await callBackend<BackendResponse<Professor>>(
+      "/api/professors/update",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          numero_identificacion: upper(numeroIdentificacion),
+          data: {
+            ...(data.tipo_identificacion !== undefined && {
+              tipo_identificacion: upper(data.tipo_identificacion),
+            }),
+            ...(data.numero_identificacion !== undefined && {
+              numero_identificacion: upper(data.numero_identificacion),
+            }),
+            ...(data.nombres !== undefined && { nombres: upper(data.nombres) }),
+            ...(data.apellidos !== undefined && {
+              apellidos: upper(data.apellidos),
+            }),
+            ...(data.telefono !== undefined && {
+              telefono: upper(data.telefono),
+            }),
+            ...(data.direccion !== undefined && {
+              direccion: upper(data.direccion),
+            }),
+            ...(data.barrio !== undefined && { barrio: upper(data.barrio) }),
+            ...(data.nombre_contacto_emergencia !== undefined && {
+              nombre_contacto_emergencia: upper(
+                data.nombre_contacto_emergencia,
+              ),
+            }),
+            ...(data.telefono_contacto_emergencia !== undefined && {
+              telefono_contacto_emergencia: upper(
+                data.telefono_contacto_emergencia,
+              ),
+            }),
+            ...(data.eps !== undefined && { eps: upper(data.eps) }),
+            ...(data.email !== undefined && { email: data.email.trim() }),
+          },
+        }),
+      },
+    );
 
-  const supabase = await createClient();
+    if (!payload.success) {
+      return { success: false, error: payload.error || "Error desconocido" };
+    }
 
-  const { error } = await supabase
-    .from("profesores")
-    .update({
-      ...(data.tipo_identificacion !== undefined && {
-        tipo_identificacion: upper(data.tipo_identificacion),
-      }),
-      ...(data.numero_identificacion !== undefined && {
-        numero_identificacion: upper(data.numero_identificacion),
-      }),
-      ...(data.nombres !== undefined && { nombres: upper(data.nombres) }),
-      ...(data.apellidos !== undefined && { apellidos: upper(data.apellidos) }),
-      ...(data.telefono !== undefined && { telefono: upper(data.telefono) }),
-      ...(data.direccion !== undefined && { direccion: upper(data.direccion) }),
-      ...(data.barrio !== undefined && { barrio: upper(data.barrio) }),
-      ...(data.nombre_contacto_emergencia !== undefined && {
-        nombre_contacto_emergencia: upper(data.nombre_contacto_emergencia),
-      }),
-      ...(data.telefono_contacto_emergencia !== undefined && {
-        telefono_contacto_emergencia: upper(data.telefono_contacto_emergencia),
-      }),
-      ...(data.eps !== undefined && { eps: upper(data.eps) }),
-      ...(data.email !== undefined && { email: data.email.trim() }),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("numero_identificacion", upper(numeroIdentificacion));
-
-  if (error) {
-    return { success: false, error: error.message };
+    return { success: true, data: payload.data };
+  } catch (err) {
+    return { success: false, error: toErrorMessage(err) };
   }
-
-  return { success: true };
 }
 
 export async function deleteProfessor(
@@ -130,17 +144,109 @@ export async function deleteProfessor(
   if (!approval.ok) {
     return { success: false, error: approval.error };
   }
+  try {
+    const payload = await callBackend<BackendResponse<null>>(
+      "/api/professors/delete",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          numero_identificacion: upper(numeroIdentificacion),
+        }),
+      },
+    );
 
-  const supabase = await createClient();
+    if (!payload.success) {
+      return { success: false, error: payload.error || "Error desconocido" };
+    }
 
-  const { error } = await supabase
-    .from("profesores")
-    .delete()
-    .eq("numero_identificacion", numeroIdentificacion);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: toErrorMessage(err) };
+  }
+}
 
-  if (error) {
-    return { success: false, error: error.message };
+export async function getProfessors(): Promise<{
+  success: boolean;
+  error?: string;
+  data?: Professor[];
+}> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
   }
 
-  return { success: true };
+  try {
+    const payload = await callBackend<BackendResponse<Professor[]>>(
+      "/api/professors",
+      {
+        method: "GET",
+      },
+    );
+
+    if (!payload.success) {
+      return { success: false, error: payload.error || "Error desconocido" };
+    }
+
+    return { success: true, data: payload.data ?? [] };
+  } catch (err) {
+    return { success: false, error: toErrorMessage(err) };
+  }
+}
+
+export async function getProfessorById(
+  numeroIdentificacion: string,
+): Promise<{ success: boolean; error?: string; data?: Professor }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
+  try {
+    const payload = await callBackend<BackendResponse<Professor>>(
+      `/api/professors/${encodeURIComponent(upper(numeroIdentificacion))}`,
+      {
+        method: "GET",
+      },
+    );
+
+    if (!payload.success || !payload.data) {
+      return {
+        success: false,
+        error: payload.error || "No se encontró el profesor",
+      };
+    }
+
+    return { success: true, data: payload.data };
+  } catch (err) {
+    return { success: false, error: toErrorMessage(err) };
+  }
+}
+
+export async function professorExists(
+  numeroIdentificacion: string,
+): Promise<{ success: boolean; error?: string; exists?: boolean }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
+  try {
+    const payload = await callBackend<BackendResponse<null>>(
+      "/api/professors/exists",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          numero_identificacion: upper(numeroIdentificacion),
+        }),
+      },
+    );
+
+    if (!payload.success) {
+      return { success: false, error: payload.error || "Error desconocido" };
+    }
+
+    return { success: true, exists: Boolean(payload.exists) };
+  } catch (err) {
+    return { success: false, error: toErrorMessage(err) };
+  }
 }

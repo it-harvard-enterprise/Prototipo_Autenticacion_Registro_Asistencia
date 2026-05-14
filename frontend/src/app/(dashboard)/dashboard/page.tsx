@@ -1,4 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
+import { callBackend } from "@/lib/backend/server-api";
+import { resolveCurrentUserAccess } from "@/lib/auth/resolved-access";
 import Link from "next/link";
 import Image from "next/image";
 import { Users, BookOpen, ClipboardList, FileSpreadsheet } from "lucide-react";
@@ -11,55 +12,59 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
+type DashboardSummary = {
+  studentsCount: number;
+  coursesCount: number;
+  attendedCount: number;
+  absentCount: number;
+};
+
+type DashboardSummaryResponse = {
+  success: boolean;
+  data?: DashboardSummary;
+  error?: string;
+};
+
 export default async function DashboardPage() {
-  const supabase = await createClient();
+  const access = await resolveCurrentUserAccess();
+  const metadata = (access.user?.user_metadata ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const fallbackName =
+    typeof metadata.first_name === "string"
+      ? `${metadata.first_name} ${typeof metadata.last_name === "string" ? metadata.last_name : ""}`.trim()
+      : undefined;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const displayName =
+    access.fullName?.trim() || fallbackName || access.user?.email || "";
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("nombre, apellido")
-    .eq("id", user?.id ?? "")
-    .single();
+  let summary: DashboardSummary = {
+    studentsCount: 0,
+    coursesCount: 0,
+    attendedCount: 0,
+    absentCount: 0,
+  };
 
-  const displayName = profile
-    ? `${profile.nombre} ${profile.apellido}`
-    : user?.user_metadata?.first_name
-      ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
-      : user?.email;
+  try {
+    const payload = await callBackend<DashboardSummaryResponse>(
+      "/api/dashboard/summary",
+      {
+        method: "GET",
+      },
+    );
 
-  const [
-    studentsCountResult,
-    coursesCountResult,
-    attendedCountResult,
-    absentCountResult,
-  ] = await Promise.all([
-    supabase.from("estudiantes").select("*", { count: "exact", head: true }),
-    supabase.from("cursos").select("*", { count: "exact", head: true }),
-    supabase
-      .from("registro_asistencia")
-      .select("*", { count: "exact", head: true })
-      .eq("asistio", true),
-    supabase
-      .from("registro_asistencia")
-      .select("*", { count: "exact", head: true })
-      .eq("asistio", false),
-  ]);
+    if (payload.success && payload.data) {
+      summary = payload.data;
+    }
+  } catch {
+    // Keep zeros if backend summary is unavailable.
+  }
 
-  const studentsCount = studentsCountResult.error
-    ? 0
-    : (studentsCountResult.count ?? 0);
-  const coursesCount = coursesCountResult.error
-    ? 0
-    : (coursesCountResult.count ?? 0);
-  const attendedCount = attendedCountResult.error
-    ? 0
-    : (attendedCountResult.count ?? 0);
-  const absentCount = absentCountResult.error
-    ? 0
-    : (absentCountResult.count ?? 0);
+  const studentsCount = summary.studentsCount;
+  const coursesCount = summary.coursesCount;
+  const attendedCount = summary.attendedCount;
+  const absentCount = summary.absentCount;
 
   return (
     <div className="space-y-6">

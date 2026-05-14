@@ -1,19 +1,11 @@
-import Link from "next/link";
-import { Plus } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
-import { Button } from "@/components/ui/button";
+import { getStudents } from "@/app/actions/students";
 import { NewStudentButton } from "@/components/new-student-button";
 import { DetailLookup } from "@/components/detail-lookup";
 import { StudentsTable } from "@/components/students-table";
 import { Student } from "@/lib/types";
 
 export default async function StudentsPage() {
-  const supabase = await createClient();
-
-  const { data: students, error } = await supabase
-    .from("estudiantes")
-    .select("*")
-    .order("apellidos", { ascending: true });
+  const result = await getStudents();
 
   return (
     <div className="space-y-6">
@@ -29,14 +21,14 @@ export default async function StudentsPage() {
 
       <DetailLookup type="student" />
 
-      {error ? (
+      {!result.success ? (
         <div className="rounded-md bg-red-50 border border-red-200 p-4">
           <p className="text-sm text-red-700">
-            Error al cargar los estudiantes: {error.message}
+            Error al cargar los estudiantes: {result.error}
           </p>
         </div>
       ) : (
-        <StudentsTable students={(students ?? []) as Student[]} />
+        <StudentsTable students={(result.data ?? []) as Student[]} />
       )}
     </div>
   );

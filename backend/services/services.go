@@ -30,6 +30,7 @@ const (
 type App struct {
 	SupabaseURL       string
 	ServiceKey        string
+	AnonKey           string
 	FrontendHealthURL string
 	Threshold         float64
 	HTTPClient        *http.Client
@@ -44,9 +45,12 @@ type supabaseError struct {
 }
 
 func NewApp(supabaseURL, serviceKey, frontendHealthURL string, threshold float64) *App {
+	trimmedServiceKey := strings.TrimSpace(serviceKey)
+
 	return &App{
 		SupabaseURL:       strings.TrimSuffix(strings.TrimSpace(supabaseURL), "/"),
-		ServiceKey:        strings.TrimSpace(serviceKey),
+		ServiceKey:        trimmedServiceKey,
+		AnonKey:           trimmedServiceKey,
 		FrontendHealthURL: strings.TrimSpace(frontendHealthURL),
 		Threshold:         threshold,
 		HTTPClient:        &http.Client{Timeout: 25 * time.Second},
