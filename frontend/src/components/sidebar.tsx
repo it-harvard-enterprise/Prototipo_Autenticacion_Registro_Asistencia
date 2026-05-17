@@ -14,6 +14,7 @@ import {
   FileSpreadsheet,
   LogOut,
   X,
+  Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,11 @@ const navItems: NavItem[] = [
     label: "Profesores",
     href: "/dashboard/professors",
     icon: Users,
+  },
+  {
+    label: "Administradores",
+    href: "/dashboard/admins",
+    icon: Shield,
   },
   {
     label: "Cursos",
@@ -201,10 +207,10 @@ export function Sidebar({ userEmail, userName, onClose }: SidebarProps) {
       </nav>
 
       {/* User section */}
-      <div className="px-4 pb-4 border-t border-[#6b1e1d] pt-4">
-        <div className="flex items-center gap-3 px-3 py-2 mb-2">
+      <div className="border-t border-[#6b1e1d] p-4 space-y-3">
+        <div className="flex items-center gap-3">
           <Avatar className="h-9 w-9">
-            <AvatarFallback className="bg-[#8a2826] text-white text-sm font-semibold">
+            <AvatarFallback className="bg-[#6b1e1d] text-white">
               {initials}
             </AvatarFallback>
           </Avatar>

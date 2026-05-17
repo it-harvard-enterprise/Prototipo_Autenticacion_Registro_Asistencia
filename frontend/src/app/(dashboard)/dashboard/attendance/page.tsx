@@ -679,17 +679,11 @@ export default function AttendancePage() {
                 </Button>
               </div>
 
-              {hasLoadedRoster && selectedCourseName && students.length > 0 && (
+              {hasLoadedRoster && selectedCourseName && (
                 <div className="rounded-md border border-[#b92f2d]/20 bg-[#b92f2d]/5 p-3 text-sm text-[#982725]">
                   Curso seleccionado:{" "}
                   <span className="font-semibold">{selectedCourseName}</span>
                 </div>
-              )}
-
-              {isAutoSaving && (
-                <p className="text-xs text-gray-500">
-                  Guardando progreso automaticamente...
-                </p>
               )}
 
               <Card className="border-dashed border-[#b92f2d]/30 bg-[#b92f2d]/5">
@@ -717,11 +711,11 @@ export default function AttendancePage() {
                         {deviceStatus}
                       </p>
                     </div>
-                    <div className="rounded-md border p-3 bg-white">
+                    <div className="rounded-md border p-3 bg-white h-[88px] flex flex-col">
                       <p className="text-[11px] uppercase tracking-wide text-gray-500">
                         Estado de captura
                       </p>
-                      <p className="text-sm mt-1 text-gray-700">
+                      <p className="text-sm mt-1 text-gray-700 flex-1 overflow-y-auto break-words leading-5 pr-1">
                         {captureStatus}
                       </p>
                     </div>
@@ -887,6 +881,12 @@ export default function AttendancePage() {
                   </TableBody>
                 </Table>
               </div>
+
+              {isAutoSaving && (
+                <p className="text-xs text-gray-500">
+                  Guardando progreso automaticamente...
+                </p>
+              )}
 
               <div className="flex flex-wrap items-center justify-between gap-3">
                 {hasLoadedRoster && (

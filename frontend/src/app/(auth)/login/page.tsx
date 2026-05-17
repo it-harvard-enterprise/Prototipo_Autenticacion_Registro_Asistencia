@@ -232,17 +232,6 @@ export default function LoginPage() {
           </form>
         </Form>
       </CardContent>
-      <CardFooter className="flex justify-center">
-        <p className="text-base text-gray-600">
-          ¿No tiene cuenta de administrador?{" "}
-          <Link
-            href="/register"
-            className="font-medium text-gray-900 hover:underline"
-          >
-            Registrarse
-          </Link>
-        </p>
-      </CardFooter>
     </Card>
   );
 }

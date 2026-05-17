@@ -890,11 +890,11 @@ export default function EditStudentPage() {
                       {deviceStatus}
                     </p>
                   </div>
-                  <div className="rounded-md border p-3 bg-white">
+                  <div className="rounded-md border p-3 bg-white h-[88px] flex flex-col">
                     <p className="text-[11px] uppercase tracking-wide text-gray-500">
                       Estado de captura
                     </p>
-                    <p className="text-sm mt-1 text-gray-700">
+                    <p className="text-sm mt-1 text-gray-700 flex-1 overflow-y-auto break-words leading-5 pr-1">
                       {captureStatus}
                     </p>
                   </div>
