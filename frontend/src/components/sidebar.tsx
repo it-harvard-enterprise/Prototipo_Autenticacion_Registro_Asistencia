@@ -145,11 +145,13 @@ export function Sidebar({ userEmail, userName, onClose }: SidebarProps) {
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-5 border-b border-[#6b1e1d]">
         <div>
-          <h2 className="text-lg font-bold text-white">SysAsistencia</h2>
-          <p className="text-xs text-[#d49392]">
+          <h2 className="text-lg font-bold text-white">
+            Aula Virtual - Harvard Enterprise
+          </h2>
+          {/* <p className="text-xs text-[#d49392]">
             Sistema de Creación de Estudiantes, Cursos y Registro de Asistencia
             de Harvard Enterprise.
-          </p>
+          </p> */}
         </div>
         {onClose && (
           <button

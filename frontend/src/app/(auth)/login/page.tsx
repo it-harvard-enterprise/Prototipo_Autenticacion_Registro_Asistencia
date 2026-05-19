@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -220,15 +219,6 @@ export default function LoginPage() {
                 "Iniciar sesión"
               )}
             </Button>
-
-            <div className="text-center">
-              <Link
-                href="/recover-password"
-                className="text-sm font-medium text-[#b92f2d] hover:text-[#982725] hover:underline"
-              >
-                ¿Olvidó su contraseña? Recupérela aquí.
-              </Link>
-            </div>
           </form>
         </Form>
       </CardContent>

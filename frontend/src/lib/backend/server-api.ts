@@ -23,8 +23,10 @@ export async function callBackend<T = unknown>(
 
   const backendAccessKey = process.env.BIOMETRIC_BACKEND_ACCESS_KEY?.trim();
   const headers = new Headers(init.headers ?? {});
+  const isFormDataBody =
+    typeof FormData !== "undefined" && init.body instanceof FormData;
 
-  if (!headers.has("Content-Type") && init.body != null) {
+  if (!headers.has("Content-Type") && init.body != null && !isFormDataBody) {
     headers.set("Content-Type", "application/json");
   }
 
@@ -51,4 +53,39 @@ export async function callBackend<T = unknown>(
   }
 
   return payload as T;
+}
+
+export async function callBackendRaw(
+  path: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const backendUrl = resolveBiometricBackendBaseUrl();
+  if (!backendUrl) {
+    throw new Error(
+      `Backend URL no configurado. ${biometricBackendConfigHint()}`,
+    );
+  }
+
+  const backendAccessKey = process.env.BIOMETRIC_BACKEND_ACCESS_KEY?.trim();
+  const headers = new Headers(init.headers ?? {});
+  const isFormDataBody =
+    typeof FormData !== "undefined" && init.body instanceof FormData;
+
+  if (!headers.has("Content-Type") && init.body != null && !isFormDataBody) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  if (!headers.has("X-Frontend-Origin")) {
+    headers.set("X-Frontend-Origin", resolveFrontendOrigin());
+  }
+
+  if (backendAccessKey && !headers.has("X-Backend-Access-Key")) {
+    headers.set("X-Backend-Access-Key", backendAccessKey);
+  }
+
+  return fetch(`${backendUrl}${path}`, {
+    ...init,
+    headers,
+    cache: "no-store",
+  });
 }

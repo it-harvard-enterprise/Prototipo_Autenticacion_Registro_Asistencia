@@ -9,7 +9,6 @@ interface MaterialsNavProps {
 const tabs = [
   { key: "home", label: "Pagina de Inicio del Curso", path: "" },
   { key: "content", label: "Contenido", path: "/content" },
-  { key: "grades", label: "Calificaciones", path: "/grades" },
   { key: "students", label: "Listado de Alumnos", path: "/students" },
 ] as const;
 

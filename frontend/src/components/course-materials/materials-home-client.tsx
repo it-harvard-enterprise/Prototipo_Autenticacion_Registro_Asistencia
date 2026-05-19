@@ -1,53 +1,110 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ImagePlus, Send } from "lucide-react";
+import { ExternalLink, ImagePlus, Loader2, Paperclip } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { CourseFolder, CoursePost } from "@/lib/course-materials/mock-data";
-import { FolderCard } from "@/components/course-materials/folder-card";
 
 interface MaterialsHomeClientProps {
+  courseId: number;
   courseName: string;
   canManage: boolean;
-  initialPosts: CoursePost[];
-  folders: CourseFolder[];
+  initialCoverImageUrl: string | null;
+  folders: Array<{
+    id: number;
+    parentFolderId: number | null;
+    name: string;
+    filesCount: number;
+    cardImageUrl: string | null;
+  }>;
+  files: Array<{
+    id: number;
+    folderId: number;
+    fileName: string;
+    contentType: string | null;
+    fileSize: number;
+    createdAt: string;
+    downloadUrl: string | null;
+    youtubeUrl: string | null;
+  }>;
 }
 
 export function MaterialsHomeClient({
+  courseId,
   courseName,
   canManage,
-  initialPosts,
+  initialCoverImageUrl,
   folders,
+  files,
 }: MaterialsHomeClientProps) {
-  const [coverPreview, setCoverPreview] = useState<string | null>(null);
-  const [postText, setPostText] = useState("");
-  const [posts, setPosts] = useState<CoursePost[]>(initialPosts);
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(
+    initialCoverImageUrl,
+  );
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
 
   const now = useMemo(() => new Date(), []);
+  const recentFiles = files.slice(0, 6);
+  const totalFiles = files.length;
+  const parentFolders = useMemo(
+    () => folders.filter((folder) => folder.parentFolderId === null),
+    [folders],
+  );
+  const folderNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const folder of folders) {
+      map.set(folder.id, folder.name);
+    }
+    return map;
+  }, [folders]);
 
-  const handleCoverUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  async function handleCoverUpload(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
-    if (!file) return;
-    const previewUrl = URL.createObjectURL(file);
-    setCoverPreview(previewUrl);
-  };
+    if (!file) {
+      return;
+    }
 
-  const publishPost = () => {
-    const message = postText.trim();
-    if (!message) return;
+    setIsUploadingCover(true);
 
-    const newPost: CoursePost = {
-      id: `local-post-${Date.now()}`,
-      author: "Usuario actual",
-      role: canManage ? "profesor" : "estudiante",
-      message,
-      publishedAt: new Date().toISOString(),
-    };
+    try {
+      const formData = new FormData();
+      formData.set("id_curso", String(courseId));
+      formData.set("image", file);
 
-    setPosts((prev) => [newPost, ...prev]);
-    setPostText("");
-  };
+      const response = await fetch("/api/course-materials/cover", {
+        method: "POST",
+        body: formData,
+      });
+
+      const payload = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        error?: string;
+        data?: { cover_url?: string };
+      } | null;
+
+      if (!response.ok || !payload?.success || !payload.data?.cover_url) {
+        toast.error(payload?.error ?? "No se pudo actualizar la portada");
+        setIsUploadingCover(false);
+        event.currentTarget.value = "";
+        return;
+      }
+
+      setCoverImageUrl(payload.data.cover_url);
+      toast.success("Portada actualizada correctamente.");
+      setIsUploadingCover(false);
+      event.currentTarget.value = "";
+    } catch {
+      toast.error("No se pudo actualizar la portada");
+      setIsUploadingCover(false);
+      event.currentTarget.value = "";
+    }
+  }
+
+  function formatBytes(value: number): string {
+    if (value < 1024) return `${value} B`;
+    if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+    return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  }
 
   return (
     <div className="space-y-6">
@@ -55,9 +112,9 @@ export function MaterialsHomeClient({
         <div
           className="relative h-56 bg-gradient-to-r from-cyan-700 via-blue-700 to-indigo-700"
           style={
-            coverPreview
+            coverImageUrl
               ? {
-                  backgroundImage: `url(${coverPreview})`,
+                  backgroundImage: `url(${coverImageUrl})`,
                   backgroundSize: "cover",
                   backgroundPosition: "center",
                 }
@@ -69,13 +126,20 @@ export function MaterialsHomeClient({
           {canManage ? (
             <div className="absolute right-4 top-4 z-10">
               <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-white/90 px-3 py-2 text-xs font-medium text-gray-900 hover:bg-white">
-                <ImagePlus className="h-4 w-4" />
-                Subir imagen de fondo
+                {isUploadingCover ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ImagePlus className="h-4 w-4" />
+                )}
+                {isUploadingCover
+                  ? "Subiendo portada..."
+                  : "Subir imagen de fondo"}
                 <input
                   type="file"
                   accept="image/*"
                   className="hidden"
                   onChange={handleCoverUpload}
+                  disabled={isUploadingCover}
                 />
               </label>
             </div>
@@ -89,94 +153,166 @@ export function MaterialsHomeClient({
         </div>
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+      <section className="grid gap-4 sm:grid-cols-3">
         <article className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">
-            Ultimas Publicaciones
+          <h2 className="text-sm uppercase tracking-wide text-gray-500">
+            Carpetas
           </h2>
-          <p className="mt-1 text-sm text-gray-600">
-            Avisos, recordatorios y novedades del curso.
+          <p className="mt-2 text-3xl font-semibold text-gray-900">
+            {folders.length}
           </p>
+        </article>
+        <article className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+          <h2 className="text-sm uppercase tracking-wide text-gray-500">
+            Archivos
+          </h2>
+          <p className="mt-2 text-3xl font-semibold text-gray-900">
+            {totalFiles}
+          </p>
+        </article>
+        <article className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+          <h2 className="text-sm uppercase tracking-wide text-gray-500">
+            Fecha actual
+          </h2>
+          <p className="mt-2 text-lg font-semibold text-gray-900">
+            {now.toLocaleDateString("es-CO", {
+              day: "2-digit",
+              month: "long",
+              year: "numeric",
+            })}
+          </p>
+        </article>
+      </section>
 
-          {canManage ? (
-            <div className="mt-4 space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-3">
-              <Textarea
-                value={postText}
-                onChange={(event) => setPostText(event.target.value)}
-                placeholder="Escriba una publicacion para el curso..."
-                className="min-h-24 bg-white"
-              />
-              <div className="flex justify-end">
-                <Button onClick={publishPost} disabled={!postText.trim()}>
-                  <Send className="mr-2 h-4 w-4" />
-                  Publicar
-                </Button>
-              </div>
-            </div>
+      <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">
+              Archivos recientes
+            </h2>
+            <p className="mt-1 text-sm text-gray-600">
+              Materiales subidos recientemente para este curso.
+            </p>
+          </div>
+          <Button asChild variant="outline">
+            <Link href={`/dashboard/courses/${courseId}/materials/content`}>
+              Ir al gestor de contenido
+            </Link>
+          </Button>
+        </div>
+
+        <div className="mt-4 space-y-2">
+          {recentFiles.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
+              Aún no hay archivos cargados para este curso.
+            </p>
           ) : (
-            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-              Solo administradores y profesores pueden publicar en esta seccion.
-            </div>
-          )}
-
-          <div className="mt-4 space-y-3">
-            {posts.map((post) => (
+            recentFiles.map((file) => (
               <div
-                key={post.id}
-                className="rounded-xl border border-gray-200 p-3"
+                key={file.id}
+                className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-3"
               >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium text-gray-900">
-                    {post.author}
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-gray-900">
+                    {file.fileName}
                   </p>
                   <p className="text-xs text-gray-500">
-                    {new Date(post.publishedAt).toLocaleDateString("es-CO", {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric",
-                    })}
+                    {file.contentType === "video/youtube"
+                      ? "Video de YouTube"
+                      : formatBytes(file.fileSize)}{" "}
+                    · {new Date(file.createdAt).toLocaleDateString("es-CO")}
                   </p>
                 </div>
-                <p className="mt-2 text-sm text-gray-700">{post.message}</p>
+                {file.youtubeUrl ? (
+                  <a
+                    href={file.youtubeUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Ver video
+                  </a>
+                ) : null}
+                {file.downloadUrl ? (
+                  <a
+                    href={file.downloadUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    <Paperclip className="h-3.5 w-3.5" />
+                    Abrir
+                  </a>
+                ) : !file.youtubeUrl ? (
+                  <span className="text-xs text-gray-400">Sin URL</span>
+                ) : null}
               </div>
-            ))}
-          </div>
-        </article>
-
-        <article className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">Calendario</h2>
-          <p className="mt-1 text-sm text-gray-600">Fecha actual del sistema</p>
-
-          <div className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-center">
-            <p className="text-sm uppercase tracking-wide text-blue-700">
-              {now.toLocaleDateString("es-CO", { weekday: "long" })}
-            </p>
-            <p className="mt-1 text-4xl font-bold text-blue-900">
-              {now.getDate()}
-            </p>
-            <p className="text-sm text-blue-700">
-              {now.toLocaleDateString("es-CO", {
-                month: "long",
-                year: "numeric",
-              })}
-            </p>
-          </div>
-        </article>
+            ))
+          )}
+        </div>
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold text-gray-900">
-          Materiales del Curso
-        </h2>
+        <h2 className="text-lg font-semibold text-gray-900">Carpetas</h2>
         <p className="text-sm text-gray-600">
-          Vista rapida de carpetas de contenido y progreso por estudiante.
+          Organización de carpetas principales para {courseName}.
         </p>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {folders.map((folder) => (
-            <FolderCard key={folder.id} folder={folder} />
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {parentFolders.map((folder) => (
+            <article
+              key={folder.id}
+              className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+            >
+              <Link
+                href={`/dashboard/courses/${courseId}/materials/folders/${folder.id}`}
+              >
+                <div className="mb-3 h-24 overflow-hidden rounded-lg border border-gray-200 bg-gradient-to-br from-slate-100 via-slate-50 to-white">
+                  {folder.cardImageUrl ? (
+                    <img
+                      src={folder.cardImageUrl}
+                      alt={`Imagen de la carpeta ${folder.name}`}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-xs text-gray-400">
+                      Sin imagen
+                    </div>
+                  )}
+                </div>
+              </Link>
+              <p className="text-sm font-medium text-gray-900">
+                <Link
+                  href={`/dashboard/courses/${courseId}/materials/folders/${folder.id}`}
+                  className="hover:text-cyan-700"
+                >
+                  {folder.name}
+                </Link>
+              </p>
+              {folder.parentFolderId ? (
+                <p className="mt-1 text-xs text-cyan-700">
+                  Subcarpeta de{" "}
+                  {folderNameById.get(folder.parentFolderId) ?? "-"}
+                </p>
+              ) : null}
+              <p className="mt-1 text-xs text-gray-600">
+                {folder.filesCount} archivo(s)
+              </p>
+            </article>
           ))}
+          {parentFolders.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600 sm:col-span-2 xl:col-span-3">
+              No hay carpetas padre creadas todavía.
+            </p>
+          ) : null}
         </div>
       </section>
+
+      {!canManage ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          Solo administradores y profesores pueden cargar o eliminar materiales.
+        </div>
+      ) : null}
     </div>
   );
 }

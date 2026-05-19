@@ -1,5 +1,5 @@
 import { MaterialsNav } from "@/components/course-materials/materials-nav";
-import { getCourseMaterialsDataset } from "@/lib/course-materials/mock-data";
+import { getCourseMaterialsMembers } from "@/app/actions/course-materials";
 import { getCourseMaterialsPageContext } from "@/lib/course-materials/page-context";
 
 interface CourseMaterialsStudentsPageProps {
@@ -11,7 +11,8 @@ export default async function CourseMaterialsStudentsPage({
 }: CourseMaterialsStudentsPageProps) {
   const { id } = await params;
   const { course } = await getCourseMaterialsPageContext(id);
-  const dataset = getCourseMaterialsDataset(course.nombre_curso);
+  const membersResult = await getCourseMaterialsMembers(course.id_curso);
+  const members = membersResult.success ? (membersResult.data ?? []) : [];
 
   return (
     <div className="space-y-6">
@@ -23,6 +24,14 @@ export default async function CourseMaterialsStudentsPage({
       </div>
 
       <MaterialsNav courseId={course.id_curso} active="students" />
+
+      {!membersResult.success ? (
+        <div className="rounded-md border border-red-200 bg-red-50 p-3">
+          <p className="text-sm text-red-700">
+            No fue posible cargar el listado: {membersResult.error}
+          </p>
+        </div>
+      ) : null}
 
       <section className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
         <table className="min-w-full text-sm">
@@ -38,7 +47,7 @@ export default async function CourseMaterialsStudentsPage({
             </tr>
           </thead>
           <tbody>
-            {dataset.members.map((member) => (
+            {members.map((member) => (
               <tr key={member.id} className="border-t border-gray-100">
                 <td className="px-3 py-3 capitalize text-gray-700">
                   {member.role}
@@ -49,6 +58,13 @@ export default async function CourseMaterialsStudentsPage({
                 <td className="px-3 py-3 text-gray-700">{member.email}</td>
               </tr>
             ))}
+            {members.length === 0 ? (
+              <tr className="border-t border-gray-100">
+                <td colSpan={5} className="px-3 py-6 text-center text-gray-500">
+                  No hay alumnos o profesor asociados a este curso.
+                </td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </section>

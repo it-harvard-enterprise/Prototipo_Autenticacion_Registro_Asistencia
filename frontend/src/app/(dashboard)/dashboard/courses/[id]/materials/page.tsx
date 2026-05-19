@@ -3,8 +3,8 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MaterialsNav } from "@/components/course-materials/materials-nav";
 import { MaterialsHomeClient } from "@/components/course-materials/materials-home-client";
-import { getCourseMaterialsDataset } from "@/lib/course-materials/mock-data";
 import { getCourseMaterialsPageContext } from "@/lib/course-materials/page-context";
+import { getCourseMaterialsSnapshot } from "@/app/actions/course-materials";
 
 interface CourseMaterialsHomePageProps {
   params: Promise<{ id: string }>;
@@ -15,7 +15,15 @@ export default async function CourseMaterialsHomePage({
 }: CourseMaterialsHomePageProps) {
   const { id } = await params;
   const { course, canManage } = await getCourseMaterialsPageContext(id);
-  const dataset = getCourseMaterialsDataset(course.nombre_curso);
+  const snapshotResult = await getCourseMaterialsSnapshot(course.id_curso);
+
+  const snapshot = snapshotResult.success
+    ? snapshotResult.data
+    : {
+        coverImageUrl: null,
+        folders: [],
+        files: [],
+      };
 
   return (
     <div className="space-y-6">
@@ -35,11 +43,21 @@ export default async function CourseMaterialsHomePage({
 
       <MaterialsNav courseId={course.id_curso} active="home" />
 
+      {!snapshotResult.success ? (
+        <div className="rounded-md border border-red-200 bg-red-50 p-3">
+          <p className="text-sm text-red-700">
+            No fue posible cargar los materiales: {snapshotResult.error}
+          </p>
+        </div>
+      ) : null}
+
       <MaterialsHomeClient
+        courseId={course.id_curso}
         courseName={course.nombre_curso}
         canManage={canManage}
-        initialPosts={dataset.posts}
-        folders={dataset.folders}
+        initialCoverImageUrl={snapshot.coverImageUrl}
+        folders={snapshot.folders}
+        files={snapshot.files}
       />
     </div>
   );

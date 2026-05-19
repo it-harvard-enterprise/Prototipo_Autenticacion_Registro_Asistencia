@@ -146,6 +146,31 @@ type AuthUpdatePasswordRequest struct {
 	Data        map[string]any `json:"data"`
 }
 
+type CourseMaterialsSnapshotRequest struct {
+	IDCurso int    `json:"id_curso"`
+	UserID  string `json:"user_id"`
+}
+
+type CourseMaterialCreateFolderRequest struct {
+	IDCurso        int    `json:"id_curso"`
+	ParentFolderID *int   `json:"parent_folder_id"`
+	Name           string `json:"name"`
+	UserID         string `json:"user_id"`
+}
+
+type CourseMaterialDeleteFileRequest struct {
+	ID     int    `json:"id"`
+	UserID string `json:"user_id"`
+}
+
+type CourseMaterialCreateYouTubeLinkRequest struct {
+	IDCurso  int    `json:"id_curso"`
+	FolderID int    `json:"folder_id"`
+	URL      string `json:"url"`
+	Title    string `json:"title"`
+	UserID   string `json:"user_id"`
+}
+
 type ManagedAuthUserParams struct {
 	Email                string
 	Password             string

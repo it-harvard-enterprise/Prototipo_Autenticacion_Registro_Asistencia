@@ -1989,7 +1989,7 @@ func (a *App) GetParticipantsByCourseID(ctx context.Context, idCurso int) ([]map
 	}
 
 	studentsQuery := url.Values{}
-	studentsQuery.Set("select", "numero_identificacion,estudiantes(numero_identificacion,nombres,apellidos,no_matricula,grado,tipo_identificacion)")
+	studentsQuery.Set("select", "numero_identificacion,estudiantes(numero_identificacion,nombres,apellidos,no_matricula,grado,tipo_identificacion,telefono,email)")
 	studentsQuery.Set("id_curso", fmt.Sprintf("eq.%d", idCurso))
 
 	studentsBody, status, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/cursos_x_estudiantes", studentsQuery, nil, false)
@@ -1998,7 +1998,7 @@ func (a *App) GetParticipantsByCourseID(ctx context.Context, idCurso int) ([]map
 	}
 
 	professorsQuery := url.Values{}
-	professorsQuery.Set("select", "numero_identificacion,profesores(numero_identificacion,nombres,apellidos,tipo_identificacion,email)")
+	professorsQuery.Set("select", "numero_identificacion,profesores(numero_identificacion,nombres,apellidos,tipo_identificacion,email,telefono)")
 	professorsQuery.Set("id_curso", fmt.Sprintf("eq.%d", idCurso))
 
 	professorsBody, status, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/cursos_x_profesores", professorsQuery, nil, false)
@@ -2037,6 +2037,8 @@ func (a *App) GetParticipantsByCourseID(ctx context.Context, idCurso int) ([]map
 		noMatricula, _ := asString(embedded["no_matricula"])
 		grado, _ := asString(embedded["grado"])
 		tipoIdentificacion, _ := asString(embedded["tipo_identificacion"])
+		telefono, _ := asString(embedded["telefono"])
+		email, _ := asString(embedded["email"])
 
 		combined = append(combined, map[string]any{
 			"numero_identificacion": numero,
@@ -2044,7 +2046,8 @@ func (a *App) GetParticipantsByCourseID(ctx context.Context, idCurso int) ([]map
 			"tipo_identificacion":   nullableString(tipoIdentificacion),
 			"no_matricula":          nullableString(noMatricula),
 			"grado":                 nullableString(grado),
-			"email":                 nil,
+			"telefono":              nullableString(telefono),
+			"email":                 nullableString(email),
 			"nombres":               nombres,
 			"apellidos":             apellidos,
 		})
@@ -2068,6 +2071,7 @@ func (a *App) GetParticipantsByCourseID(ctx context.Context, idCurso int) ([]map
 		nombres, _ := asString(embedded["nombres"])
 		apellidos, _ := asString(embedded["apellidos"])
 		email, _ := asString(embedded["email"])
+		telefono, _ := asString(embedded["telefono"])
 		tipoIdentificacion, _ := asString(embedded["tipo_identificacion"])
 
 		combined = append(combined, map[string]any{
@@ -2076,6 +2080,7 @@ func (a *App) GetParticipantsByCourseID(ctx context.Context, idCurso int) ([]map
 			"tipo_identificacion":   nullableString(tipoIdentificacion),
 			"no_matricula":          nil,
 			"grado":                 nil,
+			"telefono":              nullableString(telefono),
 			"email":                 nullableString(email),
 			"nombres":               nombres,
 			"apellidos":             apellidos,
