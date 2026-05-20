@@ -10,6 +10,7 @@ interface MaterialsHomeClientProps {
   courseId: number;
   courseName: string;
   canManage: boolean;
+  currentRole: string | null;
   initialCoverImageUrl: string | null;
   folders: Array<{
     id: number;
@@ -34,6 +35,7 @@ export function MaterialsHomeClient({
   courseId,
   courseName,
   canManage,
+  currentRole,
   initialCoverImageUrl,
   folders,
   files,
@@ -308,7 +310,7 @@ export function MaterialsHomeClient({
         </div>
       </section>
 
-      {!canManage ? (
+      {!canManage && currentRole !== "estudiante" ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
           Solo administradores y profesores pueden cargar o eliminar materiales.
         </div>

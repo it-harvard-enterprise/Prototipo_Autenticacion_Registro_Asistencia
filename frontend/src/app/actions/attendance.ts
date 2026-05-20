@@ -1,6 +1,6 @@
 "use server";
 
-import { ensureApprovedAdmin } from "@/lib/auth/approved-admin";
+import { ensureApprovedRoles } from "@/lib/auth/approved-admin";
 import { resolveCurrentUserAccess } from "@/lib/auth/resolved-access";
 import { callBackend } from "@/lib/backend/server-api";
 
@@ -96,7 +96,7 @@ export async function identifyStudentByFingerprintForAttendance(params: {
   idCurso: number;
   fingerprintTemplate: string;
 }): Promise<FingerprintAttendanceMatch> {
-  const approval = await ensureApprovedAdmin();
+  const approval = await ensureApprovedRoles(["administrador", "profesor"]);
   if (!approval.ok) {
     return {
       success: false,
@@ -158,7 +158,7 @@ export async function getCourseOptions(): Promise<{
   error?: string;
   data?: CourseOption[];
 }> {
-  const approval = await ensureApprovedAdmin();
+  const approval = await ensureApprovedRoles(["administrador", "profesor"]);
   if (!approval.ok) {
     return { success: false, error: approval.error };
   }
@@ -189,7 +189,7 @@ export async function getAttendanceRosterByCourseAndDate(
   error?: string;
   data?: AttendanceStudentRow[];
 }> {
-  const approval = await ensureApprovedAdmin();
+  const approval = await ensureApprovedRoles(["administrador", "profesor"]);
   if (!approval.ok) {
     return { success: false, error: approval.error };
   }
@@ -223,7 +223,7 @@ export async function saveAttendanceForCourseAndDate(params: {
   rows: AttendanceSaveRow[];
   saveTimestampIso?: string;
 }): Promise<{ success: boolean; error?: string; savedCount?: number }> {
-  const approval = await ensureApprovedAdmin();
+  const approval = await ensureApprovedRoles(["administrador", "profesor"]);
   if (!approval.ok) {
     return { success: false, error: approval.error };
   }
@@ -266,7 +266,7 @@ export async function deleteAttendanceForCourseAndDate(params: {
   idCurso: number;
   date: string;
 }): Promise<{ success: boolean; error?: string; deletedCount?: number }> {
-  const approval = await ensureApprovedAdmin();
+  const approval = await ensureApprovedRoles(["administrador", "profesor"]);
   if (!approval.ok) {
     return { success: false, error: approval.error };
   }
@@ -302,7 +302,7 @@ export async function getAttendanceExportByCourseAndDate(
   error?: string;
   data?: AttendanceExportRow[];
 }> {
-  const approval = await ensureApprovedAdmin();
+  const approval = await ensureApprovedRoles(["administrador", "profesor"]);
   if (!approval.ok) {
     return { success: false, error: approval.error };
   }

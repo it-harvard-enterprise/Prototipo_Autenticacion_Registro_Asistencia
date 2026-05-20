@@ -1,5 +1,9 @@
 import { callBackend } from "@/lib/backend/server-api";
 import { resolveCurrentUserAccess } from "@/lib/auth/resolved-access";
+import {
+  getCurrentUserCoursesOverview,
+  getCurrentUserProfileOverview,
+} from "@/app/actions/self-service";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -9,6 +13,9 @@ import {
   FileSpreadsheet,
   HandCoins,
   BarChart3,
+  UserRound,
+  CreditCard,
+  Fingerprint,
 } from "lucide-react";
 import {
   Card,
@@ -32,6 +39,14 @@ type DashboardSummaryResponse = {
   error?: string;
 };
 
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
 export default async function DashboardPage() {
   const access = await resolveCurrentUserAccess();
   const metadata = (access.user?.user_metadata ?? {}) as Record<
@@ -45,6 +60,282 @@ export default async function DashboardPage() {
 
   const displayName =
     access.fullName?.trim() || fallbackName || access.user?.email || "";
+
+  if (access.role === "estudiante") {
+    const overview = await getCurrentUserProfileOverview();
+    const student = overview.success ? overview.data?.student : undefined;
+    const attendance = overview.success
+      ? overview.data?.attendance
+      : { attendedCount: 0, absentCount: 0, totalCount: 0 };
+    const coursesCount = overview.success
+      ? (overview.data?.courses.length ?? 0)
+      : 0;
+
+    const clasesAdeudadas = Number(student?.clases_adeudadas ?? 0);
+    const valorApoyoSemanal = Number(student?.valor_apoyo_semanal ?? 0);
+    const deudaTotal = clasesAdeudadas * valorApoyoSemanal;
+
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Bienvenido, {displayName}
+          </h1>
+          <p className="text-gray-500 mt-1">
+            Desde aquí puede consultar su perfil, revisar sus cursos y validar
+            su estado de pagos.
+          </p>
+        </div>
+
+        {!overview.success ? (
+          <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            No fue posible cargar toda la información del estudiante:{" "}
+            {overview.error}
+          </div>
+        ) : null}
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Mi Perfil
+              </CardTitle>
+              <div className="p-2 rounded-lg bg-[#b92f2d]/10">
+                <UserRound className="h-4 w-4 text-[#b92f2d]" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <CardDescription className="mb-3">
+                Consulte todos sus datos registrados.
+              </CardDescription>
+              <Button
+                asChild
+                className="bg-[#b92f2d] hover:bg-[#982725] text-white"
+              >
+                <Link href="/dashboard/my-profile">Ir a Mi Perfil</Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Mis Cursos
+              </CardTitle>
+              <div className="p-2 rounded-lg bg-emerald-50">
+                <BookOpen className="h-4 w-4 text-emerald-600" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-gray-900">
+                {coursesCount}
+              </div>
+              <CardDescription className="mb-3">
+                Cursos actualmente inscritos
+              </CardDescription>
+              <Button
+                asChild
+                className="bg-[#b92f2d] hover:bg-[#982725] text-white"
+              >
+                <Link href="/dashboard/my-courses">Ir a Mis Cursos</Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Asistencia
+              </CardTitle>
+              <div className="p-2 rounded-lg bg-amber-50">
+                <ClipboardList className="h-4 w-4 text-amber-600" />
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-1">
+              <div className="text-sm text-gray-600">Ha asistido</div>
+              <div className="text-2xl font-bold text-gray-900">
+                {attendance?.attendedCount ?? 0}
+              </div>
+              <div className="text-sm text-gray-600">No ha asistido</div>
+              <div className="text-2xl font-bold text-gray-900">
+                {attendance?.absentCount ?? 0}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Mis Pagos
+              </CardTitle>
+              <div className="p-2 rounded-lg bg-sky-50">
+                <CreditCard className="h-4 w-4 text-sky-700" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-sm text-gray-600">Deuda actual estimada</div>
+              <div className="text-2xl font-bold text-gray-900">
+                {formatCurrency(deudaTotal)}
+              </div>
+              <CardDescription className="mb-3">
+                Clases adeudadas: {clasesAdeudadas}
+              </CardDescription>
+              <Button
+                asChild
+                className="bg-[#b92f2d] hover:bg-[#982725] text-white"
+              >
+                <Link href="/dashboard/my-payments">Ir a Mis Pagos</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  if (access.role === "profesor") {
+    const coursesOverview = await getCurrentUserCoursesOverview();
+    const coursesCount = coursesOverview.success
+      ? (coursesOverview.data?.courses.length ?? 0)
+      : 0;
+
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Bienvenido, Profesor {displayName}
+          </h1>
+          <p className="text-gray-500 mt-1">
+            Panel de funciones habilitadas para docentes: perfil, cursos,
+            identificación y asistencia.
+          </p>
+        </div>
+
+        {!coursesOverview.success ? (
+          <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            No fue posible cargar su resumen de cursos: {coursesOverview.error}
+          </div>
+        ) : null}
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Mi Perfil
+              </CardTitle>
+              <div className="p-2 rounded-lg bg-[#b92f2d]/10">
+                <UserRound className="h-4 w-4 text-[#b92f2d]" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <CardDescription className="mb-3">
+                Visualice su información registrada.
+              </CardDescription>
+              <Button
+                asChild
+                className="bg-[#b92f2d] hover:bg-[#982725] text-white"
+              >
+                <Link href="/dashboard/my-profile">Ir a Mi Perfil</Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Mis Cursos
+              </CardTitle>
+              <div className="p-2 rounded-lg bg-emerald-50">
+                <BookOpen className="h-4 w-4 text-emerald-600" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-gray-900">
+                {coursesCount}
+              </div>
+              <CardDescription className="mb-3">
+                Cursos asignados al docente
+              </CardDescription>
+              <Button
+                asChild
+                className="bg-[#b92f2d] hover:bg-[#982725] text-white"
+              >
+                <Link href="/dashboard/my-courses">Ir a Mis Cursos</Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Identificar Persona
+              </CardTitle>
+              <div className="p-2 rounded-lg bg-amber-50">
+                <Fingerprint className="h-4 w-4 text-amber-600" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <CardDescription className="mb-3">
+                Busque por huella o identificación.
+              </CardDescription>
+              <Button
+                asChild
+                className="bg-[#b92f2d] hover:bg-[#982725] text-white"
+              >
+                <Link href="/dashboard/person-identification">
+                  Ir a Identificar
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Tomar Asistencia
+              </CardTitle>
+              <div className="p-2 rounded-lg bg-rose-50">
+                <ClipboardList className="h-4 w-4 text-rose-700" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <CardDescription className="mb-3">
+                Registre asistencia por curso y fecha.
+              </CardDescription>
+              <Button
+                asChild
+                className="bg-[#b92f2d] hover:bg-[#982725] text-white"
+              >
+                <Link href="/dashboard/attendance">Ir a Asistencia</Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Exportar Asistencia
+              </CardTitle>
+              <div className="p-2 rounded-lg bg-sky-50">
+                <FileSpreadsheet className="h-4 w-4 text-sky-700" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <CardDescription className="mb-3">
+                Descargue reportes en formato Excel.
+              </CardDescription>
+              <Button
+                asChild
+                className="bg-[#b92f2d] hover:bg-[#982725] text-white"
+              >
+                <Link href="/dashboard/export">Ir a Exportar</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   let summary: DashboardSummary = {
     studentsCount: 0,

@@ -209,7 +209,7 @@ func CreateStudentHandler(app *services.App) gin.HandlerFunc {
 			"success":                  true,
 			"data":                     created,
 			"auth_user_id":             userID,
-			"requires_password_change": true,
+			"requires_password_change": false,
 		})
 	}
 }
@@ -283,9 +283,9 @@ func DeleteStudentHandler(app *services.App) gin.HandlerFunc {
 			return
 		}
 
-		_, err := app.DeleteStudentRecord(c.Request.Context(), req.NumeroIdentificacion)
+		status, err := app.DeleteStudentRecord(c.Request.Context(), req.NumeroIdentificacion)
 		if err != nil {
-			jsonError(c, http.StatusInternalServerError, err.Error())
+			jsonError(c, status, err.Error())
 			return
 		}
 
@@ -715,6 +715,19 @@ func GetStudentPaymentStatusHandler(app *services.App) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"success": true, "data": statusData})
+	}
+}
+
+func GetStudentAttendanceSummaryHandler(app *services.App) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		numero := c.Param("numero_identificacion")
+		summary, status, err := app.GetStudentAttendanceSummary(c.Request.Context(), numero)
+		if err != nil {
+			jsonError(c, status, err.Error())
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"success": true, "data": summary})
 	}
 }
 

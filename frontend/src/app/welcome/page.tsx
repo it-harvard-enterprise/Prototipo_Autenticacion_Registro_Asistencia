@@ -24,14 +24,15 @@ export default async function WelcomePage() {
     redirect("/login");
   }
 
-  if (access.mustChangePassword) {
+  if (access.role === "administrador" && access.mustChangePassword) {
     redirect("/reset-password?forced=1");
   }
 
-  if (access.role === "administrador") {
-    if (access.approved) {
-      redirect("/dashboard");
-    }
+  if (access.role && access.approved) {
+    redirect("/dashboard");
+  }
+
+  if (access.role === "administrador" && !access.approved) {
     redirect("/not-approved");
   }
 
@@ -41,7 +42,7 @@ export default async function WelcomePage() {
       ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
       : user.email;
 
-  const roleLabel = access.role === "profesor" ? "profesor" : "estudiante";
+  const roleLabel = access.role ?? "usuario";
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
@@ -52,12 +53,11 @@ export default async function WelcomePage() {
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-gray-700">
           <p>
-            Tu cuenta ya esta activa, pero por ahora las funciones del sistema
-            estan disponibles solo para administradores.
+            Estamos validando su perfil para habilitar las funcionalidades del
+            sistema de forma correcta.
           </p>
           <p>
-            Si necesitas acceso a mas funciones, contacta al administrador del
-            sistema.
+            Si esta pantalla persiste, contacte al administrador del sistema.
           </p>
         </CardContent>
         <CardFooter>

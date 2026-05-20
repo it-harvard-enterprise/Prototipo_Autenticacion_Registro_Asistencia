@@ -14,8 +14,12 @@ export default async function CourseMaterialsHomePage({
   params,
 }: CourseMaterialsHomePageProps) {
   const { id } = await params;
-  const { course, canManage } = await getCourseMaterialsPageContext(id);
+  const { course, canManage, access } = await getCourseMaterialsPageContext(id);
   const snapshotResult = await getCourseMaterialsSnapshot(course.id_curso);
+  const backHref =
+    access.role === "administrador"
+      ? `/dashboard/courses/${course.id_curso}`
+      : "/dashboard/my-courses";
 
   const snapshot = snapshotResult.success
     ? snapshotResult.data
@@ -29,7 +33,7 @@ export default async function CourseMaterialsHomePage({
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" asChild className="shrink-0">
-          <Link href={`/dashboard/courses/${course.id_curso}`}>
+          <Link href={backHref}>
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
@@ -55,6 +59,7 @@ export default async function CourseMaterialsHomePage({
         courseId={course.id_curso}
         courseName={course.nombre_curso}
         canManage={canManage}
+        currentRole={access.role}
         initialCoverImageUrl={snapshot.coverImageUrl}
         folders={snapshot.folders}
         files={snapshot.files}

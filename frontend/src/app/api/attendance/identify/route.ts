@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { ensureApprovedAdmin } from "@/lib/auth/approved-admin";
+import { ensureApprovedRoles } from "@/lib/auth/approved-admin";
 import {
   biometricBackendConfigHint,
   resolveBiometricBackendBaseUrl,
@@ -19,7 +19,7 @@ type IdentifyRequestBody = {
 };
 
 export async function POST(request: NextRequest) {
-  const approval = await ensureApprovedAdmin();
+  const approval = await ensureApprovedRoles(["administrador", "profesor"]);
   if (!approval.ok) {
     return NextResponse.json(
       {

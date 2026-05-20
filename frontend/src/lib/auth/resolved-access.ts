@@ -41,6 +41,13 @@ function asResolvedRole(value: unknown): ResolvedRole | null {
   return null;
 }
 
+function shouldForcePasswordChange(
+  mustChangePassword: boolean,
+  role: ResolvedRole | null,
+): boolean {
+  return mustChangePassword && role === "administrador";
+}
+
 export async function resolveCurrentUserAccess(): Promise<ResolvedAccess> {
   const supabase = await createClient();
   const {
@@ -58,7 +65,13 @@ export async function resolveCurrentUserAccess(): Promise<ResolvedAccess> {
     };
   }
 
-  const mustChangePassword = Boolean(user.user_metadata?.must_change_password);
+  const metadataRole = asResolvedRole(
+    user.user_metadata?.role ?? user.user_metadata?.rol,
+  );
+  const mustChangePassword = shouldForcePasswordChange(
+    Boolean(user.user_metadata?.must_change_password),
+    metadataRole,
+  );
 
   try {
     const payload = await callBackend<ResolveAccessBackendResponse>(
@@ -84,12 +97,17 @@ export async function resolveCurrentUserAccess(): Promise<ResolvedAccess> {
     }
 
     const resolvedRole = asResolvedRole(payload.data.role);
+    const backendMustChangePassword = Boolean(
+      payload.data.mustChangePassword ??
+      Boolean(user.user_metadata?.must_change_password),
+    );
     return {
       user,
       role: resolvedRole,
       approved: Boolean(payload.data.approved),
-      mustChangePassword: Boolean(
-        payload.data.mustChangePassword ?? mustChangePassword,
+      mustChangePassword: shouldForcePasswordChange(
+        backendMustChangePassword,
+        resolvedRole,
       ),
       fullName:
         typeof payload.data.fullName === "string"

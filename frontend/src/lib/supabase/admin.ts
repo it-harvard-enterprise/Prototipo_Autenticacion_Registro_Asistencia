@@ -78,7 +78,7 @@ export async function createManagedAuthUser(params: {
       apellidos: params.apellidos,
       tipo_identificacion: params.tipoIdentificacion,
       numero_identificacion: params.numeroIdentificacion,
-      must_change_password: true,
+      must_change_password: false,
       approved_by_admin: params.approvedByAdmin,
     },
   });

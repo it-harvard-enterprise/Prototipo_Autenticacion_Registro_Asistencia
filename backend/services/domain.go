@@ -534,7 +534,7 @@ func (a *App) CreateManagedAuthUser(ctx context.Context, params models.ManagedAu
 			"apellidos":             normalizeUpper(params.Apellidos),
 			"tipo_identificacion":   normalizeUpper(params.TipoIdentificacion),
 			"numero_identificacion": normalizeUpper(params.NumeroIdentificacion),
-			"must_change_password":  true,
+			"must_change_password":  strings.EqualFold(params.Role, "administrador"),
 			"approved_by_admin":     params.ApprovedByAdmin,
 		},
 	}
@@ -572,7 +572,14 @@ func (a *App) DeleteManagedAuthUser(ctx context.Context, userID string) error {
 		return errors.New("user id is required")
 	}
 
-	_, _, err := a.callSupabaseAuthAdmin(ctx, http.MethodDelete, "/users/"+normalized, nil)
+	_, status, err := a.callSupabaseAuthAdmin(ctx, http.MethodDelete, "/users/"+normalized, nil)
+	if err != nil {
+		message := strings.ToLower(strings.TrimSpace(err.Error()))
+		if status == http.StatusNotFound || strings.Contains(message, "not found") {
+			return nil
+		}
+	}
+
 	return err
 }
 
@@ -680,6 +687,7 @@ func (a *App) fillStudentEmailFromProfile(ctx context.Context, student map[strin
 func (a *App) ListStudents(ctx context.Context) ([]map[string]any, error) {
 	query := url.Values{}
 	query.Set("select", "*,saldo_estudiantes(clases_adelantadas,clases_adeudadas,total_pagado,ultima_actualizacion)")
+	query.Set("deleted_at", "is.null")
 	query.Set("order", "apellidos.asc")
 
 	body, status, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/estudiantes", query, nil, false)
@@ -690,6 +698,7 @@ func (a *App) ListStudents(ctx context.Context) ([]map[string]any, error) {
 
 		fallbackQuery := url.Values{}
 		fallbackQuery.Set("select", "*")
+		fallbackQuery.Set("deleted_at", "is.null")
 		fallbackQuery.Set("order", "apellidos.asc")
 
 		body, _, err = a.CallSupabase(ctx, http.MethodGet, "/rest/v1/estudiantes", fallbackQuery, nil, false)
@@ -719,6 +728,7 @@ func (a *App) GetStudentByNumero(ctx context.Context, numeroIdentificacion strin
 	query := url.Values{}
 	query.Set("select", "*,saldo_estudiantes(clases_adelantadas,clases_adeudadas,total_pagado,ultima_actualizacion)")
 	query.Set("numero_identificacion", fmt.Sprintf("eq.%s", numero))
+	query.Set("deleted_at", "is.null")
 
 	body, status, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/estudiantes", query, nil, false)
 	if err != nil {
@@ -729,6 +739,7 @@ func (a *App) GetStudentByNumero(ctx context.Context, numeroIdentificacion strin
 		fallbackQuery := url.Values{}
 		fallbackQuery.Set("select", "*")
 		fallbackQuery.Set("numero_identificacion", fmt.Sprintf("eq.%s", numero))
+		fallbackQuery.Set("deleted_at", "is.null")
 
 		body, status, err = a.CallSupabase(ctx, http.MethodGet, "/rest/v1/estudiantes", fallbackQuery, nil, false)
 		if err != nil {
@@ -752,14 +763,27 @@ func (a *App) GetStudentByNumero(ctx context.Context, numeroIdentificacion strin
 }
 
 func (a *App) StudentExists(ctx context.Context, numeroIdentificacion string) (bool, error) {
-	_, status, err := a.GetStudentByNumero(ctx, numeroIdentificacion)
+	numero := normalizeUpper(numeroIdentificacion)
+	if numero == "" {
+		return false, errors.New("numero_identificacion es requerido")
+	}
+
+	query := url.Values{}
+	query.Set("select", "numero_identificacion")
+	query.Set("numero_identificacion", fmt.Sprintf("eq.%s", numero))
+	query.Set("limit", "1")
+
+	body, status, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/estudiantes", query, nil, false)
 	if err != nil {
-		if status == http.StatusNotFound {
-			return false, nil
-		}
+		return false, fmt.Errorf("error consultando estudiante (status %d): %w", status, err)
+	}
+
+	rows, err := unmarshalRows(body)
+	if err != nil {
 		return false, err
 	}
-	return true, nil
+
+	return len(rows) > 0, nil
 }
 
 func (a *App) ensureSaldoEstudiante(ctx context.Context, numeroIdentificacion string) error {
@@ -1274,6 +1298,7 @@ func (a *App) UpdateStudentRecord(ctx context.Context, numeroIdentificacion stri
 
 	query := url.Values{}
 	query.Set("numero_identificacion", fmt.Sprintf("eq.%s", numero))
+	query.Set("deleted_at", "is.null")
 	query.Set("select", "*")
 
 	body, status, err := a.CallSupabase(ctx, http.MethodPatch, "/rest/v1/estudiantes", query, payload, true)
@@ -1298,12 +1323,43 @@ func (a *App) DeleteStudentRecord(ctx context.Context, numeroIdentificacion stri
 		return http.StatusBadRequest, errors.New("numero_identificacion es requerido")
 	}
 
-	query := url.Values{}
-	query.Set("numero_identificacion", fmt.Sprintf("eq.%s", numero))
+	// Remove active course associations so the archived student no longer appears
+	// in enrollment-dependent flows.
+	courseLinksQuery := url.Values{}
+	courseLinksQuery.Set("numero_identificacion", fmt.Sprintf("eq.%s", numero))
 
-	_, status, err := a.CallSupabase(ctx, http.MethodDelete, "/rest/v1/estudiantes", query, nil, false)
+	_, status, err := a.CallSupabase(ctx, http.MethodDelete, "/rest/v1/cursos_x_estudiantes", courseLinksQuery, nil, false)
 	if err != nil {
 		return status, err
+	}
+
+	query := url.Values{}
+	query.Set("numero_identificacion", fmt.Sprintf("eq.%s", numero))
+	query.Set("deleted_at", "is.null")
+	query.Set("select", "numero_identificacion,auth_user_id")
+
+	payload := map[string]any{
+		"deleted_at": time.Now().UTC().Format(time.RFC3339Nano),
+	}
+
+	body, status, err := a.CallSupabase(ctx, http.MethodPatch, "/rest/v1/estudiantes", query, payload, true)
+	if err != nil {
+		return status, err
+	}
+
+	rows, err := unmarshalRows(body)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+	if len(rows) == 0 {
+		return http.StatusNotFound, errors.New("no se encontró el estudiante")
+	}
+
+	authUserID, _ := asString(rows[0]["auth_user_id"])
+	if strings.TrimSpace(authUserID) != "" {
+		if err := a.DeleteManagedAuthUser(ctx, authUserID); err != nil {
+			return http.StatusBadGateway, err
+		}
 	}
 
 	return http.StatusOK, nil
@@ -2799,6 +2855,47 @@ func (a *App) GetAttendanceExport(ctx context.Context, idCurso int, date string)
 	return exportRows, http.StatusOK, nil
 }
 
+func (a *App) GetStudentAttendanceSummary(ctx context.Context, numeroIdentificacion string) (map[string]any, int, error) {
+	numero := normalizeUpper(numeroIdentificacion)
+	if numero == "" {
+		return nil, http.StatusBadRequest, errors.New("numero_identificacion es requerido")
+	}
+
+	query := url.Values{}
+	query.Set("select", "asistio")
+	query.Set("numero_identificacion", fmt.Sprintf("eq.%s", numero))
+
+	body, status, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/registro_asistencia", query, nil, false)
+	if err != nil {
+		return nil, status, err
+	}
+
+	rows, err := unmarshalRows(body)
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+
+	attendedCount := 0
+	absentCount := 0
+
+	for _, row := range rows {
+		asistio, ok := asBool(row["asistio"])
+		if ok && asistio {
+			attendedCount++
+			continue
+		}
+
+		absentCount++
+	}
+
+	return map[string]any{
+		"numero_identificacion": numero,
+		"attended_count":       attendedCount,
+		"absent_count":         absentCount,
+		"total_count":          attendedCount + absentCount,
+	}, http.StatusOK, nil
+}
+
 func normalizePersonCourse(raw map[string]any) (models.PersonCourseInfo, bool) {
 	idCurso, ok := asInt(raw["id_curso"])
 	if !ok {
@@ -3067,11 +3164,12 @@ func (a *App) ResolveAccessByUserID(ctx context.Context, req models.ResolveAcces
 		apellido, _ := asString(profile["apellido"])
 		role, _ := asString(profile["role"])
 		approved, _ := asBool(profile["approved"])
+		forcePasswordChange := mustChangePassword && strings.EqualFold(strings.TrimSpace(role), "administrador")
 
 		return map[string]any{
 			"role":               nullableString(role),
 			"approved":           approved,
-			"mustChangePassword": mustChangePassword,
+			"mustChangePassword": forcePasswordChange,
 			"fullName":           strings.TrimSpace(strings.TrimSpace(nombre) + " " + strings.TrimSpace(apellido)),
 			"profileFound":       true,
 			"email":              nullableString(req.Email),
@@ -3111,7 +3209,7 @@ func (a *App) ResolveAccessByUserID(ctx context.Context, req models.ResolveAcces
 	return map[string]any{
 		"role":               nil,
 		"approved":           false,
-		"mustChangePassword": mustChangePassword,
+		"mustChangePassword": false,
 		"fullName":           nil,
 		"profileFound":       false,
 		"email":              nullableString(req.Email),

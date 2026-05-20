@@ -1,6 +1,9 @@
 "use server";
 
-import { ensureApprovedAdmin } from "@/lib/auth/approved-admin";
+import {
+  ensureApprovedAdmin,
+  ensureApprovedRoles,
+} from "@/lib/auth/approved-admin";
 import { callBackend } from "@/lib/backend/server-api";
 import { Course } from "@/lib/types";
 
@@ -210,7 +213,11 @@ export async function getCourses(): Promise<{
 export async function getCourseById(
   idCurso: number,
 ): Promise<{ success: boolean; error?: string; data?: Course }> {
-  const approval = await ensureApprovedAdmin();
+  const approval = await ensureApprovedRoles([
+    "administrador",
+    "profesor",
+    "estudiante",
+  ]);
   if (!approval.ok) {
     return { success: false, error: approval.error };
   }

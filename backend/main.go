@@ -88,6 +88,7 @@ func main() {
 	router.POST("/api/students/create", handlers.CreateStudentHandler(app))
 	router.GET("/api/students", handlers.ListStudentsHandler(app))
 	router.GET("/api/students/:numero_identificacion", handlers.GetStudentByNumeroHandler(app))
+	router.GET("/api/students/:numero_identificacion/attendance-summary", handlers.GetStudentAttendanceSummaryHandler(app))
 	router.POST("/api/students/exists", handlers.StudentExistsHandler(app))
 	router.POST("/api/students/update", handlers.UpdateStudentHandler(app))
 	router.POST("/api/students/delete", handlers.DeleteStudentHandler(app))

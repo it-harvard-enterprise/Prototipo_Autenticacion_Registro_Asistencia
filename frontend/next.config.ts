@@ -9,6 +9,16 @@ const webSdkAliasPath = path.resolve(
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  images: {
+    localPatterns: [
+      {
+        pathname: "/api/course-materials/cover",
+      },
+      {
+        pathname: "/logos/**",
+      },
+    ],
+  },
   turbopack: {
     root: projectRoot,
     resolveAlias: {

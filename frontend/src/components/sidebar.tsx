@@ -15,16 +15,20 @@ import {
   LogOut,
   X,
   Shield,
+  UserRound,
+  CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { createClient } from "@/lib/supabase/client";
+import { ResolvedRole } from "@/lib/auth/resolved-access";
 
 interface SidebarProps {
   userEmail?: string;
   userName?: string;
+  userRole: ResolvedRole;
   onClose?: () => void;
 }
 
@@ -37,7 +41,7 @@ type NavItem = {
   badge?: string;
 };
 
-const navItems: NavItem[] = [
+const adminNavItems: NavItem[] = [
   {
     label: "Dashboard",
     href: "/dashboard",
@@ -96,9 +100,85 @@ const navItems: NavItem[] = [
   },
 ];
 
-export function Sidebar({ userEmail, userName, onClose }: SidebarProps) {
+const studentNavItems: NavItem[] = [
+  {
+    label: "Dashboard",
+    href: "/dashboard",
+    icon: LayoutDashboard,
+    exact: true,
+  },
+  {
+    label: "Mi Perfil",
+    href: "/dashboard/my-profile",
+    icon: UserRound,
+  },
+  {
+    label: "Mis Cursos",
+    href: "/dashboard/my-courses",
+    icon: BookOpen,
+  },
+  {
+    label: "Mis Pagos",
+    href: "/dashboard/my-payments",
+    icon: CreditCard,
+  },
+];
+
+const professorNavItems: NavItem[] = [
+  {
+    label: "Dashboard",
+    href: "/dashboard",
+    icon: LayoutDashboard,
+    exact: true,
+  },
+  {
+    label: "Mi Perfil",
+    href: "/dashboard/my-profile",
+    icon: UserRound,
+  },
+  {
+    label: "Mis Cursos",
+    href: "/dashboard/my-courses",
+    icon: BookOpen,
+  },
+  {
+    label: "Identificar Persona",
+    href: "/dashboard/person-identification",
+    icon: Fingerprint,
+  },
+  {
+    label: "Tomar Asistencia",
+    href: "/dashboard/attendance",
+    icon: ClipboardList,
+  },
+  {
+    label: "Exportar Lista de Asistencia a Excel",
+    href: "/dashboard/export",
+    icon: FileSpreadsheet,
+  },
+];
+
+function resolveNavItems(role: ResolvedRole): NavItem[] {
+  if (role === "administrador") {
+    return adminNavItems;
+  }
+
+  if (role === "profesor") {
+    return professorNavItems;
+  }
+
+  return studentNavItems;
+}
+
+export function Sidebar({
+  userEmail,
+  userName,
+  userRole,
+  onClose,
+}: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const navItems = resolveNavItems(userRole);
 
   const initials = userName
     ? userName

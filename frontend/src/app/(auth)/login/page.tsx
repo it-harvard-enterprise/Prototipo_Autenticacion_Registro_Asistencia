@@ -122,8 +122,9 @@ export default function LoginPage() {
       const metadata =
         (user?.user_metadata as Record<string, unknown> | undefined) ??
         undefined;
+      const role = metadata?.role ?? metadata?.rol;
 
-      if (metadata?.must_change_password === true) {
+      if (metadata?.must_change_password === true && role === "administrador") {
         router.push("/reset-password?forced=1");
         router.refresh();
         return;
