@@ -189,8 +189,6 @@ type PersonCourseInfo struct {
 	Salon       *string `json:"salon"`
 	HoraInicio  string  `json:"hora_inicio"`
 	HoraFin     string  `json:"hora_fin"`
-	FechaInicio string  `json:"fecha_inicio"`
-	FechaFin    string  `json:"fecha_fin"`
 }
 
 type PersonRecord struct {

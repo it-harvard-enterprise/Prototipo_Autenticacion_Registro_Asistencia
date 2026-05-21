@@ -1,5 +1,6 @@
 import { callBackend } from "@/lib/backend/server-api";
 import { resolveCurrentUserAccess } from "@/lib/auth/resolved-access";
+import { getPaymentsReport } from "@/app/actions/payments";
 import {
   getCurrentUserCoursesOverview,
   getCurrentUserProfileOverview,
@@ -10,12 +11,14 @@ import {
   Users,
   BookOpen,
   ClipboardList,
-  FileSpreadsheet,
   HandCoins,
   BarChart3,
   UserRound,
   CreditCard,
   Fingerprint,
+  Link2,
+  FolderOpen,
+  Shield,
 } from "lucide-react";
 import {
   Card,
@@ -364,6 +367,37 @@ export default async function DashboardPage() {
   const attendedCount = summary.attendedCount;
   const absentCount = summary.absentCount;
 
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const currentMonth = String(today.getMonth() + 1).padStart(2, "0");
+  const currentDay = String(today.getDate()).padStart(2, "0");
+  const monthStart = `${currentYear}-${currentMonth}-01`;
+  const monthEnd = `${currentYear}-${currentMonth}-${currentDay}`;
+  const monthCutoffLabel = today.toLocaleDateString("es-CO", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+
+  let monthRevenue = 0;
+  try {
+    const paymentsReport = await getPaymentsReport({
+      from: monthStart,
+      to: monthEnd,
+      scope: "AMBOS",
+      limit: 5000,
+    });
+
+    if (paymentsReport.success) {
+      monthRevenue = (paymentsReport.data ?? []).reduce(
+        (total, row) => total + Number(row.valor ?? 0),
+        0,
+      );
+    }
+  } catch {
+    // Keep zero if revenue summary is unavailable.
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -377,6 +411,10 @@ export default async function DashboardPage() {
           podrá exportar la lista de asistencia a Excel para su análisis y
           seguimiento.
         </p>
+      </div>
+
+      <div>
+        <h2 className="text-lg font-semibold text-gray-900">Resumen</h2>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -442,21 +480,158 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-gray-600">
-              Exportar Lista a Excel
+              Ingresos del Mes
             </CardTitle>
-            <div className="p-2 rounded-lg bg-purple-50">
-              <FileSpreadsheet className="h-4 w-4 text-purple-600" />
+            <div className="p-2 rounded-lg bg-emerald-50">
+              <HandCoins className="h-4 w-4 text-emerald-600" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-gray-900">
+              {formatCurrency(monthRevenue)}
+            </div>
+            <CardDescription className="mt-1">
+              Acumulado hasta {monthCutoffLabel}
+            </CardDescription>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div>
+        <h2 className="text-lg font-semibold text-gray-900">Accesos Rápidos</h2>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Estudiantes
+            </CardTitle>
+            <div className="p-2 rounded-lg bg-[#b92f2d]/10">
+              <Users className="h-4 w-4 text-[#b92f2d]" />
             </div>
           </CardHeader>
           <CardContent>
             <CardDescription className="mb-3">
-              Descargue la lista de asistencia por curso y fecha.
+              Gestione el registro y consulta de estudiantes.
             </CardDescription>
             <Button
               asChild
               className="bg-[#b92f2d] hover:bg-[#982725] text-white"
             >
-              <Link href="/dashboard/export">Ir a Exportar</Link>
+              <Link href="/dashboard/students">Ir a Estudiantes</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Profesores
+            </CardTitle>
+            <div className="p-2 rounded-lg bg-indigo-50">
+              <Users className="h-4 w-4 text-indigo-700" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <CardDescription className="mb-3">
+              Administre perfiles y datos de los docentes.
+            </CardDescription>
+            <Button
+              asChild
+              className="bg-[#b92f2d] hover:bg-[#982725] text-white"
+            >
+              <Link href="/dashboard/professors">Ir a Profesores</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Administradores
+            </CardTitle>
+            <div className="p-2 rounded-lg bg-violet-50">
+              <Shield className="h-4 w-4 text-violet-700" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <CardDescription className="mb-3">
+              Gestione cuentas con permisos administrativos.
+            </CardDescription>
+            <Button
+              asChild
+              className="bg-[#b92f2d] hover:bg-[#982725] text-white"
+            >
+              <Link href="/dashboard/admins">Ir a Administradores</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Cursos
+            </CardTitle>
+            <div className="p-2 rounded-lg bg-emerald-50">
+              <BookOpen className="h-4 w-4 text-emerald-600" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <CardDescription className="mb-3">
+              Cree, edite y consulte la oferta de cursos.
+            </CardDescription>
+            <Button
+              asChild
+              className="bg-[#b92f2d] hover:bg-[#982725] text-white"
+            >
+              <Link href="/dashboard/courses">Ir a Cursos</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Asociación Curso-Participantes
+            </CardTitle>
+            <div className="p-2 rounded-lg bg-orange-50">
+              <Link2 className="h-4 w-4 text-orange-700" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <CardDescription className="mb-3">
+              Asocie cursos con estudiantes y profesores.
+            </CardDescription>
+            <Button
+              asChild
+              className="bg-[#b92f2d] hover:bg-[#982725] text-white"
+            >
+              <Link href="/dashboard/course-student-association">
+                Ir a Asociaciones
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Tomar Asistencia
+            </CardTitle>
+            <div className="p-2 rounded-lg bg-rose-50">
+              <ClipboardList className="h-4 w-4 text-rose-700" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <CardDescription className="mb-3">
+              Registre asistencia por curso y fecha.
+            </CardDescription>
+            <Button
+              asChild
+              className="bg-[#b92f2d] hover:bg-[#982725] text-white"
+            >
+              <Link href="/dashboard/attendance">Ir a Asistencia</Link>
             </Button>
           </CardContent>
         </Card>
@@ -501,6 +676,52 @@ export default async function DashboardPage() {
               className="bg-[#b92f2d] hover:bg-[#982725] text-white"
             >
               <Link href="/dashboard/payments/report">Ir al Reporte</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Identificar Persona
+            </CardTitle>
+            <div className="p-2 rounded-lg bg-amber-50">
+              <Fingerprint className="h-4 w-4 text-amber-600" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <CardDescription className="mb-3">
+              Busque perfiles por huella o identificación.
+            </CardDescription>
+            <Button
+              asChild
+              className="bg-[#b92f2d] hover:bg-[#982725] text-white"
+            >
+              <Link href="/dashboard/person-identification">
+                Ir a Identificar
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Listas de Asistencia
+            </CardTitle>
+            <div className="p-2 rounded-lg bg-cyan-50">
+              <FolderOpen className="h-4 w-4 text-cyan-700" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <CardDescription className="mb-3">
+              Consulte asistencias históricas por curso y fecha.
+            </CardDescription>
+            <Button
+              asChild
+              className="bg-[#b92f2d] hover:bg-[#982725] text-white"
+            >
+              <Link href="/dashboard/attendance-lists">Ir a Listas</Link>
             </Button>
           </CardContent>
         </Card>

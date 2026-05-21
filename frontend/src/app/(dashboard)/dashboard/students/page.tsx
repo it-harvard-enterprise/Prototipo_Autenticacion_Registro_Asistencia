@@ -1,7 +1,6 @@
 import { getStudents } from "@/app/actions/students";
 import { NewStudentButton } from "@/components/new-student-button";
-import { DetailLookup } from "@/components/detail-lookup";
-import { StudentsTable } from "@/components/students-table";
+import { StudentsDashboardContent } from "@/components/students-dashboard-content";
 import { Student } from "@/lib/types";
 
 export default async function StudentsPage() {
@@ -19,8 +18,6 @@ export default async function StudentsPage() {
         <NewStudentButton />
       </div>
 
-      <DetailLookup type="student" />
-
       {!result.success ? (
         <div className="rounded-md bg-red-50 border border-red-200 p-4">
           <p className="text-sm text-red-700">
@@ -28,7 +25,7 @@ export default async function StudentsPage() {
           </p>
         </div>
       ) : (
-        <StudentsTable students={(result.data ?? []) as Student[]} />
+        <StudentsDashboardContent students={(result.data ?? []) as Student[]} />
       )}
     </div>
   );

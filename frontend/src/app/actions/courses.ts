@@ -5,6 +5,7 @@ import {
   ensureApprovedRoles,
 } from "@/lib/auth/approved-admin";
 import { callBackend } from "@/lib/backend/server-api";
+import { toAppErrorMessage } from "@/lib/error-messages";
 import { Course } from "@/lib/types";
 
 function upper(value: string): string {
@@ -28,10 +29,7 @@ function normalizeIdentificationIds(ids: string[]): string[] {
 }
 
 function toErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return "Error desconocido";
+  return toAppErrorMessage(error, "Error desconocido");
 }
 
 type BackendResponse<T> = {
@@ -69,8 +67,6 @@ export interface CourseFormData {
   hora_inicio: string;
   hora_fin: string;
   salon?: string | null;
-  fecha_inicio: string;
-  fecha_fin: string;
 }
 
 export async function createCourse(
@@ -92,8 +88,6 @@ export async function createCourse(
           hora_inicio: data.hora_inicio,
           hora_fin: data.hora_fin,
           salon: upperOrNull(data.salon) ?? null,
-          fecha_inicio: data.fecha_inicio,
-          fecha_fin: data.fecha_fin,
         }),
       },
     );
@@ -136,10 +130,6 @@ export async function updateCourse(
             }),
             ...(data.hora_fin !== undefined && { hora_fin: data.hora_fin }),
             ...(data.salon !== undefined && { salon: upperOrNull(data.salon) }),
-            ...(data.fecha_inicio !== undefined && {
-              fecha_inicio: data.fecha_inicio,
-            }),
-            ...(data.fecha_fin !== undefined && { fecha_fin: data.fecha_fin }),
           },
         }),
       },

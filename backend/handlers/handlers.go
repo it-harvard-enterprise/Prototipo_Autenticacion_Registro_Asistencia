@@ -26,7 +26,7 @@ func EnrollStudentHandler(app *services.App) gin.HandlerFunc {
 		req.Nombres = strings.ToUpper(strings.TrimSpace(req.Nombres))
 		req.Apellidos = strings.ToUpper(strings.TrimSpace(req.Apellidos))
 		req.Grado = strings.ToUpper(strings.TrimSpace(req.Grado))
-		req.CoordinadorAcademico = strings.ToUpper(strings.TrimSpace(req.CoordinadorAcademico))
+		req.CoordinadorAcademico = strings.TrimSpace(req.CoordinadorAcademico)
 		req.MedioPagoMatricula = strings.ToUpper(strings.TrimSpace(req.MedioPagoMatricula))
 
 		normalizeOptionalUpper := func(value *string) *string {
@@ -138,11 +138,7 @@ func EnrollStudentHandler(app *services.App) gin.HandlerFunc {
 
 		rows, status, err := app.InsertStudent(c.Request.Context(), payload)
 		if err != nil {
-			if status == http.StatusConflict {
-				c.JSON(http.StatusConflict, gin.H{"error": "Error: En la base datos ya existe un usuario con el mismo número de identificación."})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			c.JSON(status, gin.H{"error": err.Error()})
 			return
 		}
 

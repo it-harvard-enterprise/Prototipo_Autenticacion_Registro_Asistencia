@@ -18,8 +18,6 @@ type CourseInfo = {
   salon: string | null;
   hora_inicio: string;
   hora_fin: string;
-  fecha_inicio: string;
-  fecha_fin: string;
 };
 
 type PersonRecord = {

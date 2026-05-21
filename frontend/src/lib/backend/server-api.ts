@@ -2,6 +2,7 @@ import {
   biometricBackendConfigHint,
   resolveBiometricBackendBaseUrl,
 } from "@/lib/biometric-backend";
+import { translateErrorMessage } from "@/lib/error-messages";
 
 function resolveFrontendOrigin(): string {
   return (
@@ -49,7 +50,12 @@ export async function callBackend<T = unknown>(
   } | null;
 
   if (!response.ok) {
-    throw new Error(payload?.error || `Backend error: ${response.status}`);
+    throw new Error(
+      translateErrorMessage(
+        payload?.error,
+        `Error del backend: ${response.status}`,
+      ),
+    );
   }
 
   return payload as T;

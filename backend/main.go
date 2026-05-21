@@ -44,7 +44,8 @@ func main() {
 		app.AnonKey = anonKey
 	}
 
-	router := gin.Default()
+	router := gin.New()
+	router.Use(middleware.SecureRequestLogger(), gin.Recovery())
 	if err := router.SetTrustedProxies(nil); err != nil {
 		log.Fatalf("failed to configure trusted proxies: %v", err)
 	}
@@ -92,6 +93,8 @@ func main() {
 	router.POST("/api/students/exists", handlers.StudentExistsHandler(app))
 	router.POST("/api/students/update", handlers.UpdateStudentHandler(app))
 	router.POST("/api/students/delete", handlers.DeleteStudentHandler(app))
+	router.POST("/api/students/:numero_identificacion/profile", handlers.CreateStudentProfileHandler(app))
+	router.DELETE("/api/students/:numero_identificacion/profile", handlers.DeleteStudentProfileHandler(app))
 	router.POST("/api/students/update-fingerprints", handlers.UpdateStudentFingerprintsHandler(app))
 
 	router.POST("/api/professors/create", handlers.CreateProfessorHandler(app))
@@ -100,6 +103,8 @@ func main() {
 	router.POST("/api/professors/exists", handlers.ProfessorExistsHandler(app))
 	router.POST("/api/professors/update", handlers.UpdateProfessorHandler(app))
 	router.POST("/api/professors/delete", handlers.DeleteProfessorHandler(app))
+	router.POST("/api/professors/:numero_identificacion/profile", handlers.CreateProfessorProfileHandler(app))
+	router.DELETE("/api/professors/:numero_identificacion/profile", handlers.DeleteProfessorProfileHandler(app))
 
 	router.GET("/api/courses", handlers.ListCoursesHandler(app))
 	router.GET("/api/courses/options", handlers.ListCourseOptionsHandler(app))
@@ -128,6 +133,7 @@ func main() {
 	router.POST("/api/attendance/save", handlers.SaveAttendanceHandler(app))
 	router.POST("/api/attendance/delete", handlers.DeleteAttendanceHandler(app))
 	router.GET("/api/attendance/export", handlers.ExportAttendanceHandler(app))
+	router.GET("/api/attendance/dates", handlers.AttendanceDatesByCourseHandler(app))
 	router.POST("/api/attendance/identify", handlers.IdentifyAttendanceHandler(app))
 	router.GET("/api/payments/student/:numero_identificacion/status", handlers.GetStudentPaymentStatusHandler(app))
 	router.POST("/api/payments/process", handlers.ProcessStudentPaymentHandler(app))

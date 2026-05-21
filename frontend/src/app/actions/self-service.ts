@@ -5,6 +5,7 @@ import {
   type ResolvedRole,
 } from "@/lib/auth/resolved-access";
 import { callBackend } from "@/lib/backend/server-api";
+import { toAppErrorMessage } from "@/lib/error-messages";
 import { Professor, Student } from "@/lib/types";
 
 type BackendResponse<T> = {
@@ -20,8 +21,6 @@ type PersonCourseInfo = {
   salon: string | null;
   hora_inicio: string;
   hora_fin: string;
-  fecha_inicio: string;
-  fecha_fin: string;
 };
 
 type PersonRecord = {
@@ -113,10 +112,7 @@ function asAmount(value: unknown): number {
 }
 
 function toErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return "Error desconocido";
+  return toAppErrorMessage(error, "Error desconocido");
 }
 
 function getRecordRole(

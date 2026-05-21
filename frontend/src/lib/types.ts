@@ -59,6 +59,8 @@ export interface Student {
   huella_indice_izquierdo: string | null;
   created_at: string;
   updated_at?: string;
+  perfil_usuario?: "activo" | "inactivo";
+  profile_id?: string | null;
 }
 
 export interface Professor {
@@ -76,6 +78,8 @@ export interface Professor {
   email: string;
   created_at: string;
   updated_at?: string;
+  perfil_usuario?: "activo" | "inactivo";
+  profile_id?: string | null;
 }
 
 export interface Course {
@@ -87,8 +91,8 @@ export interface Course {
   hora_inicio: string;
   hora_fin: string;
   salon: string | null;
-  fecha_inicio: string;
-  fecha_fin: string;
+  fecha_inicio?: string;
+  fecha_fin?: string;
   description?: string | null;
   schedule?: string | null;
   created_at: string;

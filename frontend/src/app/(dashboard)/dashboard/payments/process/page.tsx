@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { FileText, Loader2 } from "lucide-react";
+import { jsPDF } from "jspdf";
 import { toast } from "sonner";
 
 import {
@@ -32,6 +33,29 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
+function toNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+function toStringOrNull(value: unknown): string | null {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  return null;
+}
+
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("es-CO", {
     style: "currency",
@@ -55,6 +79,160 @@ function resolvePaymentStatusLabel(student: Student): string {
   }
 
   return "Al día";
+}
+
+function resolvePaymentModeLabel(mode: PaymentMode): string {
+  if (mode === "DEUDA_TOTAL") return "Pago de deuda total";
+  if (mode === "DEUDA_PARCIAL") return "Pago de deuda parcial";
+  return "Pago adelantado";
+}
+
+function resolvePaymentMethodLabel(method: PaymentMethod): string {
+  return (
+    PAYMENT_METHOD_OPTIONS.find((option) => option.value === method)?.label ??
+    method
+  );
+}
+
+async function generatePaymentConfirmationPdf(params: {
+  student: Student;
+  payment: Record<string, unknown> | undefined;
+  modalidad: PaymentMode;
+  metodoPago: PaymentMethod;
+  clases: number;
+  valor: number;
+  notas: string;
+}) {
+  const { student, payment, modalidad, metodoPago, clases, valor, notas } =
+    params;
+
+  const paymentId = toStringOrNull(payment?.id) ?? "N/A";
+  const paymentDateRaw =
+    toStringOrNull(payment?.fecha_pago) ?? new Date().toISOString();
+  const paymentDateLabel = new Date(paymentDateRaw).toLocaleString("es-CO");
+  const paymentMethod =
+    toStringOrNull(payment?.metodo_pago) ??
+    resolvePaymentMethodLabel(metodoPago);
+  const paymentType =
+    toStringOrNull(payment?.tipo_pago) ?? resolvePaymentModeLabel(modalidad);
+  const paymentValue = toNumber(payment?.valor) ?? valor;
+  const paymentNotes = (toStringOrNull(payment?.notas) ?? notas) || "N/A";
+
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const horizontalPadding = 16;
+  const headerHeight = 28;
+  const headerRed = { r: 61, g: 16, b: 15 };
+  const headerRedDark = { r: 185, g: 28, b: 28 };
+  let y = 20;
+
+  const logoDataUrl = await fetch("/logos/LogoCircular_HE.PNG")
+    .then(async (response) => {
+      if (!response.ok) {
+        return null;
+      }
+
+      const blob = await response.blob();
+      return await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error("No se pudo cargar el logo"));
+        reader.readAsDataURL(blob);
+      });
+    })
+    .catch(() => null);
+
+  doc.setFillColor(headerRed.r, headerRed.g, headerRed.b);
+  doc.rect(0, 0, pageWidth, headerHeight, "F");
+  doc.setDrawColor(headerRedDark.r, headerRedDark.g, headerRedDark.b);
+  doc.line(0, headerHeight, pageWidth, headerHeight);
+
+  if (logoDataUrl) {
+    doc.addImage(
+      logoDataUrl,
+      "PNG",
+      pageWidth - horizontalPadding - 18,
+      6,
+      18,
+      18,
+    );
+  }
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.text("Confirmación de Pago", horizontalPadding, 12);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.text("Harvard Enterprise", horizontalPadding, 19);
+
+  y = 38;
+  doc.setTextColor(17, 24, 39);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.text(`${student.nombres} ${student.apellidos}`, horizontalPadding, y);
+
+  y += 7;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.text(
+    `Identificación: ${student.numero_identificacion}`,
+    horizontalPadding,
+    y,
+  );
+
+  y += 7;
+  doc.text(
+    `Fecha de emisión: ${new Date().toLocaleString("es-CO")}`,
+    horizontalPadding,
+    y,
+  );
+
+  y += 8;
+  doc.setDrawColor(229, 231, 235);
+  doc.line(horizontalPadding, y, pageWidth - horizontalPadding, y);
+  y += 8;
+
+  const rows: Array<[string, string]> = [
+    ["ID de pago", paymentId],
+    ["Fecha de pago", paymentDateLabel],
+    ["Modalidad", resolvePaymentModeLabel(modalidad)],
+    ["Tipo de pago", paymentType],
+    ["Método de pago", paymentMethod],
+    ["Clases registradas", String(clases)],
+    ["Valor pagado", formatCurrency(paymentValue)],
+    ["Grado", student.grado ?? "N/A"],
+    ["No. matrícula", student.no_matricula ?? "N/A"],
+    ["Notas", paymentNotes],
+  ];
+
+  rows.forEach(([label, value]) => {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.text(`${label}:`, horizontalPadding, y);
+    y += 4.5;
+
+    doc.setFont("helvetica", "normal");
+    const lines = doc.splitTextToSize(
+      value && value.trim() !== "" ? value : "N/A",
+      pageWidth - horizontalPadding * 2,
+    );
+    doc.text(lines, horizontalPadding, y);
+    y += lines.length * 4.5 + 3;
+  });
+
+  const safeDate = paymentDateRaw.slice(0, 10).replaceAll("-", "");
+  doc.save(
+    `confirmacion-pago-${student.numero_identificacion}-${safeDate}.pdf`,
+  );
+}
+
+function inferPaymentModeFromType(tipoPago: string): PaymentMode {
+  const normalized = tipoPago.trim().toLowerCase();
+  if (normalized === "adelanto") {
+    return "ADELANTO";
+  }
+  return "DEUDA_PARCIAL";
 }
 
 export default function ProcessPaymentPage() {
@@ -162,12 +340,18 @@ export default function ProcessPaymentPage() {
       return;
     }
 
+    const submittedModalidad = modalidad;
+    const submittedMetodoPago = metodoPago;
+    const submittedClases = clasesCalculadas;
+    const submittedValor = valorCalculado;
+    const submittedNotas = notas.trim();
+
     setIsProcessing(true);
     const result = await processStudentPayment({
       numeroIdentificacion: student.numero_identificacion,
-      modalidad,
-      metodoPago,
-      clases: clasesCalculadas,
+      modalidad: submittedModalidad,
+      metodoPago: submittedMetodoPago,
+      clases: submittedClases,
       notas,
     });
     setIsProcessing(false);
@@ -181,7 +365,56 @@ export default function ProcessPaymentPage() {
     setNotas("");
     setClasesInput(1);
     await refreshReport(result.data.student.numero_identificacion);
+
+    try {
+      await generatePaymentConfirmationPdf({
+        student: result.data.student,
+        payment: result.data.payment,
+        modalidad: submittedModalidad,
+        metodoPago: submittedMetodoPago,
+        clases: submittedClases,
+        valor: submittedValor,
+        notas: submittedNotas,
+      });
+    } catch {
+      toast.warning("Pago registrado, pero no fue posible generar el PDF");
+    }
+
     toast.success("Pago registrado correctamente");
+  }
+
+  async function handleGeneratePaymentPdfFromReport(payment: PaymentReportRow) {
+    if (!student) {
+      toast.error("Primero debe buscar un estudiante");
+      return;
+    }
+
+    const fallbackMode = inferPaymentModeFromType(payment.tipo_pago ?? "");
+    const fallbackMethod =
+      (payment.metodo_pago as PaymentMethod | undefined) ?? "OTRO";
+
+    try {
+      await generatePaymentConfirmationPdf({
+        student,
+        payment: payment as unknown as Record<string, unknown>,
+        modalidad: fallbackMode,
+        metodoPago: fallbackMethod,
+        clases:
+          payment.tipo_pago === "adelanto"
+            ? Math.max(0, Number(payment.clases_adelantadas ?? 0))
+            : Math.max(
+                1,
+                Math.round(
+                  Number(payment.valor ?? 0) /
+                    Math.max(1, Number(student.valor_apoyo_semanal ?? 0)),
+                ),
+              ),
+        valor: Number(payment.valor ?? 0),
+        notas: payment.notas ?? "",
+      });
+    } catch {
+      toast.error("No fue posible generar el PDF de ese pago");
+    }
   }
 
   return (
@@ -433,6 +666,9 @@ export default function ProcessPaymentPage() {
                           Clases adelantadas
                         </TableHead>
                         <TableHead>Notas</TableHead>
+                        <TableHead className="text-right">
+                          Comprobante
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -452,6 +688,19 @@ export default function ProcessPaymentPage() {
                             {payment.clases_adelantadas ?? 0}
                           </TableCell>
                           <TableCell>{payment.notas ?? "-"}</TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                void handleGeneratePaymentPdfFromReport(payment)
+                              }
+                            >
+                              <FileText className="mr-2 h-4 w-4" />
+                              Generar Comprobante de Pago
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { translateErrorMessage } from "@/lib/error-messages";
 
 export type ManagedUserRole = "estudiante" | "profesor";
 
@@ -25,7 +26,10 @@ export async function inviteUserByEmail(email: string, redirectTo: string) {
   });
 
   if (error) {
-    const message = error.message ?? "Error sending invite";
+    const message = translateErrorMessage(
+      error.message,
+      "No se pudo enviar la invitacion por correo.",
+    );
     const isAlreadyRegistered = /already\s+(registered|exists)/i.test(message);
     return {
       ok: false,
@@ -84,7 +88,10 @@ export async function createManagedAuthUser(params: {
   });
 
   if (error || !data.user?.id) {
-    const message = error?.message ?? "No se pudo crear el usuario en auth.";
+    const message = translateErrorMessage(
+      error?.message,
+      "No se pudo crear el usuario en autenticacion.",
+    );
     return {
       ok: false,
       error: message,
@@ -105,7 +112,10 @@ export async function deleteAuthUserById(userId: string): Promise<{
   if (error) {
     return {
       ok: false,
-      error: error.message ?? "No se pudo eliminar el usuario auth.",
+      error: translateErrorMessage(
+        error.message,
+        "No se pudo eliminar el usuario de autenticacion.",
+      ),
     };
   }
 

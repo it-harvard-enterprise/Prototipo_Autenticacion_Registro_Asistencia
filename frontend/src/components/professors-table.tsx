@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { Professor } from "@/lib/types";
 import { deleteProfessor } from "@/app/actions/professors";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -81,6 +82,7 @@ export function ProfessorsTable({ professors }: ProfessorsTableProps) {
               <TableHead className="font-semibold">Nombres</TableHead>
               <TableHead className="font-semibold">Apellidos</TableHead>
               <TableHead className="font-semibold">Correo</TableHead>
+              <TableHead className="font-semibold">Perfil de Usuario</TableHead>
               <TableHead className="font-semibold">Teléfono</TableHead>
               <TableHead className="font-semibold text-right">
                 Acciones
@@ -99,6 +101,19 @@ export function ProfessorsTable({ professors }: ProfessorsTableProps) {
                 <TableCell>{professor.nombres}</TableCell>
                 <TableCell>{professor.apellidos}</TableCell>
                 <TableCell>{professor.email}</TableCell>
+                <TableCell>
+                  <Badge
+                    variant={
+                      professor.perfil_usuario === "activo"
+                        ? "default"
+                        : "outline"
+                    }
+                  >
+                    {professor.perfil_usuario === "activo"
+                      ? "Activo"
+                      : "Inactivo"}
+                  </Badge>
+                </TableCell>
                 <TableCell>{professor.telefono}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1">

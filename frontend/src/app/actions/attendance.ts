@@ -3,6 +3,7 @@
 import { ensureApprovedRoles } from "@/lib/auth/approved-admin";
 import { resolveCurrentUserAccess } from "@/lib/auth/resolved-access";
 import { callBackend } from "@/lib/backend/server-api";
+import { toAppErrorMessage } from "@/lib/error-messages";
 
 type Saldo = "cancelado" | "debe" | null;
 type MetodoPago =
@@ -50,6 +51,10 @@ export interface AttendanceExportRow {
   metodo_pago: MetodoPago;
 }
 
+export interface AttendanceDateOption {
+  date: string;
+}
+
 interface FingerprintBackendResponse {
   success: boolean;
   numero_identificacion?: string | null;
@@ -74,10 +79,7 @@ export interface FingerprintAttendanceMatch {
 }
 
 function toErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return "Error desconocido";
+  return toAppErrorMessage(error, "Error desconocido");
 }
 
 function normalizeAttendanceRows(
@@ -325,6 +327,45 @@ export async function getAttendanceExportByCourseAndDate(
     }
 
     return { success: true, data: payload.data ?? [] };
+  } catch (error) {
+    return { success: false, error: toErrorMessage(error) };
+  }
+}
+
+export async function getAttendanceDatesByCourse(idCurso: number): Promise<{
+  success: boolean;
+  error?: string;
+  data?: AttendanceDateOption[];
+}> {
+  const approval = await ensureApprovedRoles(["administrador", "profesor"]);
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
+  if (!Number.isInteger(idCurso) || idCurso <= 0) {
+    return { success: false, error: "id_curso invalido" };
+  }
+
+  try {
+    const query = new URLSearchParams({
+      id_curso: String(idCurso),
+    });
+
+    const payload = await callBackend<BackendResponse<string[]>>(
+      `/api/attendance/dates?${query.toString()}`,
+      {
+        method: "GET",
+      },
+    );
+
+    if (!payload.success) {
+      return { success: false, error: payload.error || "Error desconocido" };
+    }
+
+    return {
+      success: true,
+      data: (payload.data ?? []).map((date) => ({ date })),
+    };
   } catch (error) {
     return { success: false, error: toErrorMessage(error) };
   }

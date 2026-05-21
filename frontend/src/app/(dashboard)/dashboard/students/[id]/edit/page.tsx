@@ -25,7 +25,6 @@ import {
   COLOMBIA_EPS_OPTIONS,
   EPS_OTHER_OPTION,
   PAYMENT_METHOD_OPTIONS,
-  STUDENT_COORDINATOR_OPTIONS,
   STUDENT_GRADE_OPTIONS,
 } from "@/lib/student-options";
 import { Student } from "@/lib/types";
@@ -46,6 +45,12 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+
+interface AdminCoordinator {
+  id: string;
+  nombres: string;
+  apellidos: string;
+}
 
 const studentSchema = z
   .object({
@@ -76,9 +81,9 @@ const studentSchema = z
       .max(20),
     eps_select: z.string().min(1, "Debe seleccionar una EPS"),
     eps_otra: z.string().optional(),
-    coordinador_academico: z.enum(STUDENT_COORDINATOR_OPTIONS, {
-      message: "Debe seleccionar un coordinador académico",
-    }),
+    coordinador_academico: z
+      .string()
+      .min(1, "Debe seleccionar un coordinador académico"),
     programa: z.string().min(1, "El programa es requerido").max(100),
     fecha_inicio: z.string().min(1, "La fecha de inicio es requerida"),
     fecha_matricula: z.string().min(1, "La fecha de matrícula es requerida"),
@@ -133,6 +138,8 @@ export default function EditStudentPage() {
   const [isFetching, setIsFetching] = useState(true);
   const [student, setStudent] = useState<Student | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [coordinatorOptions, setCoordinatorOptions] = useState<string[]>([]);
+  const [isLoadingCoordinators, setIsLoadingCoordinators] = useState(true);
   const [capturingSide, setCapturingSide] = useState<
     "huella_indice_derecho" | "huella_indice_izquierdo" | null
   >(null);
@@ -183,7 +190,7 @@ export default function EditStudentPage() {
       telefono_acudiente: "",
       eps_select: "NUEVA EPS",
       eps_otra: "",
-      coordinador_academico: "NICOL DELGADO",
+      coordinador_academico: "",
       huella_indice_derecho: "",
       huella_indice_izquierdo: "",
       programa: "",
@@ -199,6 +206,44 @@ export default function EditStudentPage() {
     void fetch("/api/start-service").catch(() => {
       // Keep this fire-and-forget on page load.
     });
+  }, []);
+
+  useEffect(() => {
+    async function fetchCoordinators() {
+      setIsLoadingCoordinators(true);
+
+      try {
+        const res = await fetch("/api/admins", { method: "GET" });
+        const result = (await res.json().catch(() => null)) as {
+          success?: boolean;
+          data?: AdminCoordinator[];
+          error?: string;
+        } | null;
+
+        if (!res.ok || !result?.success) {
+          toast.error(
+            result?.error ?? "No fue posible cargar coordinadores académicos",
+          );
+          setCoordinatorOptions([]);
+          return;
+        }
+
+        const options = (result.data ?? [])
+          .map((admin) => `${admin.nombres ?? ""} ${admin.apellidos ?? ""}`)
+          .map((name) => name.trim())
+          .filter((name) => name.length > 0)
+          .sort((a, b) => a.localeCompare(b, "es"));
+
+        setCoordinatorOptions(options);
+      } catch {
+        toast.error("No fue posible cargar coordinadores académicos");
+        setCoordinatorOptions([]);
+      } finally {
+        setIsLoadingCoordinators(false);
+      }
+    }
+
+    void fetchCoordinators();
   }, []);
 
   useEffect(() => {
@@ -219,12 +264,7 @@ export default function EditStudentPage() {
         ? (s.tipo_identificacion as StudentFormValues["tipo_identificacion"])
         : "CC";
 
-      const normalizedCoordinator = (s.coordinador_academico ?? "")
-        .trim()
-        .toUpperCase();
-      const coordinatorInList = STUDENT_COORDINATOR_OPTIONS.includes(
-        normalizedCoordinator as (typeof STUDENT_COORDINATOR_OPTIONS)[number],
-      );
+      const normalizedCoordinator = (s.coordinador_academico ?? "").trim();
 
       const epsInList = COLOMBIA_EPS_OPTIONS.includes(
         s.eps as (typeof COLOMBIA_EPS_OPTIONS)[number],
@@ -251,9 +291,7 @@ export default function EditStudentPage() {
         telefono_acudiente: s.telefono_acudiente,
         eps_select: epsInList ? s.eps : EPS_OTHER_OPTION,
         eps_otra: epsInList ? "" : s.eps,
-        coordinador_academico: coordinatorInList
-          ? (normalizedCoordinator as StudentFormValues["coordinador_academico"])
-          : "NICOL DELGADO",
+        coordinador_academico: normalizedCoordinator,
         huella_indice_derecho: "",
         huella_indice_izquierdo: "",
         programa: s.programa,
@@ -276,6 +314,20 @@ export default function EditStudentPage() {
 
     fetchStudent();
   }, [id, form]);
+
+  useEffect(() => {
+    if (isLoadingCoordinators || coordinatorOptions.length === 0) {
+      return;
+    }
+
+    const current = (form.getValues("coordinador_academico") ?? "").trim();
+
+    if (!current || !coordinatorOptions.includes(current)) {
+      form.setValue("coordinador_academico", coordinatorOptions[0], {
+        shouldValidate: true,
+      });
+    }
+  }, [coordinatorOptions, isLoadingCoordinators, form]);
 
   async function onSubmit(values: StudentFormValues) {
     const epsValue =
@@ -753,13 +805,24 @@ export default function EditStudentPage() {
                           onBlur={field.onBlur}
                           name={field.name}
                           ref={field.ref}
+                          disabled={isLoadingCoordinators}
                           className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
                         >
-                          {STUDENT_COORDINATOR_OPTIONS.map((coordinator) => (
-                            <option key={coordinator} value={coordinator}>
-                              {coordinator}
-                            </option>
-                          ))}
+                          {isLoadingCoordinators && (
+                            <option value="">Cargando coordinadores...</option>
+                          )}
+                          {!isLoadingCoordinators &&
+                            coordinatorOptions.map((coordinator) => (
+                              <option key={coordinator} value={coordinator}>
+                                {coordinator}
+                              </option>
+                            ))}
+                          {!isLoadingCoordinators &&
+                            coordinatorOptions.length === 0 && (
+                              <option value="">
+                                No hay administradores disponibles
+                              </option>
+                            )}
                         </select>
                       </FormControl>
                       <FormMessage />

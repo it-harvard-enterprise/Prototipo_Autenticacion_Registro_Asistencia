@@ -52,7 +52,7 @@ func buildStudentInsertPayload(app *services.App, req *models.StudentEnrollReque
 	req.Nombres = strings.ToUpper(strings.TrimSpace(req.Nombres))
 	req.Apellidos = strings.ToUpper(strings.TrimSpace(req.Apellidos))
 	req.Grado = strings.ToUpper(strings.TrimSpace(req.Grado))
-	req.CoordinadorAcademico = strings.ToUpper(strings.TrimSpace(req.CoordinadorAcademico))
+	req.CoordinadorAcademico = strings.TrimSpace(req.CoordinadorAcademico)
 	req.MedioPagoMatricula = strings.ToUpper(strings.TrimSpace(req.MedioPagoMatricula))
 
 	if req.TipoIdentificacion == "" || req.NumeroIdentificacion == "" || req.Nombres == "" || req.Apellidos == "" || req.Grado == "" {
@@ -190,11 +190,7 @@ func CreateStudentHandler(app *services.App) gin.HandlerFunc {
 		rows, status, err := app.InsertStudent(c.Request.Context(), payload)
 		if err != nil {
 			_ = app.DeleteManagedAuthUser(c.Request.Context(), userID)
-			if status == http.StatusConflict {
-				jsonError(c, http.StatusConflict, "Error: En la base datos ya existe un usuario con el mismo número de identificación.")
-				return
-			}
-			jsonError(c, http.StatusInternalServerError, err.Error())
+			jsonError(c, status, err.Error())
 			return
 		}
 
@@ -290,6 +286,32 @@ func DeleteStudentHandler(app *services.App) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"success": true})
+	}
+}
+
+func CreateStudentProfileHandler(app *services.App) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		numero := c.Param("numero_identificacion")
+		student, status, err := app.EnsureStudentProfile(c.Request.Context(), numero)
+		if err != nil {
+			jsonError(c, status, err.Error())
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"success": true, "data": student})
+	}
+}
+
+func DeleteStudentProfileHandler(app *services.App) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		numero := c.Param("numero_identificacion")
+		student, status, err := app.DeleteStudentProfile(c.Request.Context(), numero)
+		if err != nil {
+			jsonError(c, status, err.Error())
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"success": true, "data": student})
 	}
 }
 
@@ -421,6 +443,32 @@ func DeleteProfessorHandler(app *services.App) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"success": true})
+	}
+}
+
+func CreateProfessorProfileHandler(app *services.App) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		numero := c.Param("numero_identificacion")
+		professor, status, err := app.EnsureProfessorProfile(c.Request.Context(), numero)
+		if err != nil {
+			jsonError(c, status, err.Error())
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"success": true, "data": professor})
+	}
+}
+
+func DeleteProfessorProfileHandler(app *services.App) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		numero := c.Param("numero_identificacion")
+		professor, status, err := app.DeleteProfessorProfile(c.Request.Context(), numero)
+		if err != nil {
+			jsonError(c, status, err.Error())
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"success": true, "data": professor})
 	}
 }
 
@@ -702,6 +750,23 @@ func ExportAttendanceHandler(app *services.App) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"success": true, "data": rows})
+	}
+}
+
+func AttendanceDatesByCourseHandler(app *services.App) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		idCurso, ok := parseIntQuery(c, "id_curso")
+		if !ok {
+			return
+		}
+
+		dates, status, err := app.GetAttendanceDatesByCourse(c.Request.Context(), idCurso)
+		if err != nil {
+			jsonError(c, status, err.Error())
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"success": true, "data": dates})
 	}
 }
 

@@ -2,6 +2,7 @@
 
 import { ensureApprovedAdmin } from "@/lib/auth/approved-admin";
 import { callBackend } from "@/lib/backend/server-api";
+import { toAppErrorMessage, translateErrorMessage } from "@/lib/error-messages";
 import {
   createAdminClient,
   createManagedAuthUser,
@@ -33,10 +34,7 @@ function upper(value: string): string {
 }
 
 function toErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return "Error desconocido";
+  return toAppErrorMessage(error, "Error desconocido");
 }
 
 type BackendResponse<T> = {
@@ -86,8 +84,10 @@ export async function createAdmin(
     if (fetchError || !admin) {
       return {
         success: false,
-        error:
-          "Se creó el usuario pero no se pudo recuperar los datos del administrador",
+        error: translateErrorMessage(
+          fetchError?.message,
+          "Se creo el usuario pero no se pudieron recuperar los datos del administrador.",
+        ),
       };
     }
 
@@ -140,7 +140,10 @@ export async function updateAdmin(
     if (error || !admin) {
       return {
         success: false,
-        error: error?.message || "No se pudo actualizar el administrador",
+        error: translateErrorMessage(
+          error?.message,
+          "No se pudo actualizar el administrador.",
+        ),
       };
     }
 
@@ -190,7 +193,13 @@ export async function getAdmins(): Promise<{
       .order("created_at", { ascending: false });
 
     if (error) {
-      return { success: false, error: error.message };
+      return {
+        success: false,
+        error: translateErrorMessage(
+          error.message,
+          "No se pudo consultar administradores.",
+        ),
+      };
     }
 
     return { success: true, data: (data ?? []) as Admin[] };
@@ -220,7 +229,10 @@ export async function getAdminById(adminId: string): Promise<{
     if (error || !data) {
       return {
         success: false,
-        error: error?.message || "Administrador no encontrado",
+        error: translateErrorMessage(
+          error?.message,
+          "Administrador no encontrado.",
+        ),
       };
     }
 

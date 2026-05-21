@@ -2,6 +2,7 @@
 
 import { ensureApprovedAdmin } from "@/lib/auth/approved-admin";
 import { callBackend } from "@/lib/backend/server-api";
+import { toAppErrorMessage } from "@/lib/error-messages";
 import { Student } from "@/lib/types";
 
 function upper(value: string): string {
@@ -17,10 +18,7 @@ function upperOrNull(value?: string | null): string | null | undefined {
 }
 
 function toErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return "Error desconocido";
+  return toAppErrorMessage(error, "Error desconocido");
 }
 
 type BackendResponse<T> = {
@@ -87,7 +85,7 @@ export async function createStudent(
           nombre_acudiente: upper(data.nombre_acudiente),
           telefono_acudiente: upper(data.telefono_acudiente),
           eps: upper(data.eps),
-          coordinador_academico: upper(data.coordinador_academico),
+          coordinador_academico: data.coordinador_academico.trim(),
           programa: upper(data.programa),
           fecha_inicio: data.fecha_inicio,
           fecha_matricula: data.fecha_matricula,
@@ -163,7 +161,7 @@ export async function updateStudent(
               eps: upper(data.eps),
             }),
             ...(data.coordinador_academico !== undefined && {
-              coordinador_academico: upper(data.coordinador_academico),
+              coordinador_academico: data.coordinador_academico.trim(),
             }),
             ...(data.programa !== undefined && {
               programa: upper(data.programa),
@@ -227,6 +225,66 @@ export async function deleteStudent(
     }
 
     return { success: true };
+  } catch (err) {
+    return { success: false, error: toErrorMessage(err) };
+  }
+}
+
+export async function createStudentUserProfile(
+  numeroIdentificacion: string,
+): Promise<{
+  success: boolean;
+  error?: string;
+  data?: Student;
+}> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
+  try {
+    const payload = await callBackend<BackendResponse<Student>>(
+      `/api/students/${encodeURIComponent(upper(numeroIdentificacion))}/profile`,
+      {
+        method: "POST",
+      },
+    );
+
+    if (!payload.success) {
+      return { success: false, error: payload.error || "Error desconocido" };
+    }
+
+    return { success: true, data: payload.data };
+  } catch (err) {
+    return { success: false, error: toErrorMessage(err) };
+  }
+}
+
+export async function deleteStudentUserProfile(
+  numeroIdentificacion: string,
+): Promise<{
+  success: boolean;
+  error?: string;
+  data?: Student;
+}> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
+  try {
+    const payload = await callBackend<BackendResponse<Student>>(
+      `/api/students/${encodeURIComponent(upper(numeroIdentificacion))}/profile`,
+      {
+        method: "DELETE",
+      },
+    );
+
+    if (!payload.success) {
+      return { success: false, error: payload.error || "Error desconocido" };
+    }
+
+    return { success: true, data: payload.data };
   } catch (err) {
     return { success: false, error: toErrorMessage(err) };
   }

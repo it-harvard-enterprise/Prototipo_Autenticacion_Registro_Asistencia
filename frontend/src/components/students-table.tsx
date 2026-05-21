@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Student } from "@/lib/types";
 import { deleteStudent } from "@/app/actions/students";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -92,6 +93,7 @@ export function StudentsTable({ students }: StudentsTableProps) {
               <TableHead className="font-semibold">Apellidos</TableHead>
               <TableHead className="font-semibold">Grado</TableHead>
               <TableHead className="font-semibold">Estado de Pagos</TableHead>
+              <TableHead className="font-semibold">Perfil de Usuario</TableHead>
               <TableHead className="font-semibold text-right">
                 Acciones
               </TableHead>
@@ -138,6 +140,19 @@ export function StudentsTable({ students }: StudentsTableProps) {
                     >
                       {estadoTexto}
                     </span>
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={
+                        student.perfil_usuario === "activo"
+                          ? "default"
+                          : "outline"
+                      }
+                    >
+                      {student.perfil_usuario === "activo"
+                        ? "Activo"
+                        : "Inactivo"}
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">

@@ -489,14 +489,6 @@ export default function CourseStudentAssociationPage() {
                       <span className="font-semibold">Horario:</span>{" "}
                       {course.hora_inicio} - {course.hora_fin}
                     </p>
-                    <p>
-                      <span className="font-semibold">Fecha inicio:</span>{" "}
-                      {course.fecha_inicio}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Fecha fin:</span>{" "}
-                      {course.fecha_fin}
-                    </p>
                   </CardContent>
                 </Card>
               )}

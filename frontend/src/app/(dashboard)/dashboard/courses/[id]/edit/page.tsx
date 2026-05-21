@@ -39,16 +39,10 @@ const courseSchema = z
     hora_inicio: z.string().min(1, "La hora de inicio es requerida"),
     hora_fin: z.string().min(1, "La hora de fin es requerida"),
     salon: z.string().max(50).optional(),
-    fecha_inicio: z.string().min(1, "La fecha de inicio es requerida"),
-    fecha_fin: z.string().min(1, "La fecha de fin es requerida"),
   })
   .refine((values) => values.hora_fin > values.hora_inicio, {
     message: "La hora de fin debe ser mayor que la hora de inicio",
     path: ["hora_fin"],
-  })
-  .refine((values) => values.fecha_fin > values.fecha_inicio, {
-    message: "La fecha de fin debe ser mayor que la fecha de inicio",
-    path: ["fecha_fin"],
   });
 
 type CourseFormValues = z.infer<typeof courseSchema>;
@@ -75,8 +69,6 @@ export default function EditCoursePage() {
       hora_inicio: "",
       hora_fin: "",
       salon: "",
-      fecha_inicio: "",
-      fecha_fin: "",
     },
   });
 
@@ -98,8 +90,6 @@ export default function EditCoursePage() {
         hora_inicio: c.hora_inicio,
         hora_fin: c.hora_fin,
         salon: (c.salon ?? "").toUpperCase(),
-        fecha_inicio: c.fecha_inicio,
-        fecha_fin: c.fecha_fin,
       });
       setIsFetching(false);
     }
@@ -116,8 +106,6 @@ export default function EditCoursePage() {
         hora_inicio: values.hora_inicio,
         hora_fin: values.hora_fin,
         salon: values.salon || null,
-        fecha_inicio: values.fecha_inicio,
-        fecha_fin: values.fecha_fin,
       });
 
       if (!result.success) {
@@ -259,35 +247,6 @@ export default function EditCoursePage() {
                       <FormLabel>Hora de fin *</FormLabel>
                       <FormControl>
                         <Input type="time" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="fecha_inicio"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Fecha de inicio *</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="fecha_fin"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Fecha de fin *</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

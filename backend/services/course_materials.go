@@ -180,6 +180,36 @@ func (a *App) resolveCourseMaterialsAccess(ctx context.Context, userID string, r
 		return "", http.StatusForbidden, errors.New("No tiene permisos para gestionar materiales")
 	}
 
+	if role == "estudiante" {
+		studentQuery := url.Values{}
+		studentQuery.Set("select", "numero_identificacion,saldo_estudiantes(clases_adeudadas)")
+		studentQuery.Set("auth_user_id", fmt.Sprintf("eq.%s", resolvedUserID))
+		studentQuery.Set("deleted_at", "is.null")
+
+		studentBody, studentStatus, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/estudiantes", studentQuery, nil, false)
+		if err != nil {
+			return "", studentStatus, err
+		}
+
+		studentRows, err := unmarshalRows(studentBody)
+		if err != nil {
+			return "", http.StatusInternalServerError, err
+		}
+		if len(studentRows) == 0 {
+			return "", http.StatusForbidden, errors.New("No existe un estudiante asociado a este usuario")
+		}
+
+		saldoRow := extractEmbeddedRow(studentRows[0]["saldo_estudiantes"])
+		clasesAdeudadas, ok := asInt(saldoRow["clases_adeudadas"])
+		if !ok || clasesAdeudadas < 0 {
+			clasesAdeudadas = 0
+		}
+
+		if clasesAdeudadas > 0 {
+			return "", http.StatusForbidden, errors.New("Acceso bloqueado a materiales del curso por deuda pendiente")
+		}
+	}
+
 	return role, http.StatusOK, nil
 }
 

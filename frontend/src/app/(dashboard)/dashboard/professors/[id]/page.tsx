@@ -5,16 +5,24 @@ import { getProfessorById } from "@/app/actions/professors";
 import { IDENTIFICATION_TYPE_OPTIONS } from "@/lib/identification-types";
 import { Professor } from "@/lib/types";
 import { Button } from "@/components/ui/button";
+import { EnrollmentConfirmationPdfButton } from "@/components/enrollment-confirmation-pdf-button";
+import { UserProfileActions } from "@/components/user-profile-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface ProfessorDetailPageProps {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ autogenerate_pdf?: string; auto_pdf?: string }>;
 }
 
 export default async function ProfessorDetailPage({
   params,
+  searchParams,
 }: ProfessorDetailPageProps) {
   const { id } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const shouldAutoGeneratePdf =
+    resolvedSearchParams?.autogenerate_pdf === "1" ||
+    resolvedSearchParams?.auto_pdf === "1";
   const result = await getProfessorById(id);
   if (!result.success || !result.data) {
     notFound();
@@ -49,6 +57,28 @@ export default async function ProfessorDetailPage({
     });
   };
 
+  const pdfFields = [
+    { label: "Tipo de identificación", value: identificationTypeLabel },
+    { label: "Identificación", value: p.numero_identificacion },
+    { label: "Nombres", value: p.nombres },
+    { label: "Apellidos", value: p.apellidos },
+    { label: "Correo electrónico", value: p.email ?? "N/A" },
+    { label: "Teléfono", value: p.telefono ?? "N/A" },
+    { label: "Dirección", value: p.direccion ?? "N/A" },
+    { label: "Barrio", value: p.barrio ?? "N/A" },
+    {
+      label: "Contacto de emergencia",
+      value: p.nombre_contacto_emergencia ?? "N/A",
+    },
+    {
+      label: "Teléfono emergencia",
+      value: p.telefono_contacto_emergencia ?? "N/A",
+    },
+    { label: "EPS", value: p.eps ?? "N/A" },
+    { label: "Creado", value: formatDate(p.created_at) },
+    { label: "Última actualización", value: formatDate(p.updated_at) },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -65,13 +95,31 @@ export default async function ProfessorDetailPage({
             Identificación: {p.numero_identificacion}
           </p>
         </div>
-        <Button asChild>
-          <Link href={`/dashboard/professors/${p.numero_identificacion}/edit`}>
-            <Pencil className="mr-2 h-4 w-4" />
-            Editar
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <EnrollmentConfirmationPdfButton
+            subjectType="profesor"
+            fullName={`${p.nombres} ${p.apellidos}`}
+            identification={p.numero_identificacion}
+            fields={pdfFields}
+            autoGenerateOnMount={shouldAutoGeneratePdf}
+          />
+          <Button asChild>
+            <Link
+              href={`/dashboard/professors/${p.numero_identificacion}/edit`}
+            >
+              <Pencil className="mr-2 h-4 w-4" />
+              Editar
+            </Link>
+          </Button>
+        </div>
       </div>
+
+      <UserProfileActions
+        entityType="profesor"
+        numeroIdentificacion={p.numero_identificacion}
+        email={p.email}
+        profileStatus={p.perfil_usuario}
+      />
 
       <Card className="max-w-4xl mx-auto">
         <CardHeader>

@@ -2,6 +2,7 @@
 
 import { callBackend } from "@/lib/backend/server-api";
 import { resolveCurrentUserAccess } from "@/lib/auth/resolved-access";
+import { toAppErrorMessage } from "@/lib/error-messages";
 
 export interface CourseMaterialFolder {
   id: number;
@@ -91,11 +92,7 @@ type BackendMembersResponse = {
 };
 
 function toErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "Error desconocido";
+  return toAppErrorMessage(error, "Error desconocido");
 }
 
 async function ensureCourseMaterialsAccess(requireManage: boolean): Promise<{

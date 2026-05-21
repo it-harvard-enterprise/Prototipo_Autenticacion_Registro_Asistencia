@@ -3,6 +3,7 @@
 import { ensureApprovedAdmin } from "@/lib/auth/approved-admin";
 import { resolveCurrentUserAccess } from "@/lib/auth/resolved-access";
 import { callBackend } from "@/lib/backend/server-api";
+import { toAppErrorMessage } from "@/lib/error-messages";
 import { Student } from "@/lib/types";
 
 export type PaymentMethod =
@@ -56,10 +57,7 @@ interface ProcessStudentPaymentData {
 }
 
 function toErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return "Error desconocido";
+  return toAppErrorMessage(error, "Error desconocido");
 }
 
 function normalizeId(value: string): string {

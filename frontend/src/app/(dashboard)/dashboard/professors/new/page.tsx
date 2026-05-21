@@ -134,7 +134,9 @@ export default function NewProfessorPage() {
       }
 
       toast.success("Profesor creado correctamente");
-      router.replace("/dashboard/professors");
+      router.replace(
+        `/dashboard/professors/${encodeURIComponent(values.numero_identificacion)}?autogenerate_pdf=1`,
+      );
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Error desconocido al crear",

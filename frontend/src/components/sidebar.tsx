@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -11,7 +12,7 @@ import {
   HandCoins,
   BarChart3,
   Fingerprint,
-  FileSpreadsheet,
+  FolderOpen,
   LogOut,
   X,
   Shield,
@@ -94,9 +95,9 @@ const adminNavItems: NavItem[] = [
     icon: Fingerprint,
   },
   {
-    label: "Exportar Lista de Asistencia a Excel",
-    href: "/dashboard/export",
-    icon: FileSpreadsheet,
+    label: "Listas de Asistencia",
+    href: "/dashboard/attendance-lists",
+    icon: FolderOpen,
   },
 ];
 
@@ -150,11 +151,6 @@ const professorNavItems: NavItem[] = [
     label: "Tomar Asistencia",
     href: "/dashboard/attendance",
     icon: ClipboardList,
-  },
-  {
-    label: "Exportar Lista de Asistencia a Excel",
-    href: "/dashboard/export",
-    icon: FileSpreadsheet,
   },
 ];
 
@@ -224,10 +220,17 @@ export function Sidebar({
     <div className="flex flex-col h-full bg-[#3d100f] text-white w-64">
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-5 border-b border-[#6b1e1d]">
-        <div>
-          <h2 className="text-lg font-bold text-white">
-            Aula Virtual - Harvard Enterprise
-          </h2>
+        <div className="flex-1">
+          <div className="mb-2 flex justify-center">
+            <Image
+              src="/logos/Logo_Nuevo.png"
+              alt="Logo Harvard Enterprise"
+              width={150}
+              height={150}
+              priority
+            />
+          </div>
+          <h2 className="text-lg font-bold text-white">Aula Virtual</h2>
           {/* <p className="text-xs text-[#d49392]">
             Sistema de Creación de Estudiantes, Cursos y Registro de Asistencia
             de Harvard Enterprise.

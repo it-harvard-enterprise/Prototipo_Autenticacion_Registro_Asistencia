@@ -2,6 +2,7 @@
 
 import { ensureApprovedAdmin } from "@/lib/auth/approved-admin";
 import { callBackend } from "@/lib/backend/server-api";
+import { toAppErrorMessage } from "@/lib/error-messages";
 import { Professor } from "@/lib/types";
 
 function upper(value: string): string {
@@ -9,10 +10,7 @@ function upper(value: string): string {
 }
 
 function toErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return "Error desconocido";
+  return toAppErrorMessage(error, "Error desconocido");
 }
 
 type BackendResponse<T> = {
@@ -160,6 +158,66 @@ export async function deleteProfessor(
     }
 
     return { success: true };
+  } catch (err) {
+    return { success: false, error: toErrorMessage(err) };
+  }
+}
+
+export async function createProfessorUserProfile(
+  numeroIdentificacion: string,
+): Promise<{
+  success: boolean;
+  error?: string;
+  data?: Professor;
+}> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
+  try {
+    const payload = await callBackend<BackendResponse<Professor>>(
+      `/api/professors/${encodeURIComponent(upper(numeroIdentificacion))}/profile`,
+      {
+        method: "POST",
+      },
+    );
+
+    if (!payload.success) {
+      return { success: false, error: payload.error || "Error desconocido" };
+    }
+
+    return { success: true, data: payload.data };
+  } catch (err) {
+    return { success: false, error: toErrorMessage(err) };
+  }
+}
+
+export async function deleteProfessorUserProfile(
+  numeroIdentificacion: string,
+): Promise<{
+  success: boolean;
+  error?: string;
+  data?: Professor;
+}> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
+  try {
+    const payload = await callBackend<BackendResponse<Professor>>(
+      `/api/professors/${encodeURIComponent(upper(numeroIdentificacion))}/profile`,
+      {
+        method: "DELETE",
+      },
+    );
+
+    if (!payload.success) {
+      return { success: false, error: payload.error || "Error desconocido" };
+    }
+
+    return { success: true, data: payload.data };
   } catch (err) {
     return { success: false, error: toErrorMessage(err) };
   }

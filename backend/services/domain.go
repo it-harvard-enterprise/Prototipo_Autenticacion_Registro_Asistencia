@@ -43,6 +43,14 @@ func normalizeOptionalTrim(value string) any {
 	return trimmed
 }
 
+func normalizeOptionalLower(value string) any {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil
+	}
+	return strings.ToLower(trimmed)
+}
+
 func asString(value any) (string, bool) {
 	s, ok := value.(string)
 	if !ok {
@@ -227,6 +235,23 @@ func (a *App) callSupabaseAuthAdmin(ctx context.Context, method, path string, pa
 	_ = json.Unmarshal(respBody, &sbErr)
 	if sbErr.Message != "" {
 		return nil, resp.StatusCode, errors.New(sbErr.Message)
+	}
+
+	var authErr supabaseAuthErrorPayload
+	_ = json.Unmarshal(respBody, &authErr)
+
+	message := strings.TrimSpace(authErr.ErrorDescription)
+	if message == "" {
+		message = strings.TrimSpace(authErr.Message)
+	}
+	if message == "" {
+		message = strings.TrimSpace(authErr.Msg)
+	}
+	if message == "" {
+		message = strings.TrimSpace(authErr.Error)
+	}
+	if message != "" {
+		return nil, resp.StatusCode, errors.New(message)
 	}
 
 	return nil, resp.StatusCode, fmt.Errorf("supabase auth admin request failed with status %d", resp.StatusCode)
@@ -541,7 +566,13 @@ func (a *App) CreateManagedAuthUser(ctx context.Context, params models.ManagedAu
 
 	body, status, err := a.callSupabaseAuthAdmin(ctx, http.MethodPost, "/users", payload)
 	if err != nil {
-		alreadyRegistered := strings.Contains(strings.ToLower(err.Error()), "already") && strings.Contains(strings.ToLower(err.Error()), "register")
+		lowerErr := strings.ToLower(err.Error())
+		alreadyRegistered := strings.Contains(lowerErr, "already") && strings.Contains(lowerErr, "register")
+		if !alreadyRegistered {
+			alreadyRegistered = strings.Contains(lowerErr, "already exists") ||
+				(strings.Contains(lowerErr, "email") && strings.Contains(lowerErr, "exists")) ||
+				(strings.Contains(lowerErr, "email") && strings.Contains(lowerErr, "registered"))
+		}
 		if status == http.StatusConflict || status == http.StatusUnprocessableEntity {
 			return "", alreadyRegistered, err
 		}
@@ -716,6 +747,14 @@ func (a *App) ListStudents(ctx context.Context) ([]map[string]any, error) {
 		attachPaymentStatusFields(row)
 	}
 
+	profilesByID, profilesByEmail, err := a.loadProfileIndexByRole(ctx, "estudiante")
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		attachProfileStatus(row, profilesByID, profilesByEmail)
+	}
+
 	return rows, nil
 }
 
@@ -758,6 +797,12 @@ func (a *App) GetStudentByNumero(ctx context.Context, numeroIdentificacion strin
 	student := rows[0]
 	attachPaymentStatusFields(student)
 	a.fillStudentEmailFromProfile(ctx, student)
+
+	profilesByID, profilesByEmail, err := a.loadProfileIndexByRole(ctx, "estudiante")
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+	attachProfileStatus(student, profilesByID, profilesByEmail)
 
 	return student, http.StatusOK, nil
 }
@@ -1211,7 +1256,7 @@ func buildStudentUpdatePayload(data map[string]any) map[string]any {
 		if value == nil {
 			payload["email"] = nil
 		} else if s, ok := asString(value); ok {
-			payload["email"] = normalizeOptionalTrim(s)
+			payload["email"] = normalizeOptionalLower(s)
 		}
 	}
 	if value, ok := data["grado"]; ok {
@@ -1251,7 +1296,7 @@ func buildStudentUpdatePayload(data map[string]any) map[string]any {
 	}
 	if value, ok := data["coordinador_academico"]; ok {
 		if s, ok := asString(value); ok {
-			payload["coordinador_academico"] = normalizeUpper(s)
+			payload["coordinador_academico"] = strings.TrimSpace(s)
 		}
 	}
 	if value, ok := data["programa"]; ok {
@@ -1288,6 +1333,33 @@ func buildStudentUpdatePayload(data map[string]any) map[string]any {
 	return payload
 }
 
+func (a *App) studentEmailExistsInAnotherRecord(ctx context.Context, email, numeroIdentificacion string) (bool, int, error) {
+	normalizedEmail := normalizeLower(email)
+	normalizedNumero := normalizeUpper(numeroIdentificacion)
+	if normalizedEmail == "" || normalizedNumero == "" {
+		return false, http.StatusBadRequest, errors.New("email y numero_identificacion son requeridos")
+	}
+
+	query := url.Values{}
+	query.Set("select", "numero_identificacion")
+	query.Set("email", fmt.Sprintf("eq.%s", normalizedEmail))
+	query.Set("numero_identificacion", fmt.Sprintf("neq.%s", normalizedNumero))
+	query.Set("deleted_at", "is.null")
+	query.Set("limit", "1")
+
+	body, status, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/estudiantes", query, nil, false)
+	if err != nil {
+		return false, status, err
+	}
+
+	rows, err := unmarshalRows(body)
+	if err != nil {
+		return false, http.StatusInternalServerError, err
+	}
+
+	return len(rows) > 0, http.StatusOK, nil
+}
+
 func (a *App) UpdateStudentRecord(ctx context.Context, numeroIdentificacion string, data map[string]any) (map[string]any, int, error) {
 	numero := normalizeUpper(numeroIdentificacion)
 	if numero == "" {
@@ -1295,6 +1367,18 @@ func (a *App) UpdateStudentRecord(ctx context.Context, numeroIdentificacion stri
 	}
 
 	payload := buildStudentUpdatePayload(data)
+
+	if emailValue, ok := payload["email"]; ok && emailValue != nil {
+		if email, ok := emailValue.(string); ok && strings.TrimSpace(email) != "" {
+			exists, status, err := a.studentEmailExistsInAnotherRecord(ctx, email, numero)
+			if err != nil {
+				return nil, status, err
+			}
+			if exists {
+				return nil, http.StatusConflict, errors.New("Ya existe un usuario con el mismo correo electronico. Use un correo diferente.")
+			}
+		}
+	}
 
 	query := url.Values{}
 	query.Set("numero_identificacion", fmt.Sprintf("eq.%s", numero))
@@ -1375,7 +1459,20 @@ func (a *App) ListProfessors(ctx context.Context) ([]map[string]any, error) {
 		return nil, err
 	}
 
-	return unmarshalRows(body)
+	rows, err := unmarshalRows(body)
+	if err != nil {
+		return nil, err
+	}
+
+	profilesByID, profilesByEmail, err := a.loadProfileIndexByRole(ctx, "profesor")
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		attachProfileStatus(row, profilesByID, profilesByEmail)
+	}
+
+	return rows, nil
 }
 
 func (a *App) GetProfessorByNumero(ctx context.Context, numeroIdentificacion string) (map[string]any, int, error) {
@@ -1400,6 +1497,12 @@ func (a *App) GetProfessorByNumero(ctx context.Context, numeroIdentificacion str
 	if len(rows) == 0 {
 		return nil, http.StatusNotFound, errors.New("no se encontró el profesor")
 	}
+
+	profilesByID, profilesByEmail, err := a.loadProfileIndexByRole(ctx, "profesor")
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+	attachProfileStatus(rows[0], profilesByID, profilesByEmail)
 
 	return rows[0], http.StatusOK, nil
 }
@@ -1623,6 +1726,11 @@ func (a *App) CourseExists(ctx context.Context, idCurso int) (bool, error) {
 
 func buildCoursePayload(data map[string]any, includeUpdatedAt bool) map[string]any {
 	payload := map[string]any{}
+	if !includeUpdatedAt {
+		// Keep DB constraints satisfied while courses are treated as perpetual.
+		payload["fecha_inicio"] = "2000-01-01"
+		payload["fecha_fin"] = "2999-12-31"
+	}
 	if includeUpdatedAt {
 		payload["updated_at"] = time.Now().UTC().Format(time.RFC3339Nano)
 	}
@@ -2855,6 +2963,54 @@ func (a *App) GetAttendanceExport(ctx context.Context, idCurso int, date string)
 	return exportRows, http.StatusOK, nil
 }
 
+func (a *App) GetAttendanceDatesByCourse(ctx context.Context, idCurso int) ([]string, int, error) {
+	if idCurso <= 0 {
+		return nil, http.StatusBadRequest, errors.New("id_curso invalido")
+	}
+
+	query := url.Values{}
+	query.Set("select", "fecha")
+	query.Set("id_curso", fmt.Sprintf("eq.%d", idCurso))
+	query.Set("order", "fecha.desc")
+
+	body, status, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/registro_asistencia", query, nil, false)
+	if err != nil {
+		return nil, status, err
+	}
+
+	rows, err := unmarshalRows(body)
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+
+	seen := map[string]bool{}
+	dates := make([]string, 0, len(rows))
+
+	for _, row := range rows {
+		fechaRaw, ok := asString(row["fecha"])
+		if !ok {
+			continue
+		}
+
+		parsed, parseErr := time.Parse(time.RFC3339Nano, strings.TrimSpace(fechaRaw))
+		if parseErr != nil {
+			continue
+		}
+
+		dateOnly := parsed.In(bogotaTZ).Format("2006-01-02")
+		if dateOnly == "" || seen[dateOnly] {
+			continue
+		}
+
+		seen[dateOnly] = true
+		dates = append(dates, dateOnly)
+	}
+
+	sort.Sort(sort.Reverse(sort.StringSlice(dates)))
+
+	return dates, http.StatusOK, nil
+}
+
 func (a *App) GetStudentAttendanceSummary(ctx context.Context, numeroIdentificacion string) (map[string]any, int, error) {
 	numero := normalizeUpper(numeroIdentificacion)
 	if numero == "" {
@@ -2917,14 +3073,6 @@ func normalizePersonCourse(raw map[string]any) (models.PersonCourseInfo, bool) {
 	if !ok {
 		return models.PersonCourseInfo{}, false
 	}
-	fechaInicio, ok := asString(raw["fecha_inicio"])
-	if !ok {
-		return models.PersonCourseInfo{}, false
-	}
-	fechaFin, ok := asString(raw["fecha_fin"])
-	if !ok {
-		return models.PersonCourseInfo{}, false
-	}
 
 	var salon *string
 	if salonValue, ok := asString(raw["salon"]); ok && strings.TrimSpace(salonValue) != "" {
@@ -2939,8 +3087,6 @@ func normalizePersonCourse(raw map[string]any) (models.PersonCourseInfo, bool) {
 		Salon:       salon,
 		HoraInicio:  horaInicio,
 		HoraFin:     horaFin,
-		FechaInicio: fechaInicio,
-		FechaFin:    fechaFin,
 	}, true
 }
 
@@ -2976,7 +3122,7 @@ func (a *App) LookupPersonByID(ctx context.Context, numeroIdentificacion string)
 	}
 
 	studentCoursesQuery := url.Values{}
-	studentCoursesQuery.Set("select", "id_curso,cursos(id_curso,nombre_curso,nivel_curso,salon,hora_inicio,hora_fin,fecha_inicio,fecha_fin)")
+	studentCoursesQuery.Set("select", "id_curso,cursos(id_curso,nombre_curso,nivel_curso,salon,hora_inicio,hora_fin)")
 	studentCoursesQuery.Set("numero_identificacion", fmt.Sprintf("eq.%s", numero))
 	studentCoursesBody, status, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/cursos_x_estudiantes", studentCoursesQuery, nil, false)
 	if err != nil {
@@ -2984,7 +3130,7 @@ func (a *App) LookupPersonByID(ctx context.Context, numeroIdentificacion string)
 	}
 
 	professorCoursesQuery := url.Values{}
-	professorCoursesQuery.Set("select", "id_curso,cursos(id_curso,nombre_curso,nivel_curso,salon,hora_inicio,hora_fin,fecha_inicio,fecha_fin)")
+	professorCoursesQuery.Set("select", "id_curso,cursos(id_curso,nombre_curso,nivel_curso,salon,hora_inicio,hora_fin)")
 	professorCoursesQuery.Set("numero_identificacion", fmt.Sprintf("eq.%s", numero))
 	professorCoursesBody, status, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/cursos_x_profesores", professorCoursesQuery, nil, false)
 	if err != nil {
@@ -3107,8 +3253,6 @@ func (a *App) LookupPersonByID(ctx context.Context, numeroIdentificacion string)
 				"salon":        course.Salon,
 				"hora_inicio":  course.HoraInicio,
 				"hora_fin":     course.HoraFin,
-				"fecha_inicio": course.FechaInicio,
-				"fecha_fin":    course.FechaFin,
 			})
 		}
 

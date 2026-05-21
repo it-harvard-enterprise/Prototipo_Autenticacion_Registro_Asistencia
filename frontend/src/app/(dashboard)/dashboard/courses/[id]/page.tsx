@@ -123,18 +123,6 @@ export default async function CourseDetailPage({
             </div>
             <div>
               <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Fecha de inicio
-              </dt>
-              <dd className="mt-1 text-sm text-gray-900">{c.fecha_inicio}</dd>
-            </div>
-            <div>
-              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Fecha de fin
-              </dt>
-              <dd className="mt-1 text-sm text-gray-900">{c.fecha_fin}</dd>
-            </div>
-            <div>
-              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Creado
               </dt>
               <dd className="mt-1 text-sm text-gray-900">

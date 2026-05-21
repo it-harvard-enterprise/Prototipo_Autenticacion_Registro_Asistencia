@@ -11,19 +11,6 @@ function formatHour(hour: string): string {
   return hour.length >= 5 ? hour.slice(0, 5) : hour;
 }
 
-function formatDate(dateValue: string): string {
-  const date = new Date(dateValue);
-  if (Number.isNaN(date.getTime())) {
-    return dateValue;
-  }
-
-  return date.toLocaleDateString("es-CO", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
-
 export default async function MyCoursesPage() {
   const access = await resolveCurrentUserAccess();
 
@@ -108,10 +95,7 @@ export default async function MyCoursesPage() {
                   <DoorOpen className="h-4 w-4 text-[#b92f2d]" />
                   {course.salon?.trim() || "Sin salón asignado"}
                 </p>
-                <p className="text-xs text-gray-500">
-                  Vigencia: {formatDate(course.fecha_inicio)} -{" "}
-                  {formatDate(course.fecha_fin)}
-                </p>
+                <p className="text-xs text-gray-500">Curso activo</p>
               </div>
 
               <Link
