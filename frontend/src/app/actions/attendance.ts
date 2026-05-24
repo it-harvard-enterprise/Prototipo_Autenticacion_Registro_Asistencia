@@ -27,6 +27,7 @@ export interface AttendanceStudentRow {
   saldo: Saldo;
   metodo_pago: MetodoPago;
   marcado_en: string | null;
+  clases_adelantadas?: number;
 }
 
 export interface AttendanceSaveRow {
@@ -343,7 +344,7 @@ export async function getAttendanceDatesByCourse(idCurso: number): Promise<{
   }
 
   if (!Number.isInteger(idCurso) || idCurso <= 0) {
-    return { success: false, error: "id_curso invalido" };
+    return { success: false, error: "id_curso inválido" };
   }
 
   try {

@@ -19,7 +19,7 @@ func parseIntParam(c *gin.Context, key string) (int, bool) {
 	value := strings.TrimSpace(c.Param(key))
 	parsed, err := strconv.Atoi(value)
 	if err != nil {
-		jsonError(c, http.StatusBadRequest, key+" invalido")
+		jsonError(c, http.StatusBadRequest, key+" inválido")
 		return 0, false
 	}
 	return parsed, true
@@ -29,7 +29,7 @@ func parseIntQuery(c *gin.Context, key string) (int, bool) {
 	value := strings.TrimSpace(c.Query(key))
 	parsed, err := strconv.Atoi(value)
 	if err != nil {
-		jsonError(c, http.StatusBadRequest, key+" invalido")
+		jsonError(c, http.StatusBadRequest, key+" inválido")
 		return 0, false
 	}
 	return parsed, true
@@ -436,9 +436,9 @@ func DeleteProfessorHandler(app *services.App) gin.HandlerFunc {
 			return
 		}
 
-		_, err := app.DeleteProfessorRecord(c.Request.Context(), req.NumeroIdentificacion)
+		status, err := app.DeleteProfessorRecord(c.Request.Context(), req.NumeroIdentificacion)
 		if err != nil {
-			jsonError(c, http.StatusInternalServerError, err.Error())
+			jsonError(c, status, err.Error())
 			return
 		}
 
@@ -843,7 +843,7 @@ func ListPaymentsReportHandler(app *services.App) gin.HandlerFunc {
 		if rawLimit := strings.TrimSpace(c.Query("limit")); rawLimit != "" {
 			parsed, err := strconv.Atoi(rawLimit)
 			if err != nil {
-				jsonError(c, http.StatusBadRequest, "limit invalido")
+				jsonError(c, http.StatusBadRequest, "limit inválido")
 				return
 			}
 			limit = parsed

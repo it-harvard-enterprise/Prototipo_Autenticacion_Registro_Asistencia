@@ -158,6 +158,19 @@ type CourseMaterialCreateFolderRequest struct {
 	UserID         string `json:"user_id"`
 }
 
+type CourseMaterialUpdateFolderRequest struct {
+	IDCurso  int    `json:"id_curso"`
+	FolderID int    `json:"folder_id"`
+	Name     string `json:"name"`
+	UserID   string `json:"user_id"`
+}
+
+type CourseMaterialDeleteFolderRequest struct {
+	IDCurso  int    `json:"id_curso"`
+	FolderID int    `json:"folder_id"`
+	UserID   string `json:"user_id"`
+}
+
 type CourseMaterialDeleteFileRequest struct {
 	ID     int    `json:"id"`
 	UserID string `json:"user_id"`

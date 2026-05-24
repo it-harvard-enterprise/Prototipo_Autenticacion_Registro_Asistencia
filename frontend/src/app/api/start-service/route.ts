@@ -5,7 +5,7 @@ export async function GET() {
   const backendUrl = resolveBiometricBackendBaseUrl();
   if (!backendUrl) {
     return NextResponse.json(
-      { message: "Backend URL not configured." },
+      { message: "La URL del backend no está configurada." },
       { status: 500 },
     );
   }
@@ -19,7 +19,7 @@ export async function GET() {
     return NextResponse.json(body, { status: res.status });
   } catch (err) {
     return NextResponse.json(
-      { message: "Fingerprint capture service could not be started" },
+      { message: "No se pudo iniciar el servicio de captura de huellas" },
       { status: 500 },
     );
   }

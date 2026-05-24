@@ -75,7 +75,7 @@ export function EnrollmentConfirmationPdfButton({
 
     const truncateToWidth = (text: string, maxWidth: number) => {
       const normalized = text.replace(/\s+/g, " ").trim();
-      if (!normalized) return "N/A";
+      if (!normalized) return "N/D";
       if (doc.getTextWidth(normalized) <= maxWidth) return normalized;
 
       const ellipsis = "...";
@@ -123,7 +123,7 @@ export function EnrollmentConfirmationPdfButton({
     y += 6;
 
     doc.text(
-      `Fecha de emision: ${new Date().toLocaleString("es-CO")}`,
+      `Fecha de emisión: ${new Date().toLocaleString("es-CO")}`,
       horizontalPadding,
       y,
     );
@@ -165,7 +165,7 @@ export function EnrollmentConfirmationPdfButton({
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(7.4);
-      const safeValue = value && value.trim() !== "" ? value : "N/A";
+      const safeValue = value && value.trim() !== "" ? value : "N/D";
       const valueText = truncateToWidth(safeValue, columnWidth - 1);
       doc.text(valueText, x, rowY + valueOffset);
     });

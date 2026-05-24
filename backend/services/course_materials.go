@@ -13,16 +13,18 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 )
 
 const (
-	maxCourseMaterialFileBytes       int64 = 25 * 1024 * 1024
+	maxCourseMaterialFileBytes       int64 = 2 * 1024 * 1024 * 1024
 	maxCourseMaterialCoverBytes      int64 = 10 * 1024 * 1024
 	maxCourseMaterialFolderCardBytes int64 = 10 * 1024 * 1024
 	youtubeMaterialBucket                  = "youtube_link"
 	youtubeMaterialContentType             = "video/youtube"
+	externalImageURLBucket                 = "external_url"
 )
 
 type CourseMaterialUploadInput struct {
@@ -35,6 +37,31 @@ type CourseMaterialObject struct {
 	Bytes       []byte
 	ContentType string
 	FileName    string
+	SourceURL   string
+}
+
+type countingReader struct {
+	reader io.Reader
+	total  int64
+}
+
+func (r *countingReader) Read(p []byte) (int, error) {
+	n, err := r.reader.Read(p)
+	r.total += int64(n)
+	return n, err
+}
+
+func formatCourseMaterialBytes(value int64) string {
+	if value < 1024 {
+		return fmt.Sprintf("%d B", value)
+	}
+	if value < 1024*1024 {
+		return fmt.Sprintf("%.1f KB", float64(value)/1024)
+	}
+	if value < 1024*1024*1024 {
+		return fmt.Sprintf("%.1f MB", float64(value)/(1024*1024))
+	}
+	return fmt.Sprintf("%.2f GB", float64(value)/(1024*1024*1024))
 }
 
 func normalizeCourseMaterialFileName(name string, fallback string) string {
@@ -127,6 +154,38 @@ func escapeStoragePath(storagePath string) string {
 		parts[index] = url.PathEscape(parts[index])
 	}
 	return strings.Join(parts, "/")
+}
+
+func buildIntInFilter(values []int) string {
+	parts := make([]string, 0, len(values))
+	for _, value := range values {
+		parts = append(parts, strconv.Itoa(value))
+	}
+
+	return fmt.Sprintf("in.(%s)", strings.Join(parts, ","))
+}
+
+func normalizeExternalImageURL(rawURL string) (string, error) {
+	trimmed := strings.TrimSpace(rawURL)
+	if trimmed == "" {
+		return "", errors.New("Debe ingresar una URL de imagen")
+	}
+
+	parsed, err := url.ParseRequestURI(trimmed)
+	if err != nil {
+		return "", errors.New("La URL de imagen es inválida")
+	}
+
+	scheme := strings.ToLower(strings.TrimSpace(parsed.Scheme))
+	if scheme != "http" && scheme != "https" {
+		return "", errors.New("La URL de imagen debe iniciar con http:// o https://")
+	}
+
+	if strings.TrimSpace(parsed.Host) == "" {
+		return "", errors.New("La URL de imagen es inválida")
+	}
+
+	return parsed.String(), nil
 }
 
 func getCourseMaterialsBucketName() (string, error) {
@@ -266,9 +325,66 @@ func (a *App) callSupabaseStorage(
 	return nil, nil, resp.StatusCode, fmt.Errorf("supabase storage request failed with status %d", resp.StatusCode)
 }
 
+func (a *App) callSupabaseStorageStream(
+	ctx context.Context,
+	method string,
+	pathWithPrefix string,
+	body io.Reader,
+	contentType string,
+	extraHeaders map[string]string,
+) ([]byte, http.Header, int, error) {
+	requestURL := a.SupabaseURL + "/storage/v1" + pathWithPrefix
+
+	req, err := http.NewRequestWithContext(ctx, method, requestURL, body)
+	if err != nil {
+		return nil, nil, http.StatusInternalServerError, err
+	}
+
+	req.Header.Set("apikey", a.ServiceKey)
+	req.Header.Set("Authorization", "Bearer "+a.ServiceKey)
+	if strings.TrimSpace(contentType) != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+	for key, value := range extraHeaders {
+		req.Header.Set(key, value)
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, nil, http.StatusBadGateway, err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, nil, http.StatusBadGateway, err
+	}
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return respBody, resp.Header, resp.StatusCode, nil
+	}
+
+	var storageErr supabaseError
+	_ = json.Unmarshal(respBody, &storageErr)
+	if storageErr.Message != "" {
+		return nil, nil, resp.StatusCode, fmt.Errorf("supabase storage error: %s", storageErr.Message)
+	}
+
+	return nil, nil, resp.StatusCode, fmt.Errorf("supabase storage request failed with status %d", resp.StatusCode)
+}
+
 func (a *App) uploadStorageObject(ctx context.Context, bucket string, storagePath string, contentType string, data []byte) (int, error) {
 	apiPath := fmt.Sprintf("/object/%s/%s", url.PathEscape(bucket), escapeStoragePath(storagePath))
 	_, _, status, err := a.callSupabaseStorage(ctx, http.MethodPost, apiPath, data, contentType, map[string]string{
+		"x-upsert": "false",
+	})
+	return status, err
+}
+
+func (a *App) uploadStorageObjectStream(ctx context.Context, bucket string, storagePath string, contentType string, data io.Reader) (int, error) {
+	apiPath := fmt.Sprintf("/object/%s/%s", url.PathEscape(bucket), escapeStoragePath(storagePath))
+	_, _, status, err := a.callSupabaseStorageStream(ctx, http.MethodPost, apiPath, data, contentType, map[string]string{
 		"x-upsert": "false",
 	})
 	return status, err
@@ -292,7 +408,7 @@ func (a *App) downloadStorageObject(ctx context.Context, bucket string, storageP
 
 func (a *App) GetCourseMaterialsSnapshot(ctx context.Context, idCurso int, userID string) (map[string]any, int, error) {
 	if idCurso <= 0 {
-		return nil, http.StatusBadRequest, errors.New("id_curso invalido")
+		return nil, http.StatusBadRequest, errors.New("id_curso inválido")
 	}
 
 	if _, status, err := a.resolveCourseMaterialsAccess(ctx, userID, false); err != nil {
@@ -422,7 +538,7 @@ func (a *App) GetCourseMaterialsSnapshot(ctx context.Context, idCurso int, userI
 
 func (a *App) CreateCourseMaterialFolder(ctx context.Context, idCurso int, parentFolderID *int, name string, userID string) (map[string]any, int, error) {
 	if idCurso <= 0 {
-		return nil, http.StatusBadRequest, errors.New("id_curso invalido")
+		return nil, http.StatusBadRequest, errors.New("id_curso inválido")
 	}
 
 	trimmedName := strings.TrimSpace(name)
@@ -438,7 +554,7 @@ func (a *App) CreateCourseMaterialFolder(ctx context.Context, idCurso int, paren
 	var normalizedParentFolderID any = nil
 	if parentFolderID != nil {
 		if *parentFolderID <= 0 {
-			return nil, http.StatusBadRequest, errors.New("parent_folder_id invalido")
+			return nil, http.StatusBadRequest, errors.New("parent_folder_id inválido")
 		}
 		if status, err := a.validateCourseMaterialFolder(ctx, idCurso, *parentFolderID); err != nil {
 			return nil, status, err
@@ -474,6 +590,229 @@ func (a *App) CreateCourseMaterialFolder(ctx context.Context, idCurso int, paren
 	return rows[0], http.StatusCreated, nil
 }
 
+func (a *App) UpdateCourseMaterialFolder(ctx context.Context, idCurso int, folderID int, name string, userID string) (map[string]any, int, error) {
+	if idCurso <= 0 {
+		return nil, http.StatusBadRequest, errors.New("id_curso inválido")
+	}
+	if folderID <= 0 {
+		return nil, http.StatusBadRequest, errors.New("folder_id inválido")
+	}
+
+	trimmedName := strings.TrimSpace(name)
+	if trimmedName == "" {
+		return nil, http.StatusBadRequest, errors.New("El nombre de la carpeta es obligatorio")
+	}
+
+	resolvedUserID := strings.TrimSpace(userID)
+	if _, status, err := a.resolveCourseMaterialsAccess(ctx, resolvedUserID, true); err != nil {
+		return nil, status, err
+	}
+
+	lookupQuery := url.Values{}
+	lookupQuery.Set("select", "id,id_curso,parent_folder_id,name,created_at,updated_at")
+	lookupQuery.Set("id", fmt.Sprintf("eq.%d", folderID))
+	lookupQuery.Set("id_curso", fmt.Sprintf("eq.%d", idCurso))
+
+	lookupBody, status, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/course_material_folders", lookupQuery, nil, false)
+	if err != nil {
+		return nil, status, err
+	}
+
+	rows, err := unmarshalRows(lookupBody)
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+	if len(rows) == 0 {
+		return nil, http.StatusNotFound, errors.New("La carpeta no existe o no pertenece al curso")
+	}
+
+	currentName, _ := asString(rows[0]["name"])
+	if strings.TrimSpace(currentName) == trimmedName {
+		return rows[0], http.StatusOK, nil
+	}
+
+	updateQuery := url.Values{}
+	updateQuery.Set("id", fmt.Sprintf("eq.%d", folderID))
+	updateQuery.Set("id_curso", fmt.Sprintf("eq.%d", idCurso))
+	updateQuery.Set("select", "id,id_curso,parent_folder_id,name,created_at,updated_at")
+
+	updatePayload := map[string]any{
+		"name": trimmedName,
+	}
+
+	updateBody, status, err := a.CallSupabase(ctx, http.MethodPatch, "/rest/v1/course_material_folders", updateQuery, updatePayload, true)
+	if err != nil {
+		if status == http.StatusConflict {
+			return nil, http.StatusConflict, errors.New("Ya existe una carpeta con ese nombre en el mismo nivel")
+		}
+		return nil, status, err
+	}
+
+	updatedRows, err := unmarshalRows(updateBody)
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+	if len(updatedRows) == 0 {
+		return nil, http.StatusInternalServerError, errors.New("No se pudo actualizar la carpeta")
+	}
+
+	return updatedRows[0], http.StatusOK, nil
+}
+
+func (a *App) DeleteCourseMaterialFolder(ctx context.Context, idCurso int, folderID int, userID string) (int, error) {
+	if idCurso <= 0 {
+		return http.StatusBadRequest, errors.New("id_curso inválido")
+	}
+	if folderID <= 0 {
+		return http.StatusBadRequest, errors.New("folder_id inválido")
+	}
+
+	resolvedUserID := strings.TrimSpace(userID)
+	if _, status, err := a.resolveCourseMaterialsAccess(ctx, resolvedUserID, true); err != nil {
+		return status, err
+	}
+
+	foldersQuery := url.Values{}
+	foldersQuery.Set("select", "id,parent_folder_id,card_storage_bucket,card_storage_path")
+	foldersQuery.Set("id_curso", fmt.Sprintf("eq.%d", idCurso))
+
+	foldersBody, status, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/course_material_folders", foldersQuery, nil, false)
+	if err != nil {
+		return status, err
+	}
+
+	folderRows, err := unmarshalRows(foldersBody)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+
+	parentByID := map[int]int{}
+	cardByFolderID := map[int]struct {
+		bucket string
+		path   string
+	}{}
+	targetExists := false
+
+	for _, row := range folderRows {
+		rowID, _ := asInt(row["id"])
+		if rowID <= 0 {
+			continue
+		}
+
+		parentID, _ := asInt(row["parent_folder_id"])
+		cardBucket, _ := asString(row["card_storage_bucket"])
+		cardPath, _ := asString(row["card_storage_path"])
+
+		parentByID[rowID] = parentID
+		cardByFolderID[rowID] = struct {
+			bucket string
+			path   string
+		}{
+			bucket: strings.TrimSpace(cardBucket),
+			path:   strings.TrimSpace(cardPath),
+		}
+
+		if rowID == folderID {
+			targetExists = true
+		}
+	}
+
+	if !targetExists {
+		return http.StatusNotFound, errors.New("La carpeta no existe o no pertenece al curso")
+	}
+
+	folderSet := map[int]bool{folderID: true}
+	queue := []int{folderID}
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+
+		for childID, parentID := range parentByID {
+			if parentID == current && !folderSet[childID] {
+				folderSet[childID] = true
+				queue = append(queue, childID)
+			}
+		}
+	}
+
+	folderIDs := make([]int, 0, len(folderSet))
+	for value := range folderSet {
+		folderIDs = append(folderIDs, value)
+	}
+
+	filesQuery := url.Values{}
+	filesQuery.Set("select", "storage_bucket,storage_path,content_type")
+	filesQuery.Set("id_curso", fmt.Sprintf("eq.%d", idCurso))
+	filesQuery.Set("folder_id", buildIntInFilter(folderIDs))
+
+	filesBody, status, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/course_material_files", filesQuery, nil, false)
+	if err != nil {
+		return status, err
+	}
+
+	fileRows, err := unmarshalRows(filesBody)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+
+	fileStorageRefs := make([]struct {
+		bucket string
+		path   string
+	}, 0, len(fileRows))
+	for _, row := range fileRows {
+		bucket, _ := asString(row["storage_bucket"])
+		storagePath, _ := asString(row["storage_path"])
+		contentType, _ := asString(row["content_type"])
+
+		trimmedBucket := strings.TrimSpace(bucket)
+		trimmedPath := strings.TrimSpace(storagePath)
+		trimmedContentType := strings.TrimSpace(contentType)
+
+		isYouTube := trimmedBucket == youtubeMaterialBucket || trimmedContentType == youtubeMaterialContentType
+		if isYouTube || trimmedBucket == "" || trimmedPath == "" {
+			continue
+		}
+
+		fileStorageRefs = append(fileStorageRefs, struct {
+			bucket string
+			path   string
+		}{
+			bucket: trimmedBucket,
+			path:   trimmedPath,
+		})
+	}
+
+	deleteQuery := url.Values{}
+	deleteQuery.Set("id", fmt.Sprintf("eq.%d", folderID))
+	deleteQuery.Set("id_curso", fmt.Sprintf("eq.%d", idCurso))
+
+	_, status, err = a.CallSupabase(ctx, http.MethodDelete, "/rest/v1/course_material_folders", deleteQuery, nil, false)
+	if err != nil {
+		return status, err
+	}
+
+	for _, ref := range fileStorageRefs {
+		storageStatus, storageErr := a.deleteStorageObject(ctx, ref.bucket, ref.path)
+		if storageErr != nil && storageStatus != http.StatusNotFound {
+			continue
+		}
+	}
+
+	for currentFolderID := range folderSet {
+		cardRef, ok := cardByFolderID[currentFolderID]
+		if !ok || cardRef.bucket == "" || cardRef.path == "" {
+			continue
+		}
+
+		storageStatus, storageErr := a.deleteStorageObject(ctx, cardRef.bucket, cardRef.path)
+		if storageErr != nil && storageStatus != http.StatusNotFound {
+			continue
+		}
+	}
+
+	return http.StatusOK, nil
+}
+
 func (a *App) validateCourseMaterialFolder(ctx context.Context, idCurso int, folderID int) (int, error) {
 	query := url.Values{}
 	query.Set("select", "id")
@@ -504,7 +843,7 @@ func resolveYouTubeVideoID(rawURL string) (string, error) {
 
 	parsedURL, err := url.Parse(trimmedURL)
 	if err != nil || parsedURL.Host == "" {
-		return "", errors.New("El enlace de YouTube es invalido")
+		return "", errors.New("El enlace de YouTube es inválido")
 	}
 
 	host := strings.ToLower(strings.TrimPrefix(parsedURL.Host, "www."))
@@ -536,12 +875,12 @@ func resolveYouTubeVideoID(rawURL string) (string, error) {
 		isLetter := (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z')
 		isNumber := char >= '0' && char <= '9'
 		if !isLetter && !isNumber && char != '-' && char != '_' {
-			return "", errors.New("El identificador del video de YouTube es invalido")
+			return "", errors.New("El identificador del video de YouTube es inválido")
 		}
 	}
 
 	if len(videoID) < 6 {
-		return "", errors.New("El identificador del video de YouTube es invalido")
+		return "", errors.New("El identificador del video de YouTube es inválido")
 	}
 
 	return videoID, nil
@@ -549,10 +888,10 @@ func resolveYouTubeVideoID(rawURL string) (string, error) {
 
 func (a *App) CreateCourseMaterialYouTubeLink(ctx context.Context, idCurso int, folderID int, rawURL string, title string, userID string) (map[string]any, int, error) {
 	if idCurso <= 0 {
-		return nil, http.StatusBadRequest, errors.New("id_curso invalido")
+		return nil, http.StatusBadRequest, errors.New("id_curso inválido")
 	}
 	if folderID <= 0 {
-		return nil, http.StatusBadRequest, errors.New("folder_id invalido")
+		return nil, http.StatusBadRequest, errors.New("folder_id inválido")
 	}
 
 	resolvedUserID := strings.TrimSpace(userID)
@@ -614,13 +953,52 @@ func (a *App) UploadCourseMaterialFiles(
 	uploads []CourseMaterialUploadInput,
 ) ([]map[string]any, int, error) {
 	if idCurso <= 0 {
-		return nil, http.StatusBadRequest, errors.New("id_curso invalido")
+		return nil, http.StatusBadRequest, errors.New("id_curso inválido")
 	}
 	if folderID <= 0 {
-		return nil, http.StatusBadRequest, errors.New("folder_id invalido")
+		return nil, http.StatusBadRequest, errors.New("folder_id inválido")
 	}
 	if len(uploads) == 0 {
 		return nil, http.StatusBadRequest, errors.New("Debe enviar al menos un archivo")
+	}
+
+	inserted := make([]map[string]any, 0, len(uploads))
+	for _, upload := range uploads {
+		insertedRow, status, err := a.UploadCourseMaterialFileStream(
+			ctx,
+			idCurso,
+			folderID,
+			userID,
+			upload.FileName,
+			upload.ContentType,
+			bytes.NewReader(upload.Data),
+		)
+		if err != nil {
+			return nil, status, err
+		}
+		inserted = append(inserted, insertedRow)
+	}
+
+	return inserted, http.StatusOK, nil
+}
+
+func (a *App) UploadCourseMaterialFileStream(
+	ctx context.Context,
+	idCurso int,
+	folderID int,
+	userID string,
+	fileName string,
+	contentType string,
+	data io.Reader,
+) (map[string]any, int, error) {
+	if idCurso <= 0 {
+		return nil, http.StatusBadRequest, errors.New("id_curso inválido")
+	}
+	if folderID <= 0 {
+		return nil, http.StatusBadRequest, errors.New("folder_id inválido")
+	}
+	if data == nil {
+		return nil, http.StatusBadRequest, errors.New("Debe enviar un archivo")
 	}
 
 	resolvedUserID := strings.TrimSpace(userID)
@@ -637,72 +1015,73 @@ func (a *App) UploadCourseMaterialFiles(
 		return nil, http.StatusInternalServerError, err
 	}
 
-	inserted := make([]map[string]any, 0, len(uploads))
-	for _, upload := range uploads {
-		originalName := strings.TrimSpace(upload.FileName)
-		if originalName == "" {
-			originalName = "archivo"
-		}
-
-		fileSize := int64(len(upload.Data))
-		if fileSize <= 0 {
-			return nil, http.StatusBadRequest, fmt.Errorf("El archivo %s no contiene datos", originalName)
-		}
-		if fileSize > maxCourseMaterialFileBytes {
-			return nil, http.StatusBadRequest, fmt.Errorf("El archivo %s supera el limite de 25 MB", originalName)
-		}
-
-		safeName := normalizeCourseMaterialFileName(originalName, "archivo")
-		uniquePrefix := fmt.Sprintf("%d-%s", time.Now().UnixMilli(), randomCourseMaterialSuffix())
-		storagePath := fmt.Sprintf("courses/%d/folders/%d/%s-%s", idCurso, folderID, uniquePrefix, safeName)
-
-		contentType := strings.TrimSpace(upload.ContentType)
-		if contentType == "" {
-			contentType = "application/octet-stream"
-		}
-
-		if status, err := a.uploadStorageObject(ctx, bucket, storagePath, contentType, upload.Data); err != nil {
-			return nil, status, err
-		}
-
-		insertQuery := url.Values{}
-		insertQuery.Set("select", "id,folder_id,file_name,content_type,file_size,created_at")
-		insertPayload := map[string]any{
-			"id_curso":       idCurso,
-			"folder_id":      folderID,
-			"file_name":      originalName,
-			"storage_bucket": bucket,
-			"storage_path":   storagePath,
-			"content_type":   nullableString(contentType),
-			"file_size":      fileSize,
-			"uploaded_by":    resolvedUserID,
-		}
-
-		insertBody, status, err := a.CallSupabase(ctx, http.MethodPost, "/rest/v1/course_material_files", insertQuery, insertPayload, true)
-		if err != nil {
-			_, _ = a.deleteStorageObject(ctx, bucket, storagePath)
-			return nil, status, err
-		}
-
-		rows, err := unmarshalRows(insertBody)
-		if err != nil {
-			_, _ = a.deleteStorageObject(ctx, bucket, storagePath)
-			return nil, http.StatusInternalServerError, err
-		}
-		if len(rows) == 0 {
-			_, _ = a.deleteStorageObject(ctx, bucket, storagePath)
-			return nil, http.StatusInternalServerError, errors.New("No se pudo guardar el registro del archivo")
-		}
-
-		inserted = append(inserted, rows[0])
+	originalName := strings.TrimSpace(fileName)
+	if originalName == "" {
+		originalName = "archivo"
 	}
 
-	return inserted, http.StatusOK, nil
+	safeName := normalizeCourseMaterialFileName(originalName, "archivo")
+	uniquePrefix := fmt.Sprintf("%d-%s", time.Now().UnixMilli(), randomCourseMaterialSuffix())
+	storagePath := fmt.Sprintf("courses/%d/folders/%d/%s-%s", idCurso, folderID, uniquePrefix, safeName)
+
+	resolvedContentType := strings.TrimSpace(contentType)
+	if resolvedContentType == "" {
+		resolvedContentType = "application/octet-stream"
+	}
+
+	countedReader := &countingReader{
+		reader: io.LimitReader(data, maxCourseMaterialFileBytes+1),
+	}
+
+	if status, err := a.uploadStorageObjectStream(ctx, bucket, storagePath, resolvedContentType, countedReader); err != nil {
+		return nil, status, err
+	}
+
+	fileSize := countedReader.total
+	if fileSize <= 0 {
+		_, _ = a.deleteStorageObject(ctx, bucket, storagePath)
+		return nil, http.StatusBadRequest, fmt.Errorf("El archivo %s no contiene datos", originalName)
+	}
+	if fileSize > maxCourseMaterialFileBytes {
+		_, _ = a.deleteStorageObject(ctx, bucket, storagePath)
+		return nil, http.StatusRequestEntityTooLarge, fmt.Errorf("El archivo %s supera el limite de %s", originalName, formatCourseMaterialBytes(maxCourseMaterialFileBytes))
+	}
+
+	insertQuery := url.Values{}
+	insertQuery.Set("select", "id,folder_id,file_name,content_type,file_size,created_at")
+	insertPayload := map[string]any{
+		"id_curso":       idCurso,
+		"folder_id":      folderID,
+		"file_name":      originalName,
+		"storage_bucket": bucket,
+		"storage_path":   storagePath,
+		"content_type":   nullableString(resolvedContentType),
+		"file_size":      fileSize,
+		"uploaded_by":    resolvedUserID,
+	}
+
+	insertBody, status, err := a.CallSupabase(ctx, http.MethodPost, "/rest/v1/course_material_files", insertQuery, insertPayload, true)
+	if err != nil {
+		_, _ = a.deleteStorageObject(ctx, bucket, storagePath)
+		return nil, status, err
+	}
+
+	rows, err := unmarshalRows(insertBody)
+	if err != nil {
+		_, _ = a.deleteStorageObject(ctx, bucket, storagePath)
+		return nil, http.StatusInternalServerError, err
+	}
+	if len(rows) == 0 {
+		_, _ = a.deleteStorageObject(ctx, bucket, storagePath)
+		return nil, http.StatusInternalServerError, errors.New("No se pudo guardar el registro del archivo")
+	}
+
+	return rows[0], http.StatusCreated, nil
 }
 
 func (a *App) DeleteCourseMaterialFile(ctx context.Context, fileID int, userID string) (int, error) {
 	if fileID <= 0 {
-		return http.StatusBadRequest, errors.New("id de archivo invalido")
+		return http.StatusBadRequest, errors.New("id de archivo inválido")
 	}
 
 	if _, status, err := a.resolveCourseMaterialsAccess(ctx, userID, true); err != nil {
@@ -749,7 +1128,7 @@ func (a *App) DeleteCourseMaterialFile(ctx context.Context, fileID int, userID s
 
 func (a *App) DownloadCourseMaterialFile(ctx context.Context, fileID int, userID string) (*CourseMaterialObject, int, error) {
 	if fileID <= 0 {
-		return nil, http.StatusBadRequest, errors.New("id de archivo invalido")
+		return nil, http.StatusBadRequest, errors.New("id de archivo inválido")
 	}
 
 	if _, status, err := a.resolveCourseMaterialsAccess(ctx, userID, false); err != nil {
@@ -808,7 +1187,7 @@ func (a *App) DownloadCourseMaterialFile(ctx context.Context, fileID int, userID
 
 func (a *App) UploadCourseMaterialCover(ctx context.Context, idCurso int, userID string, image CourseMaterialUploadInput) (map[string]any, int, error) {
 	if idCurso <= 0 {
-		return nil, http.StatusBadRequest, errors.New("id_curso invalido")
+		return nil, http.StatusBadRequest, errors.New("id_curso inválido")
 	}
 
 	if _, status, err := a.resolveCourseMaterialsAccess(ctx, userID, true); err != nil {
@@ -915,9 +1294,97 @@ func (a *App) UploadCourseMaterialCover(ctx context.Context, idCurso int, userID
 	}, http.StatusOK, nil
 }
 
+func (a *App) SetCourseMaterialCoverURL(ctx context.Context, idCurso int, userID string, imageURL string) (map[string]any, int, error) {
+	if idCurso <= 0 {
+		return nil, http.StatusBadRequest, errors.New("id_curso inválido")
+	}
+
+	resolvedUserID := strings.TrimSpace(userID)
+	if _, status, err := a.resolveCourseMaterialsAccess(ctx, resolvedUserID, true); err != nil {
+		return nil, status, err
+	}
+
+	resolvedURL, err := normalizeExternalImageURL(imageURL)
+	if err != nil {
+		return nil, http.StatusBadRequest, err
+	}
+
+	lookupQuery := url.Values{}
+	lookupQuery.Set("select", "id_curso,cover_storage_bucket,cover_storage_path")
+	lookupQuery.Set("id_curso", fmt.Sprintf("eq.%d", idCurso))
+
+	lookupBody, status, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/course_material_course_settings", lookupQuery, nil, false)
+	if err != nil {
+		return nil, status, err
+	}
+
+	settingsRows, err := unmarshalRows(lookupBody)
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+
+	oldBucket := ""
+	oldPath := ""
+	if len(settingsRows) > 0 {
+		oldBucket, _ = asString(settingsRows[0]["cover_storage_bucket"])
+		oldPath, _ = asString(settingsRows[0]["cover_storage_path"])
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	payload := map[string]any{
+		"cover_storage_bucket": externalImageURLBucket,
+		"cover_storage_path":   resolvedURL,
+		"updated_by":           resolvedUserID,
+		"updated_at":           now,
+	}
+
+	var writeBody []byte
+	if len(settingsRows) > 0 {
+		updateQuery := url.Values{}
+		updateQuery.Set("id_curso", fmt.Sprintf("eq.%d", idCurso))
+		updateQuery.Set("select", "updated_at")
+
+		writeBody, status, err = a.CallSupabase(ctx, http.MethodPatch, "/rest/v1/course_material_course_settings", updateQuery, payload, true)
+		if err != nil {
+			return nil, status, err
+		}
+	} else {
+		insertQuery := url.Values{}
+		insertQuery.Set("select", "updated_at")
+		insertPayload := map[string]any{
+			"id_curso":             idCurso,
+			"cover_storage_bucket": externalImageURLBucket,
+			"cover_storage_path":   resolvedURL,
+			"updated_by":           resolvedUserID,
+			"updated_at":           now,
+		}
+
+		writeBody, status, err = a.CallSupabase(ctx, http.MethodPost, "/rest/v1/course_material_course_settings", insertQuery, insertPayload, true)
+		if err != nil {
+			return nil, status, err
+		}
+	}
+
+	if strings.TrimSpace(oldBucket) != "" && strings.TrimSpace(oldPath) != "" && oldPath != resolvedURL && !strings.EqualFold(strings.TrimSpace(oldBucket), externalImageURLBucket) {
+		_, _ = a.deleteStorageObject(ctx, oldBucket, oldPath)
+	}
+
+	updatedAt := now
+	rows, err := unmarshalRows(writeBody)
+	if err == nil && len(rows) > 0 {
+		if parsed, ok := asString(rows[0]["updated_at"]); ok && strings.TrimSpace(parsed) != "" {
+			updatedAt = parsed
+		}
+	}
+
+	return map[string]any{
+		"cover_updated_at": updatedAt,
+	}, http.StatusOK, nil
+}
+
 func (a *App) DownloadCourseMaterialCover(ctx context.Context, idCurso int, userID string) (*CourseMaterialObject, int, error) {
 	if idCurso <= 0 {
-		return nil, http.StatusBadRequest, errors.New("id_curso invalido")
+		return nil, http.StatusBadRequest, errors.New("id_curso inválido")
 	}
 
 	if _, status, err := a.resolveCourseMaterialsAccess(ctx, userID, false); err != nil {
@@ -947,6 +1414,14 @@ func (a *App) DownloadCourseMaterialCover(ctx context.Context, idCurso int, user
 		return nil, http.StatusNotFound, errors.New("El curso no tiene portada configurada")
 	}
 
+	if strings.EqualFold(strings.TrimSpace(bucket), externalImageURLBucket) {
+		return &CourseMaterialObject{
+			ContentType: "image/jpeg",
+			FileName:    path.Base(storagePath),
+			SourceURL:   storagePath,
+		}, http.StatusOK, nil
+	}
+
 	coverBytes, contentType, status, err := a.downloadStorageObject(ctx, bucket, storagePath)
 	if err != nil {
 		return nil, status, err
@@ -965,10 +1440,10 @@ func (a *App) DownloadCourseMaterialCover(ctx context.Context, idCurso int, user
 
 func (a *App) UploadCourseMaterialFolderCard(ctx context.Context, idCurso int, folderID int, userID string, image CourseMaterialUploadInput) (map[string]any, int, error) {
 	if idCurso <= 0 {
-		return nil, http.StatusBadRequest, errors.New("id_curso invalido")
+		return nil, http.StatusBadRequest, errors.New("id_curso inválido")
 	}
 	if folderID <= 0 {
-		return nil, http.StatusBadRequest, errors.New("folder_id invalido")
+		return nil, http.StatusBadRequest, errors.New("folder_id inválido")
 	}
 
 	if _, status, err := a.resolveCourseMaterialsAccess(ctx, userID, true); err != nil {
@@ -1055,9 +1530,81 @@ func (a *App) UploadCourseMaterialFolderCard(ctx context.Context, idCurso int, f
 	}, http.StatusOK, nil
 }
 
+func (a *App) SetCourseMaterialFolderCardURL(ctx context.Context, idCurso int, folderID int, userID string, imageURL string) (map[string]any, int, error) {
+	if idCurso <= 0 {
+		return nil, http.StatusBadRequest, errors.New("id_curso inválido")
+	}
+	if folderID <= 0 {
+		return nil, http.StatusBadRequest, errors.New("folder_id inválido")
+	}
+
+	resolvedUserID := strings.TrimSpace(userID)
+	if _, status, err := a.resolveCourseMaterialsAccess(ctx, resolvedUserID, true); err != nil {
+		return nil, status, err
+	}
+
+	resolvedURL, err := normalizeExternalImageURL(imageURL)
+	if err != nil {
+		return nil, http.StatusBadRequest, err
+	}
+
+	folderQuery := url.Values{}
+	folderQuery.Set("select", "id,id_curso,card_storage_bucket,card_storage_path")
+	folderQuery.Set("id", fmt.Sprintf("eq.%d", folderID))
+	folderQuery.Set("id_curso", fmt.Sprintf("eq.%d", idCurso))
+
+	folderBody, status, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/course_material_folders", folderQuery, nil, false)
+	if err != nil {
+		return nil, status, err
+	}
+
+	folderRows, err := unmarshalRows(folderBody)
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+	if len(folderRows) == 0 {
+		return nil, http.StatusNotFound, errors.New("La carpeta no existe o no pertenece al curso")
+	}
+
+	oldBucket, _ := asString(folderRows[0]["card_storage_bucket"])
+	oldPath, _ := asString(folderRows[0]["card_storage_path"])
+
+	updateQuery := url.Values{}
+	updateQuery.Set("id", fmt.Sprintf("eq.%d", folderID))
+	updateQuery.Set("id_curso", fmt.Sprintf("eq.%d", idCurso))
+	updateQuery.Set("select", "updated_at")
+
+	updatePayload := map[string]any{
+		"card_storage_bucket": externalImageURLBucket,
+		"card_storage_path":   resolvedURL,
+	}
+
+	updateBody, status, err := a.CallSupabase(ctx, http.MethodPatch, "/rest/v1/course_material_folders", updateQuery, updatePayload, true)
+	if err != nil {
+		return nil, status, err
+	}
+
+	if strings.TrimSpace(oldBucket) != "" && strings.TrimSpace(oldPath) != "" && oldPath != resolvedURL && !strings.EqualFold(strings.TrimSpace(oldBucket), externalImageURLBucket) {
+		_, _ = a.deleteStorageObject(ctx, oldBucket, oldPath)
+	}
+
+	updatedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	updatedRows, err := unmarshalRows(updateBody)
+	if err == nil && len(updatedRows) > 0 {
+		if parsed, ok := asString(updatedRows[0]["updated_at"]); ok && strings.TrimSpace(parsed) != "" {
+			updatedAt = parsed
+		}
+	}
+
+	return map[string]any{
+		"folder_id":       folderID,
+		"card_updated_at": updatedAt,
+	}, http.StatusOK, nil
+}
+
 func (a *App) DownloadCourseMaterialFolderCard(ctx context.Context, folderID int, userID string) (*CourseMaterialObject, int, error) {
 	if folderID <= 0 {
-		return nil, http.StatusBadRequest, errors.New("folder_id invalido")
+		return nil, http.StatusBadRequest, errors.New("folder_id inválido")
 	}
 
 	if _, status, err := a.resolveCourseMaterialsAccess(ctx, userID, false); err != nil {
@@ -1085,6 +1632,14 @@ func (a *App) DownloadCourseMaterialFolderCard(ctx context.Context, folderID int
 	storagePath, _ := asString(rows[0]["card_storage_path"])
 	if strings.TrimSpace(bucket) == "" || strings.TrimSpace(storagePath) == "" {
 		return nil, http.StatusNotFound, errors.New("La carpeta no tiene imagen de tarjeta configurada")
+	}
+
+	if strings.EqualFold(strings.TrimSpace(bucket), externalImageURLBucket) {
+		return &CourseMaterialObject{
+			ContentType: "image/jpeg",
+			FileName:    path.Base(storagePath),
+			SourceURL:   storagePath,
+		}, http.StatusOK, nil
 	}
 
 	imageBytes, contentType, status, err := a.downloadStorageObject(ctx, bucket, storagePath)

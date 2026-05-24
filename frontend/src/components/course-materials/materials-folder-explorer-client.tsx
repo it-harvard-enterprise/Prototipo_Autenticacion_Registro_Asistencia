@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ChevronDown,
   ChevronRight,
@@ -11,6 +12,7 @@ import {
   Image as ImageIcon,
   ImagePlus,
   Loader2,
+  Pencil,
   PlayCircle,
   Trash2,
   Upload,
@@ -19,6 +21,16 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface FolderExplorerFolder {
   id: number;
@@ -47,10 +59,17 @@ interface MaterialsFolderExplorerClientProps {
   files: FolderExplorerFile[];
 }
 
+const MAX_FILE_BYTES = 2 * 1024 * 1024 * 1024;
+const MAX_UPLOAD_BATCH_BYTES = 2 * 1024 * 1024 * 1024;
+const MAX_CARD_IMAGE_BYTES = 10 * 1024 * 1024;
+
 function formatBytes(value: number): string {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
-  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  if (value < 1024 * 1024 * 1024) {
+    return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  return `${(value / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 function extractYouTubeId(rawUrl: string | null): string | null {
@@ -91,6 +110,19 @@ function extractYouTubeId(rawUrl: string | null): string | null {
   return null;
 }
 
+function normalizeHttpImageUrl(rawValue: string): string | null {
+  try {
+    const parsed = new URL(rawValue.trim());
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return null;
+    }
+
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
 export function MaterialsFolderExplorerClient({
   courseId,
   canManage,
@@ -98,6 +130,7 @@ export function MaterialsFolderExplorerClient({
   folders: initialFolders,
   files: initialFiles,
 }: MaterialsFolderExplorerClientProps) {
+  const router = useRouter();
   const [folders, setFolders] = useState(initialFolders);
   const [files, setFiles] = useState(initialFiles);
   const [selectedFolderId, setSelectedFolderId] = useState(initialFolderId);
@@ -107,6 +140,10 @@ export function MaterialsFolderExplorerClient({
   const [selectedFileId, setSelectedFileId] = useState<number | null>(null);
   const [newSubfolderName, setNewSubfolderName] = useState("");
   const [isCreatingSubfolder, setIsCreatingSubfolder] = useState(false);
+  const [editingFolderId, setEditingFolderId] = useState<number | null>(null);
+  const [editingFolderName, setEditingFolderName] = useState("");
+  const [savingFolderId, setSavingFolderId] = useState<number | null>(null);
+  const [deletingFolderId, setDeletingFolderId] = useState<number | null>(null);
   const [uploadingFolderId, setUploadingFolderId] = useState<number | null>(
     null,
   );
@@ -114,11 +151,23 @@ export function MaterialsFolderExplorerClient({
   const [uploadingCardFolderId, setUploadingCardFolderId] = useState<
     number | null
   >(null);
+  const [folderCardImageSourceMode, setFolderCardImageSourceMode] = useState<
+    "upload" | "url"
+  >("upload");
+  const [savingCardUrlFolderId, setSavingCardUrlFolderId] = useState<
+    number | null
+  >(null);
+  const [cardImageUrlInput, setCardImageUrlInput] = useState("");
   const [youtubeUrlInput, setYoutubeUrlInput] = useState("");
   const [youtubeTitleInput, setYoutubeTitleInput] = useState("");
   const [creatingYoutubeFolderId, setCreatingYoutubeFolderId] = useState<
     number | null
   >(null);
+  const [pendingFolderDelete, setPendingFolderDelete] = useState<{
+    folder: FolderExplorerFolder;
+    nestedCount: number;
+    filesInBranch: number;
+  } | null>(null);
 
   const folderById = useMemo(() => {
     const map = new Map<number, FolderExplorerFolder>();
@@ -167,6 +216,9 @@ export function MaterialsFolderExplorerClient({
   const selectedFolderFiles = selectedFolder
     ? (filesByFolder.get(selectedFolder.id) ?? [])
     : [];
+  const selectedSubfolderCount = selectedFolder
+    ? (childrenByParent.get(selectedFolder.id)?.length ?? 0)
+    : 0;
 
   const resolvedSelectedFileId = selectedFolderFiles.some(
     (file) => file.id === selectedFileId,
@@ -177,6 +229,24 @@ export function MaterialsFolderExplorerClient({
   const selectedFile =
     selectedFolderFiles.find((file) => file.id === resolvedSelectedFileId) ??
     null;
+
+  function collectFolderBranchIds(rootFolderId: number): number[] {
+    const collected = new Set<number>([rootFolderId]);
+    const queue: number[] = [rootFolderId];
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      const children = childrenByParent.get(current) ?? [];
+      for (const child of children) {
+        if (!collected.has(child.id)) {
+          collected.add(child.id);
+          queue.push(child.id);
+        }
+      }
+    }
+
+    return Array.from(collected);
+  }
 
   function toggleFolder(folderId: number) {
     setExpandedFolderIds((previous) => {
@@ -200,6 +270,78 @@ export function MaterialsFolderExplorerClient({
       next.add(folderId);
       return next;
     });
+  }
+
+  function startFolderRename(folder: FolderExplorerFolder) {
+    setEditingFolderId(folder.id);
+    setEditingFolderName(folder.name);
+  }
+
+  function cancelFolderRename() {
+    setEditingFolderId(null);
+    setEditingFolderName("");
+  }
+
+  async function submitFolderRename(folder: FolderExplorerFolder) {
+    const name = editingFolderName.trim();
+    if (!name) {
+      toast.error("El nombre de la carpeta es obligatorio");
+      return;
+    }
+
+    if (name === folder.name) {
+      cancelFolderRename();
+      return;
+    }
+
+    setSavingFolderId(folder.id);
+
+    try {
+      const response = await fetch("/api/course-materials/folders", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id_curso: courseId,
+          folder_id: folder.id,
+          name,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        error?: string;
+        data?: {
+          id: number;
+          parent_folder_id: number | null;
+          name: string;
+        };
+      } | null;
+
+      if (!response.ok || !payload?.success || !payload.data) {
+        toast.error(payload?.error ?? "No se pudo actualizar la carpeta");
+        setSavingFolderId(null);
+        return;
+      }
+
+      setFolders((prev) =>
+        prev.map((currentFolder) =>
+          currentFolder.id === folder.id
+            ? {
+                ...currentFolder,
+                name: payload.data?.name ?? name,
+              }
+            : currentFolder,
+        ),
+      );
+      toast.success("Nombre de carpeta actualizado correctamente.");
+      setSavingFolderId(null);
+      cancelFolderRename();
+    } catch {
+      toast.error("No se pudo actualizar la carpeta");
+      setSavingFolderId(null);
+    }
   }
 
   async function createSubfolder() {
@@ -272,6 +414,18 @@ export function MaterialsFolderExplorerClient({
       return;
     }
 
+    if (!file.type.startsWith("image/")) {
+      toast.error("El archivo debe ser una imagen.");
+      return;
+    }
+
+    if (file.size > MAX_CARD_IMAGE_BYTES) {
+      toast.error(
+        `La imagen pesa ${formatBytes(file.size)} y supera el límite de ${formatBytes(MAX_CARD_IMAGE_BYTES)}.`,
+      );
+      return;
+    }
+
     setUploadingCardFolderId(folderId);
 
     try {
@@ -319,9 +473,84 @@ export function MaterialsFolderExplorerClient({
     }
   }
 
+  async function setFolderCardUrl(folderId: number) {
+    const normalizedUrl = normalizeHttpImageUrl(cardImageUrlInput);
+    if (!normalizedUrl) {
+      toast.error("Debe ingresar una URL válida con http:// o https://");
+      return;
+    }
+
+    setSavingCardUrlFolderId(folderId);
+
+    try {
+      const response = await fetch(
+        `/api/course-materials/folders/${folderId}/card`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id_curso: courseId,
+            image_url: normalizedUrl,
+          }),
+        },
+      );
+
+      const payload = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        error?: string;
+        data?: {
+          card_url?: string;
+        };
+      } | null;
+
+      if (!response.ok || !payload?.success || !payload.data?.card_url) {
+        toast.error(payload?.error ?? "No se pudo actualizar la imagen");
+        setSavingCardUrlFolderId(null);
+        return;
+      }
+
+      setFolders((prev) =>
+        prev.map((folder) =>
+          folder.id === folderId
+            ? {
+                ...folder,
+                cardImageUrl: payload.data?.card_url ?? null,
+              }
+            : folder,
+        ),
+      );
+      setCardImageUrlInput("");
+      toast.success("Imagen de carpeta actualizada correctamente.");
+      setSavingCardUrlFolderId(null);
+    } catch {
+      toast.error("No se pudo actualizar la imagen");
+      setSavingCardUrlFolderId(null);
+    }
+  }
+
   async function uploadFiles(folderId: number, fileList: FileList | null) {
     const selectedFiles = fileList ? Array.from(fileList) : [];
     if (selectedFiles.length === 0) {
+      return;
+    }
+
+    const oversizedFile = selectedFiles.find(
+      (file) => file.size > MAX_FILE_BYTES,
+    );
+    if (oversizedFile) {
+      toast.error(
+        `El archivo ${oversizedFile.name} pesa ${formatBytes(oversizedFile.size)} y supera el límite de ${formatBytes(MAX_FILE_BYTES)}.`,
+      );
+      return;
+    }
+
+    const totalBytes = selectedFiles.reduce((sum, file) => sum + file.size, 0);
+    if (totalBytes > MAX_UPLOAD_BATCH_BYTES) {
+      toast.error(
+        `La carga seleccionada pesa ${formatBytes(totalBytes)} y supera el límite total de ${formatBytes(MAX_UPLOAD_BATCH_BYTES)} por envío.`,
+      );
       return;
     }
 
@@ -513,6 +742,86 @@ export function MaterialsFolderExplorerClient({
     }
   }
 
+  function promptRemoveFolder(folder: FolderExplorerFolder) {
+    const branchIds = collectFolderBranchIds(folder.id);
+    const branchSet = new Set<number>(branchIds);
+    const nestedCount = Math.max(0, branchIds.length - 1);
+    const filesInBranch = files.reduce(
+      (count, file) => count + (branchSet.has(file.folderId) ? 1 : 0),
+      0,
+    );
+
+    setPendingFolderDelete({
+      folder,
+      nestedCount,
+      filesInBranch,
+    });
+  }
+
+  async function removeFolder(folder: FolderExplorerFolder) {
+    const branchIds = collectFolderBranchIds(folder.id);
+    const branchSet = new Set<number>(branchIds);
+
+    setDeletingFolderId(folder.id);
+
+    try {
+      const response = await fetch("/api/course-materials/folders", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id_curso: courseId,
+          folder_id: folder.id,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        error?: string;
+      } | null;
+
+      if (!response.ok || !payload?.success) {
+        toast.error(payload?.error ?? "No se pudo eliminar la carpeta");
+        setDeletingFolderId(null);
+        return;
+      }
+
+      setFolders((prev) => prev.filter((item) => !branchSet.has(item.id)));
+      setFiles((prev) => prev.filter((item) => !branchSet.has(item.folderId)));
+      setExpandedFolderIds((prev) => {
+        const next = new Set(prev);
+        for (const id of branchSet) {
+          next.delete(id);
+        }
+        return next;
+      });
+
+      if (branchSet.has(selectedFolderId)) {
+        setSelectedFileId(null);
+      }
+
+      if (folder.id === initialFolderId) {
+        toast.success("Carpeta eliminada correctamente.");
+        router.push(`/dashboard/courses/${courseId}/materials/content`);
+        router.refresh();
+        setDeletingFolderId(null);
+        return;
+      }
+
+      if (branchSet.has(selectedFolderId)) {
+        setSelectedFolderId(folder.parentFolderId ?? initialFolderId);
+      }
+
+      toast.success("Carpeta eliminada correctamente.");
+      setDeletingFolderId(null);
+      setPendingFolderDelete(null);
+    } catch {
+      toast.error("No se pudo eliminar la carpeta");
+      setDeletingFolderId(null);
+    }
+  }
+
   function renderTree(
     folder: FolderExplorerFolder,
     depth: number,
@@ -697,11 +1006,81 @@ export function MaterialsFolderExplorerClient({
           <p className="text-xs uppercase tracking-wide text-gray-500">
             Contenido activo
           </p>
-          <h2 className="mt-1 text-xl font-semibold text-gray-900">
-            {selectedFolder?.name ?? "Sin carpeta"}
-          </h2>
+          {selectedFolder && editingFolderId === selectedFolder.id ? (
+            <div className="mt-1 flex items-center gap-2">
+              <Input
+                value={editingFolderName}
+                onChange={(event) => setEditingFolderName(event.target.value)}
+                className="h-9 max-w-xl text-xl font-semibold text-gray-900"
+                autoFocus
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void submitFolderRename(selectedFolder);
+                  }
+
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    cancelFolderRename();
+                  }
+                }}
+                onBlur={() => {
+                  if (savingFolderId !== selectedFolder.id) {
+                    void submitFolderRename(selectedFolder);
+                  }
+                }}
+              />
+              {savingFolderId === selectedFolder.id ? (
+                <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
+              ) : null}
+            </div>
+          ) : (
+            <div className="mt-1 flex items-center gap-2">
+              <h2 className="text-xl font-semibold text-gray-900">
+                {selectedFolder?.name ?? "Sin carpeta"}
+              </h2>
+              {canManage && selectedFolder ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => startFolderRename(selectedFolder)}
+                    disabled={
+                      savingFolderId === selectedFolder.id ||
+                      deletingFolderId === selectedFolder.id
+                    }
+                    className="inline-flex h-8 w-8 items-center justify-center rounded text-gray-500 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-60"
+                    aria-label={`Editar nombre de ${selectedFolder.name}`}
+                  >
+                    {savingFolderId === selectedFolder.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Pencil className="h-4 w-4" />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => promptRemoveFolder(selectedFolder)}
+                    disabled={
+                      deletingFolderId === selectedFolder.id ||
+                      savingFolderId === selectedFolder.id
+                    }
+                    className="inline-flex h-8 w-8 items-center justify-center rounded text-red-600 hover:bg-red-50 hover:text-red-700 disabled:opacity-60"
+                    aria-label={`Eliminar carpeta ${selectedFolder.name}`}
+                  >
+                    {deletingFolderId === selectedFolder.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                  </button>
+                </>
+              ) : null}
+            </div>
+          )}
           <p className="mt-1 text-sm text-gray-600">
-            {selectedFolderFiles.length} elemento(s) en esta carpeta
+            {selectedFolder?.parentFolderId === null
+              ? `${selectedSubfolderCount} subcarpeta(s) en esta carpeta`
+              : `${selectedFolderFiles.length} elemento(s) en esta carpeta`}
           </p>
         </div>
 
@@ -725,29 +1104,81 @@ export function MaterialsFolderExplorerClient({
                     </div>
                   )}
                 </div>
-                <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">
-                  {uploadingCardFolderId === selectedFolder.id ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <ImagePlus className="h-4 w-4" />
-                  )}
-                  {uploadingCardFolderId === selectedFolder.id
-                    ? "Subiendo imagen..."
-                    : "Subir imagen"}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    disabled={uploadingCardFolderId === selectedFolder.id}
-                    onChange={(event) => {
-                      void uploadFolderCard(
-                        selectedFolder.id,
-                        event.target.files,
-                      );
-                      event.currentTarget.value = "";
-                    }}
-                  />
-                </label>
+                <div className="flex items-center gap-1 rounded-lg bg-gray-100 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setFolderCardImageSourceMode("upload")}
+                    className={`rounded-md px-2 py-1 text-xs font-medium transition ${
+                      folderCardImageSourceMode === "upload"
+                        ? "bg-white text-gray-900 shadow-sm"
+                        : "text-gray-600 hover:text-gray-900"
+                    }`}
+                  >
+                    Desde archivo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFolderCardImageSourceMode("url")}
+                    className={`rounded-md px-2 py-1 text-xs font-medium transition ${
+                      folderCardImageSourceMode === "url"
+                        ? "bg-white text-gray-900 shadow-sm"
+                        : "text-gray-600 hover:text-gray-900"
+                    }`}
+                  >
+                    Desde URL
+                  </button>
+                </div>
+
+                {folderCardImageSourceMode === "upload" ? (
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">
+                    {uploadingCardFolderId === selectedFolder.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <ImagePlus className="h-4 w-4" />
+                    )}
+                    {uploadingCardFolderId === selectedFolder.id
+                      ? "Subiendo imagen..."
+                      : "Subir imagen"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={uploadingCardFolderId === selectedFolder.id}
+                      onChange={(event) => {
+                        void uploadFolderCard(
+                          selectedFolder.id,
+                          event.target.files,
+                        );
+                        event.currentTarget.value = "";
+                      }}
+                    />
+                  </label>
+                ) : (
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input
+                      value={cardImageUrlInput}
+                      onChange={(event) =>
+                        setCardImageUrlInput(event.target.value)
+                      }
+                      placeholder="https://imagen-ejemplo.com/carpeta.jpg"
+                      disabled={savingCardUrlFolderId === selectedFolder.id}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => void setFolderCardUrl(selectedFolder.id)}
+                      disabled={
+                        !cardImageUrlInput.trim() ||
+                        savingCardUrlFolderId === selectedFolder.id
+                      }
+                    >
+                      {savingCardUrlFolderId === selectedFolder.id ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : null}
+                      Usar URL
+                    </Button>
+                  </div>
+                )}
               </div>
             ) : null}
 
@@ -923,6 +1354,44 @@ export function MaterialsFolderExplorerClient({
         )}
 
         {renderPreview()}
+
+        <AlertDialog
+          open={!!pendingFolderDelete}
+          onOpenChange={(open) => {
+            if (!open && !deletingFolderId) {
+              setPendingFolderDelete(null);
+            }
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="font-bold text-[#b92f2d]">
+                ¿Eliminar carpeta?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {pendingFolderDelete
+                  ? `Se eliminará la carpeta "${pendingFolderDelete.folder.name}" con ${pendingFolderDelete.nestedCount} subcarpeta(s) y ${pendingFolderDelete.filesInBranch} archivo(s). Esta acción no se puede deshacer.`
+                  : "Esta acción no se puede deshacer."}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={!!deletingFolderId}>
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  if (pendingFolderDelete) {
+                    void removeFolder(pendingFolderDelete.folder);
+                  }
+                }}
+                disabled={!!deletingFolderId || !pendingFolderDelete}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {deletingFolderId ? "Eliminando..." : "Eliminar carpeta"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </section>
     </div>
   );

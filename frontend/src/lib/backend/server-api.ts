@@ -76,6 +76,9 @@ export async function callBackendRaw(
   const headers = new Headers(init.headers ?? {});
   const isFormDataBody =
     typeof FormData !== "undefined" && init.body instanceof FormData;
+  const isReadableStreamBody =
+    typeof ReadableStream !== "undefined" &&
+    init.body instanceof ReadableStream;
 
   if (!headers.has("Content-Type") && init.body != null && !isFormDataBody) {
     headers.set("Content-Type", "application/json");
@@ -89,9 +92,15 @@ export async function callBackendRaw(
     headers.set("X-Backend-Access-Key", backendAccessKey);
   }
 
-  return fetch(`${backendUrl}${path}`, {
+  const requestInit: RequestInit & { duplex?: "half" } = {
     ...init,
     headers,
     cache: "no-store",
-  });
+  };
+
+  if (isReadableStreamBody) {
+    requestInit.duplex = "half";
+  }
+
+  return fetch(`${backendUrl}${path}`, requestInit);
 }

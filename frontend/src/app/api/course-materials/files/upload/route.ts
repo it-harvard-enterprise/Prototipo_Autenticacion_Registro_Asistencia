@@ -3,8 +3,6 @@ import { NextResponse } from "next/server";
 import { resolveCurrentUserAccess } from "@/lib/auth/resolved-access";
 import { callBackendRaw } from "@/lib/backend/server-api";
 
-const MAX_FILE_BYTES = 25 * 1024 * 1024;
-
 function toApiError(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -51,59 +49,40 @@ export async function POST(req: Request) {
       );
     }
 
-    const form = await req.formData();
-    const idCurso = Number(form.get("id_curso"));
-    const folderId = Number(form.get("folder_id"));
-    const files = form
-      .getAll("files")
-      .filter((item) => item instanceof File) as File[];
-
-    if (!Number.isInteger(idCurso) || idCurso <= 0) {
+    const contentType = req.headers.get("content-type")?.trim() ?? "";
+    if (!contentType.toLowerCase().includes("multipart/form-data")) {
       return NextResponse.json(
-        { success: false, error: "id_curso inválido." },
+        {
+          success: false,
+          error:
+            "La solicitud de carga debe enviarse como multipart/form-data.",
+        },
         { status: 400 },
       );
     }
 
-    if (!Number.isInteger(folderId) || folderId <= 0) {
+    if (!req.body) {
       return NextResponse.json(
-        { success: false, error: "folder_id inválido." },
+        { success: false, error: "No se encontraron datos para la carga." },
         { status: 400 },
       );
     }
 
-    if (files.length === 0) {
-      return NextResponse.json(
-        { success: false, error: "Debe seleccionar al menos un archivo." },
-        { status: 400 },
-      );
-    }
-
-    for (const file of files) {
-      if (file.size > MAX_FILE_BYTES) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: `El archivo ${file.name} supera el límite de 25 MB.`,
-          },
-          { status: 400 },
-        );
-      }
-    }
-
-    const backendForm = new FormData();
-    backendForm.set("id_curso", String(idCurso));
-    backendForm.set("folder_id", String(folderId));
-    backendForm.set("user_id", permissions.userId ?? "");
-    for (const file of files) {
-      backendForm.append("files", file);
+    const forwardedHeaders = new Headers({
+      "Content-Type": contentType,
+      "X-Materials-User-Id": permissions.userId ?? "",
+    });
+    const contentLength = req.headers.get("content-length")?.trim();
+    if (contentLength) {
+      forwardedHeaders.set("Content-Length", contentLength);
     }
 
     const response = await callBackendRaw(
       "/api/course-materials/files/upload",
       {
         method: "POST",
-        body: backendForm,
+        headers: forwardedHeaders,
+        body: req.body,
       },
     );
 

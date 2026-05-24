@@ -5,7 +5,20 @@ import { callBackendRaw } from "@/lib/backend/server-api";
 
 const MAX_CARD_BYTES = 10 * 1024 * 1024;
 
+function formatBytes(value: number): string {
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function toApiError(error: unknown): string {
+  if (
+    error instanceof Error &&
+    error.message.includes("Failed to parse body as FormData")
+  ) {
+    return `No fue posible procesar la imagen enviada. Verifique que no supere ${formatBytes(MAX_CARD_BYTES)} y vuelva a intentarlo.`;
+  }
+
   if (error instanceof Error) {
     return error.message;
   }
@@ -156,7 +169,86 @@ export async function POST(req: Request, { params }: RouteContext) {
       );
     }
 
-    const form = await req.formData();
+    const requestContentType = req.headers.get("content-type") ?? "";
+    const isJSONBody = requestContentType.includes("application/json");
+
+    if (isJSONBody) {
+      const body = (await req.json().catch(() => null)) as {
+        id_curso?: unknown;
+        image_url?: unknown;
+      } | null;
+
+      const idCurso = Number(body?.id_curso);
+      const imageUrl = String(body?.image_url ?? "").trim();
+
+      if (!Number.isInteger(idCurso) || idCurso <= 0) {
+        return NextResponse.json(
+          { success: false, error: "id_curso inválido." },
+          { status: 400 },
+        );
+      }
+
+      if (!imageUrl) {
+        return NextResponse.json(
+          { success: false, error: "Debe ingresar una URL de imagen." },
+          { status: 400 },
+        );
+      }
+
+      const response = await callBackendRaw(
+        "/api/course-materials/folders/card/url",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            id_curso: idCurso,
+            folder_id: folderId,
+            image_url: imageUrl,
+            user_id: permissions.userId,
+          }),
+        },
+      );
+
+      const payload = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        error?: string;
+        data?: { card_updated_at?: string };
+      } | null;
+
+      if (!response.ok || !payload?.success) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              payload?.error ?? "No se pudo actualizar la imagen de carpeta.",
+          },
+          { status: response.status || 500 },
+        );
+      }
+
+      const version = payload.data?.card_updated_at ?? String(Date.now());
+      const paramsQuery = new URLSearchParams({ v: version });
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          card_url: `/api/course-materials/folders/${folderId}/card?${paramsQuery.toString()}`,
+        },
+      });
+    }
+
+    let form: FormData;
+    try {
+      form = await req.formData();
+    } catch {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `No fue posible procesar la imagen enviada. Verifique que no supere ${formatBytes(MAX_CARD_BYTES)} y vuelva a intentarlo.`,
+        },
+        { status: 413 },
+      );
+    }
+
     const idCurso = Number(form.get("id_curso"));
     const image = form.get("image");
 

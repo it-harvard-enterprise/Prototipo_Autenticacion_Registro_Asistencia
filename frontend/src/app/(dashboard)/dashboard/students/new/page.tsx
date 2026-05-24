@@ -74,8 +74,6 @@ function formatCurrencyInput(value: string): string {
   return currencyFormatter.format(parsed);
 }
 
-const TEMP_FINGERPRINT_PLACEHOLDER = "PENDING_FINGERPRINT";
-
 interface AdminCoordinator {
   id: string;
   nombres: string;
@@ -284,23 +282,30 @@ export default function NewStudentPage() {
     setIsLoading(true);
 
     try {
-      const frontendPassphrase =
-        process.env.NEXT_PUBLIC_BIOMETRIC_PASSPHRASE_PNG?.trim() ?? "";
-      if (!frontendPassphrase) {
-        toast.error(
-          "Falta NEXT_PUBLIC_BIOMETRIC_PASSPHRASE_PNG en el entorno del frontend.",
-        );
-        setIsLoading(false);
-        return;
-      }
+      const hasFingerprintSamples =
+        rightFingerprint.length > 0 || leftFingerprint.length > 0;
+      let rightEncrypted: EncryptedPayload | null = null;
+      let leftEncrypted: EncryptedPayload | null = null;
 
-      const encryptionKey = await deriveKeyFromPassphrase(frontendPassphrase);
-      const rightEncrypted: EncryptedPayload | null = rightFingerprint
-        ? await encryptAESGCM(rightFingerprint, encryptionKey)
-        : null;
-      const leftEncrypted: EncryptedPayload | null = leftFingerprint
-        ? await encryptAESGCM(leftFingerprint, encryptionKey)
-        : null;
+      if (hasFingerprintSamples) {
+        const frontendPassphrase =
+          process.env.NEXT_PUBLIC_BIOMETRIC_PASSPHRASE_PNG?.trim() ?? "";
+        if (!frontendPassphrase) {
+          toast.error(
+            "Falta NEXT_PUBLIC_BIOMETRIC_PASSPHRASE_PNG en el entorno del frontend.",
+          );
+          setIsLoading(false);
+          return;
+        }
+
+        const encryptionKey = await deriveKeyFromPassphrase(frontendPassphrase);
+        rightEncrypted = rightFingerprint
+          ? await encryptAESGCM(rightFingerprint, encryptionKey)
+          : null;
+        leftEncrypted = leftFingerprint
+          ? await encryptAESGCM(leftFingerprint, encryptionKey)
+          : null;
+      }
 
       const res = await fetch(`/api/students/create`, {
         method: "POST",
@@ -366,7 +371,7 @@ export default function NewStudentPage() {
   ) {
     if (!readerReady) {
       toast.error(
-        "El lector no esta listo. Verifique la conexion y el servicio de DigitalPersona.",
+        "El lector no está listo. Verifique la conexión y el servicio de DigitalPersona.",
       );
       return;
     }

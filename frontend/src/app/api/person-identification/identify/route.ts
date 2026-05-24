@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         found: false,
-        error: "mode invalido",
+        error: "modo inválido",
       },
       { status: 400 },
     );
@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
           {
             success: false,
             found: false,
-            error: "numeroIdentificacion es requerido",
+            error: "numeroIdentificacion es obligatorio",
           },
           { status: 400 },
         );
@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
         {
           success: false,
           found: false,
-          error: "fingerprintTemplate es requerido",
+          error: "fingerprintTemplate es obligatorio",
         },
         { status: 400 },
       );

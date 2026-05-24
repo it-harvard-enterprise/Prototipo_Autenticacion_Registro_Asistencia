@@ -75,7 +75,7 @@ func (a *App) managedRecordByRole(ctx context.Context, role, numero string) (map
 	case "profesor":
 		return a.GetProfessorByNumero(ctx, numero)
 	default:
-		return nil, http.StatusBadRequest, errors.New("role invalido")
+		return nil, http.StatusBadRequest, errors.New("role inválido")
 	}
 }
 

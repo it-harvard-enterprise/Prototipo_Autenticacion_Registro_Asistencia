@@ -431,7 +431,7 @@ export default function EditStudentPage() {
   ) {
     if (!readerReady) {
       toast.error(
-        "El lector no esta listo. Verifique la conexion y el servicio de DigitalPersona.",
+        "El lector no está listo. Verifique la conexión y el servicio de DigitalPersona.",
       );
       return;
     }

@@ -892,7 +892,7 @@ func normalizeMetodoPagoValue(value string) (string, error) {
 	}
 
 	if !allowed[trimmed] {
-		return "", errors.New("metodo_pago invalido")
+		return "", errors.New("metodo_pago inválido")
 	}
 
 	return trimmed, nil
@@ -904,7 +904,7 @@ func normalizePaymentMode(value string) (string, error) {
 	case "DEUDA_TOTAL", "DEUDA_PARCIAL", "ADELANTO":
 		return mode, nil
 	default:
-		return "", errors.New("modalidad de pago invalida")
+		return "", errors.New("modalidad de pago inválida")
 	}
 }
 
@@ -976,7 +976,7 @@ func (a *App) ProcessStudentPayment(ctx context.Context, req models.ProcessStude
 
 	valorApoyoSemanal, ok := asFloat(student["valor_apoyo_semanal"])
 	if !ok || valorApoyoSemanal <= 0 {
-		return nil, http.StatusBadRequest, errors.New("el estudiante no tiene un valor_apoyo_semanal valido")
+		return nil, http.StatusBadRequest, errors.New("el estudiante no tiene un valor_apoyo_semanal válido")
 	}
 
 	if err := a.ensureSaldoEstudiante(ctx, numero); err != nil {
@@ -1195,12 +1195,12 @@ func (a *App) ListPaymentsReport(ctx context.Context, filters PaymentReportFilte
 	if fromDate != "" {
 		startISO, _, err := getBogotaDayBounds(fromDate)
 		if err != nil {
-			return nil, http.StatusBadRequest, errors.New("fecha inicial invalida")
+			return nil, http.StatusBadRequest, errors.New("fecha inicial inválida")
 		}
 
 		_, endISO, err := getBogotaDayBounds(toDate)
 		if err != nil {
-			return nil, http.StatusBadRequest, errors.New("fecha final invalida")
+			return nil, http.StatusBadRequest, errors.New("fecha final inválida")
 		}
 
 		query.Set("fecha_pago", fmt.Sprintf("gte.%s", startISO))
@@ -1375,7 +1375,7 @@ func (a *App) UpdateStudentRecord(ctx context.Context, numeroIdentificacion stri
 				return nil, status, err
 			}
 			if exists {
-				return nil, http.StatusConflict, errors.New("Ya existe un usuario con el mismo correo electronico. Use un correo diferente.")
+				return nil, http.StatusConflict, errors.New("Ya existe un usuario con el mismo correo electrónico. Use un correo diferente.")
 			}
 		}
 	}
@@ -1407,26 +1407,60 @@ func (a *App) DeleteStudentRecord(ctx context.Context, numeroIdentificacion stri
 		return http.StatusBadRequest, errors.New("numero_identificacion es requerido")
 	}
 
-	// Remove active course associations so the archived student no longer appears
-	// in enrollment-dependent flows.
-	courseLinksQuery := url.Values{}
-	courseLinksQuery.Set("numero_identificacion", fmt.Sprintf("eq.%s", numero))
+	lookupQuery := url.Values{}
+	lookupQuery.Set("numero_identificacion", fmt.Sprintf("eq.%s", numero))
+	lookupQuery.Set("deleted_at", "is.null")
+	lookupQuery.Set("select", "numero_identificacion,auth_user_id")
 
-	_, status, err := a.CallSupabase(ctx, http.MethodDelete, "/rest/v1/cursos_x_estudiantes", courseLinksQuery, nil, false)
+	lookupBody, status, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/estudiantes", lookupQuery, nil, false)
 	if err != nil {
 		return status, err
 	}
 
-	query := url.Values{}
-	query.Set("numero_identificacion", fmt.Sprintf("eq.%s", numero))
-	query.Set("deleted_at", "is.null")
-	query.Set("select", "numero_identificacion,auth_user_id")
-
-	payload := map[string]any{
-		"deleted_at": time.Now().UTC().Format(time.RFC3339Nano),
+	lookupRows, err := unmarshalRows(lookupBody)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+	if len(lookupRows) == 0 {
+		return http.StatusNotFound, errors.New("no se encontró el estudiante")
 	}
 
-	body, status, err := a.CallSupabase(ctx, http.MethodPatch, "/rest/v1/estudiantes", query, payload, true)
+	authUserID, _ := asString(lookupRows[0]["auth_user_id"])
+
+	// Keep explicit cleanup for compatibility with environments where cascades
+	// may not be present in all migrations.
+	courseLinksQuery := url.Values{}
+	courseLinksQuery.Set("numero_identificacion", fmt.Sprintf("eq.%s", numero))
+
+	_, status, err = a.CallSupabase(ctx, http.MethodDelete, "/rest/v1/cursos_x_estudiantes", courseLinksQuery, nil, false)
+	if err != nil {
+		return status, err
+	}
+
+	attendanceQuery := url.Values{}
+	attendanceQuery.Set("numero_identificacion", fmt.Sprintf("eq.%s", numero))
+
+	_, status, err = a.CallSupabase(ctx, http.MethodDelete, "/rest/v1/registro_asistencia", attendanceQuery, nil, false)
+	if err != nil {
+		return status, err
+	}
+
+	balanceQuery := url.Values{}
+	balanceQuery.Set("numero_identificacion", fmt.Sprintf("eq.%s", numero))
+
+	_, status, err = a.CallSupabase(ctx, http.MethodDelete, "/rest/v1/saldo_estudiantes", balanceQuery, nil, false)
+	if err != nil {
+		if status != http.StatusNotFound {
+			return status, err
+		}
+	}
+
+	deleteStudentQuery := url.Values{}
+	deleteStudentQuery.Set("numero_identificacion", fmt.Sprintf("eq.%s", numero))
+	deleteStudentQuery.Set("deleted_at", "is.null")
+	deleteStudentQuery.Set("select", "numero_identificacion")
+
+	body, status, err := a.CallSupabase(ctx, http.MethodDelete, "/rest/v1/estudiantes", deleteStudentQuery, nil, true)
 	if err != nil {
 		return status, err
 	}
@@ -1439,7 +1473,6 @@ func (a *App) DeleteStudentRecord(ctx context.Context, numeroIdentificacion stri
 		return http.StatusNotFound, errors.New("no se encontró el estudiante")
 	}
 
-	authUserID, _ := asString(rows[0]["auth_user_id"])
 	if strings.TrimSpace(authUserID) != "" {
 		if err := a.DeleteManagedAuthUser(ctx, authUserID); err != nil {
 			return http.StatusBadGateway, err
@@ -1651,12 +1684,54 @@ func (a *App) DeleteProfessorRecord(ctx context.Context, numeroIdentificacion st
 		return http.StatusBadRequest, errors.New("numero_identificacion es requerido")
 	}
 
-	query := url.Values{}
-	query.Set("numero_identificacion", fmt.Sprintf("eq.%s", numero))
+	lookupQuery := url.Values{}
+	lookupQuery.Set("numero_identificacion", fmt.Sprintf("eq.%s", numero))
+	lookupQuery.Set("select", "numero_identificacion,auth_user_id")
 
-	_, status, err := a.CallSupabase(ctx, http.MethodDelete, "/rest/v1/profesores", query, nil, false)
+	lookupBody, status, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/profesores", lookupQuery, nil, false)
 	if err != nil {
 		return status, err
+	}
+
+	lookupRows, err := unmarshalRows(lookupBody)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+	if len(lookupRows) == 0 {
+		return http.StatusNotFound, errors.New("no se encontró el profesor")
+	}
+
+	authUserID, _ := asString(lookupRows[0]["auth_user_id"])
+
+	courseLinksQuery := url.Values{}
+	courseLinksQuery.Set("numero_identificacion", fmt.Sprintf("eq.%s", numero))
+
+	_, status, err = a.CallSupabase(ctx, http.MethodDelete, "/rest/v1/cursos_x_profesores", courseLinksQuery, nil, false)
+	if err != nil {
+		return status, err
+	}
+
+	query := url.Values{}
+	query.Set("numero_identificacion", fmt.Sprintf("eq.%s", numero))
+	query.Set("select", "numero_identificacion")
+
+	body, status, err := a.CallSupabase(ctx, http.MethodDelete, "/rest/v1/profesores", query, nil, true)
+	if err != nil {
+		return status, err
+	}
+
+	rows, err := unmarshalRows(body)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+	if len(rows) == 0 {
+		return http.StatusNotFound, errors.New("no se encontró el profesor")
+	}
+
+	if strings.TrimSpace(authUserID) != "" {
+		if err := a.DeleteManagedAuthUser(ctx, authUserID); err != nil {
+			return http.StatusBadGateway, err
+		}
 	}
 
 	return http.StatusOK, nil
@@ -1690,7 +1765,7 @@ func (a *App) ListCourseOptions(ctx context.Context) ([]map[string]any, error) {
 
 func (a *App) GetCourseByID(ctx context.Context, idCurso int) (map[string]any, int, error) {
 	if idCurso <= 0 {
-		return nil, http.StatusBadRequest, errors.New("id_curso invalido")
+		return nil, http.StatusBadRequest, errors.New("id_curso inválido")
 	}
 
 	query := url.Values{}
@@ -1800,7 +1875,7 @@ func (a *App) CreateCourseRecord(ctx context.Context, data map[string]any) (map[
 
 func (a *App) UpdateCourseRecord(ctx context.Context, idCurso int, data map[string]any) (map[string]any, int, error) {
 	if idCurso <= 0 {
-		return nil, http.StatusBadRequest, errors.New("id_curso invalido")
+		return nil, http.StatusBadRequest, errors.New("id_curso inválido")
 	}
 
 	payload := buildCoursePayload(data, true)
@@ -1827,7 +1902,7 @@ func (a *App) UpdateCourseRecord(ctx context.Context, idCurso int, data map[stri
 
 func (a *App) DeleteCourseRecord(ctx context.Context, idCurso int) (int, error) {
 	if idCurso <= 0 {
-		return http.StatusBadRequest, errors.New("id_curso invalido")
+		return http.StatusBadRequest, errors.New("id_curso inválido")
 	}
 
 	query := url.Values{}
@@ -2061,7 +2136,7 @@ func (a *App) AssociateParticipantsToCourse(ctx context.Context, idCurso int, pa
 
 func (a *App) DissociateParticipantsFromCourse(ctx context.Context, idCurso int, participantIDs []string) (map[string]any, int, error) {
 	if idCurso <= 0 {
-		return nil, http.StatusBadRequest, errors.New("id_curso invalido")
+		return nil, http.StatusBadRequest, errors.New("id_curso inválido")
 	}
 
 	normalizedIDs := normalizeIdentificationIDs(participantIDs)
@@ -2149,7 +2224,7 @@ func (a *App) DissociateParticipantsFromCourse(ctx context.Context, idCurso int,
 
 func (a *App) GetParticipantsByCourseID(ctx context.Context, idCurso int) ([]map[string]any, int, error) {
 	if idCurso <= 0 {
-		return nil, http.StatusBadRequest, errors.New("id_curso invalido")
+		return nil, http.StatusBadRequest, errors.New("id_curso inválido")
 	}
 
 	studentsQuery := url.Values{}
@@ -2272,7 +2347,7 @@ func (a *App) GetParticipantsByCourseID(ctx context.Context, idCurso int) ([]map
 
 func (a *App) GetStudentsByCourseID(ctx context.Context, idCurso int) ([]map[string]any, int, error) {
 	if idCurso <= 0 {
-		return nil, http.StatusBadRequest, errors.New("id_curso invalido")
+		return nil, http.StatusBadRequest, errors.New("id_curso inválido")
 	}
 
 	query := url.Values{}
@@ -2331,9 +2406,15 @@ func (a *App) GetDashboardSummary(ctx context.Context) (map[string]any, error) {
 		return nil, err
 	}
 
+	nowBogota := time.Now().In(bogotaTZ)
+	monthStart := time.Date(nowBogota.Year(), nowBogota.Month(), 1, 0, 0, 0, 0, bogotaTZ).UTC().Format(time.RFC3339)
+	nextMonthStart := time.Date(nowBogota.Year(), nowBogota.Month()+1, 1, 0, 0, 0, 0, bogotaTZ).UTC().Format(time.RFC3339)
+
 	attendedQuery := url.Values{}
 	attendedQuery.Set("select", "id")
 	attendedQuery.Set("asistio", "eq.true")
+	attendedQuery.Set("fecha", fmt.Sprintf("gte.%s", monthStart))
+	attendedQuery.Add("fecha", fmt.Sprintf("lt.%s", nextMonthStart))
 	attendedBody, _, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/registro_asistencia", attendedQuery, nil, false)
 	if err != nil {
 		return nil, err
@@ -2346,6 +2427,8 @@ func (a *App) GetDashboardSummary(ctx context.Context) (map[string]any, error) {
 	absentQuery := url.Values{}
 	absentQuery.Set("select", "id")
 	absentQuery.Set("asistio", "eq.false")
+	absentQuery.Set("fecha", fmt.Sprintf("gte.%s", monthStart))
+	absentQuery.Add("fecha", fmt.Sprintf("lt.%s", nextMonthStart))
 	absentBody, _, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/registro_asistencia", absentQuery, nil, false)
 	if err != nil {
 		return nil, err
@@ -2408,12 +2491,12 @@ func nullableString(value string) any {
 
 func (a *App) GetAttendanceRoster(ctx context.Context, idCurso int, date string) ([]map[string]any, int, error) {
 	if idCurso <= 0 {
-		return nil, http.StatusBadRequest, errors.New("id_curso invalido")
+		return nil, http.StatusBadRequest, errors.New("id_curso inválido")
 	}
 
 	startISO, endISO, err := getBogotaDayBounds(date)
 	if err != nil {
-		return nil, http.StatusBadRequest, errors.New("fecha invalida")
+		return nil, http.StatusBadRequest, errors.New("fecha inválida")
 	}
 
 	enrolledQuery := url.Values{}
@@ -2469,6 +2552,35 @@ func (a *App) GetAttendanceRoster(ctx context.Context, idCurso int, date string)
 		attendanceByStudent[id] = row
 	}
 
+	advanceByStudent := map[string]int{}
+	saldoQuery := url.Values{}
+	saldoQuery.Set("select", "numero_identificacion,clases_adelantadas")
+	saldoQuery.Set("numero_identificacion", buildStringInFilter(identifiers))
+
+	saldoBody, status, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/saldo_estudiantes", saldoQuery, nil, false)
+	if err != nil {
+		return nil, status, err
+	}
+
+	saldoRows, err := unmarshalRows(saldoBody)
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+
+	for _, saldoRow := range saldoRows {
+		id, _ := asString(saldoRow["numero_identificacion"])
+		if id == "" {
+			continue
+		}
+
+		clasesAdelantadas, ok := asInt(saldoRow["clases_adelantadas"])
+		if !ok || clasesAdelantadas < 0 {
+			clasesAdelantadas = 0
+		}
+
+		advanceByStudent[id] = clasesAdelantadas
+	}
+
 	result := make([]map[string]any, 0, len(enrolledRows))
 	for _, row := range enrolledRows {
 		id, _ := asString(row["numero_identificacion"])
@@ -2520,6 +2632,7 @@ func (a *App) GetAttendanceRoster(ctx context.Context, idCurso int, date string)
 			"saldo":                 saldo,
 			"metodo_pago":           metodoPago,
 			"marcado_en":            marcadoEn,
+			"clases_adelantadas":    advanceByStudent[id],
 		})
 	}
 
@@ -2528,7 +2641,7 @@ func (a *App) GetAttendanceRoster(ctx context.Context, idCurso int, date string)
 
 func (a *App) SaveAttendance(ctx context.Context, req models.AttendanceSaveRequest) (map[string]any, int, error) {
 	if req.IDCurso <= 0 {
-		return nil, http.StatusBadRequest, errors.New("id_curso invalido")
+		return nil, http.StatusBadRequest, errors.New("id_curso inválido")
 	}
 	if strings.TrimSpace(req.Date) == "" {
 		return nil, http.StatusBadRequest, errors.New("date es requerido")
@@ -2578,7 +2691,7 @@ func (a *App) SaveAttendance(ctx context.Context, req models.AttendanceSaveReque
 
 	startISO, endISO, err := getBogotaDayBounds(req.Date)
 	if err != nil {
-		return nil, http.StatusBadRequest, errors.New("fecha invalida")
+		return nil, http.StatusBadRequest, errors.New("fecha inválida")
 	}
 
 	studentIDs := make([]string, 0, len(normalizedRows))
@@ -2642,25 +2755,50 @@ func (a *App) SaveAttendance(ctx context.Context, req models.AttendanceSaveReque
 		}
 	}
 
+	advanceByStudent := map[string]int{}
+	advanceQuery := url.Values{}
+	advanceQuery.Set("select", "numero_identificacion,clases_adelantadas")
+	advanceQuery.Set("numero_identificacion", buildStringInFilter(studentIDs))
+
+	advanceBody, status, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/saldo_estudiantes", advanceQuery, nil, false)
+	if err != nil {
+		return nil, status, err
+	}
+
+	advanceRows, err := unmarshalRows(advanceBody)
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+
+	for _, advanceRow := range advanceRows {
+		id, _ := asString(advanceRow["numero_identificacion"])
+		if id == "" {
+			continue
+		}
+
+		clasesAdelantadas, ok := asInt(advanceRow["clases_adelantadas"])
+		if !ok || clasesAdelantadas < 0 {
+			clasesAdelantadas = 0
+		}
+
+		advanceByStudent[id] = clasesAdelantadas
+	}
+
 	savedCount := 0
 
 	for _, row := range normalizedRows {
+		hadAdvanceBefore := row.Asistio && advanceByStudent[row.NumeroIdentificacion] > 0
+		if hadAdvanceBefore {
+			forcedSaldo := "cancelado"
+			row.Saldo = &forcedSaldo
+			row.MetodoPago = nil
+		}
+
 		existing := existingByStudent[row.NumeroIdentificacion]
 		existingPagoID := ""
 		if existing != nil {
 			if value, ok := asString(existing["id_pago"]); ok {
 				existingPagoID = strings.TrimSpace(value)
-			}
-		}
-
-		hadAdvanceBefore := false
-		if row.Asistio && row.Saldo != nil && *row.Saldo == "cancelado" {
-			saldoSnapshot, _, saldoErr := a.getSaldoEstudiante(ctx, row.NumeroIdentificacion)
-			if saldoErr == nil {
-				clasesAdelantadas, ok := asInt(saldoSnapshot["clases_adelantadas"])
-				if ok && clasesAdelantadas > 0 {
-					hadAdvanceBefore = true
-				}
 			}
 		}
 
@@ -2846,12 +2984,12 @@ func (a *App) SaveAttendance(ctx context.Context, req models.AttendanceSaveReque
 
 func (a *App) DeleteAttendance(ctx context.Context, idCurso int, date string) (map[string]any, int, error) {
 	if idCurso <= 0 {
-		return nil, http.StatusBadRequest, errors.New("id_curso invalido")
+		return nil, http.StatusBadRequest, errors.New("id_curso inválido")
 	}
 
 	startISO, endISO, err := getBogotaDayBounds(date)
 	if err != nil {
-		return nil, http.StatusBadRequest, errors.New("fecha invalida")
+		return nil, http.StatusBadRequest, errors.New("fecha inválida")
 	}
 
 	countQuery := url.Values{}
@@ -2885,12 +3023,12 @@ func (a *App) DeleteAttendance(ctx context.Context, idCurso int, date string) (m
 
 func (a *App) GetAttendanceExport(ctx context.Context, idCurso int, date string) ([]map[string]any, int, error) {
 	if idCurso <= 0 {
-		return nil, http.StatusBadRequest, errors.New("id_curso invalido")
+		return nil, http.StatusBadRequest, errors.New("id_curso inválido")
 	}
 
 	startISO, endISO, err := getBogotaDayBounds(date)
 	if err != nil {
-		return nil, http.StatusBadRequest, errors.New("fecha invalida")
+		return nil, http.StatusBadRequest, errors.New("fecha inválida")
 	}
 
 	query := url.Values{}
@@ -2965,7 +3103,7 @@ func (a *App) GetAttendanceExport(ctx context.Context, idCurso int, date string)
 
 func (a *App) GetAttendanceDatesByCourse(ctx context.Context, idCurso int) ([]string, int, error) {
 	if idCurso <= 0 {
-		return nil, http.StatusBadRequest, errors.New("id_curso invalido")
+		return nil, http.StatusBadRequest, errors.New("id_curso inválido")
 	}
 
 	query := url.Values{}

@@ -16,6 +16,7 @@ import {
   UserRound,
   CreditCard,
   Fingerprint,
+  FileSpreadsheet,
   Link2,
   FolderOpen,
   Shield,
@@ -459,21 +460,26 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-gray-600">
-              Asistencia
+              Asistencia del Mes
             </CardTitle>
             <div className="p-2 rounded-lg bg-amber-50">
               <ClipboardList className="h-4 w-4 text-amber-600" />
             </div>
           </CardHeader>
           <CardContent className="space-y-1">
-            <div className="text-sm text-gray-600">Han asistido</div>
+            <div className="text-sm text-gray-600">Han asistido este mes</div>
             <div className="text-2xl font-bold text-gray-900">
               {attendedCount}
             </div>
-            <div className="text-sm text-gray-600">No han asistido</div>
+            <div className="text-sm text-gray-600">
+              No han asistido este mes
+            </div>
             <div className="text-2xl font-bold text-gray-900">
               {absentCount}
             </div>
+            <CardDescription className="pt-1">
+              Acumulado del mes actual
+            </CardDescription>
           </CardContent>
         </Card>
 
@@ -732,8 +738,8 @@ export default async function DashboardPage() {
           src="/logos/Logo_Nuevo.png"
           alt="Logo Harvard Enterprise"
           width={350}
-          height={370}
-          className="h-[370px] w-[350px]"
+          height={329}
+          className="h-auto w-[350px]"
           priority
         />
       </div>

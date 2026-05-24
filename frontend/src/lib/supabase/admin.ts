@@ -28,7 +28,7 @@ export async function inviteUserByEmail(email: string, redirectTo: string) {
   if (error) {
     const message = translateErrorMessage(
       error.message,
-      "No se pudo enviar la invitacion por correo.",
+      "No se pudo enviar la invitación por correo.",
     );
     const isAlreadyRegistered = /already\s+(registered|exists)/i.test(message);
     return {
@@ -90,7 +90,7 @@ export async function createManagedAuthUser(params: {
   if (error || !data.user?.id) {
     const message = translateErrorMessage(
       error?.message,
-      "No se pudo crear el usuario en autenticacion.",
+      "No se pudo crear el usuario en autenticación.",
     );
     return {
       ok: false,
@@ -114,7 +114,7 @@ export async function deleteAuthUserById(userId: string): Promise<{
       ok: false,
       error: translateErrorMessage(
         error.message,
-        "No se pudo eliminar el usuario de autenticacion.",
+        "No se pudo eliminar el usuario de autenticación.",
       ),
     };
   }

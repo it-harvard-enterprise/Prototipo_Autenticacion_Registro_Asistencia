@@ -33,8 +33,8 @@ export default function AuthLayout({
               src="/logos/Logo_Nuevo.png"
               alt="Logo Harvard Enterprise"
               width={500}
-              height={500}
-              className="h-[500px] w-[500px]"
+              height={470}
+              className="h-auto w-[500px]"
               priority
             />
           </div>

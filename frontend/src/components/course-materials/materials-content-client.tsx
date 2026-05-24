@@ -2,10 +2,20 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { FolderPlus, ImagePlus, Loader2 } from "lucide-react";
+import { FolderPlus, ImagePlus, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface MaterialsContentClientProps {
   courseId: number;
@@ -27,6 +37,13 @@ export function MaterialsContentClient({
   const [folders, setFolders] = useState(initialFolders);
   const [newFolderName, setNewFolderName] = useState("");
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [deletingFolderId, setDeletingFolderId] = useState<number | null>(null);
+  const [pendingFolderDelete, setPendingFolderDelete] = useState<{
+    folderId: number;
+    folderName: string;
+    nestedCount: number;
+    filesInBranch: number;
+  } | null>(null);
 
   const parentFolders = useMemo(() => {
     return [...folders]
@@ -90,6 +107,83 @@ export function MaterialsContentClient({
     } catch {
       toast.error("No se pudo crear la carpeta");
       setIsCreatingFolder(false);
+    }
+  }
+
+  function collectFolderBranchIds(rootFolderId: number): number[] {
+    const collected = new Set<number>([rootFolderId]);
+    const queue: number[] = [rootFolderId];
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      const children = folders.filter(
+        (folder) => folder.parentFolderId === current,
+      );
+      for (const child of children) {
+        if (!collected.has(child.id)) {
+          collected.add(child.id);
+          queue.push(child.id);
+        }
+      }
+    }
+
+    return Array.from(collected);
+  }
+
+  function promptRemoveFolder(folderId: number, folderName: string) {
+    const branchIds = collectFolderBranchIds(folderId);
+    const branchSet = new Set<number>(branchIds);
+    const nestedCount = Math.max(0, branchIds.length - 1);
+    const filesInBranch = folders.reduce(
+      (count, folder) =>
+        count + (branchSet.has(folder.id) ? Math.max(0, folder.filesCount) : 0),
+      0,
+    );
+
+    setPendingFolderDelete({
+      folderId,
+      folderName,
+      nestedCount,
+      filesInBranch,
+    });
+  }
+
+  async function removeFolder(folderId: number) {
+    const branchIds = collectFolderBranchIds(folderId);
+    const branchSet = new Set<number>(branchIds);
+
+    setDeletingFolderId(folderId);
+
+    try {
+      const response = await fetch("/api/course-materials/folders", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id_curso: courseId,
+          folder_id: folderId,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        error?: string;
+      } | null;
+
+      if (!response.ok || !payload?.success) {
+        toast.error(payload?.error ?? "No se pudo eliminar la carpeta");
+        setDeletingFolderId(null);
+        return;
+      }
+
+      setFolders((prev) => prev.filter((folder) => !branchSet.has(folder.id)));
+      toast.success("Carpeta eliminada correctamente.");
+      setDeletingFolderId(null);
+      setPendingFolderDelete(null);
+    } catch {
+      toast.error("No se pudo eliminar la carpeta");
+      setDeletingFolderId(null);
     }
   }
 
@@ -188,6 +282,23 @@ export function MaterialsContentClient({
             <p className="mt-2 text-xs text-gray-500">
               Abra esta carpeta para gestionar subcarpetas, archivos y enlaces.
             </p>
+            {canManage ? (
+              <div className="mt-3 border-t border-gray-200 pt-3">
+                <button
+                  type="button"
+                  onClick={() => promptRemoveFolder(folder.id, folder.name)}
+                  disabled={deletingFolderId === folder.id}
+                  className="inline-flex items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-60"
+                >
+                  {deletingFolderId === folder.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3.5 w-3.5" />
+                  )}
+                  Eliminar carpeta
+                </button>
+              </div>
+            ) : null}
           </article>
         ))}
 
@@ -197,6 +308,44 @@ export function MaterialsContentClient({
           </div>
         ) : null}
       </section>
+
+      <AlertDialog
+        open={!!pendingFolderDelete}
+        onOpenChange={(open) => {
+          if (!open && !deletingFolderId) {
+            setPendingFolderDelete(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-bold text-[#b92f2d]">
+              ¿Eliminar carpeta?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingFolderDelete
+                ? `Se eliminará la carpeta "${pendingFolderDelete.folderName}" con ${pendingFolderDelete.nestedCount} subcarpeta(s) y ${pendingFolderDelete.filesInBranch} archivo(s). Esta acción no se puede deshacer.`
+                : "Esta acción no se puede deshacer."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={!!deletingFolderId}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingFolderDelete) {
+                  void removeFolder(pendingFolderDelete.folderId);
+                }
+              }}
+              disabled={!!deletingFolderId || !pendingFolderDelete}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deletingFolderId ? "Eliminando..." : "Eliminar carpeta"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

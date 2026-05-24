@@ -1,12 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, FileSpreadsheet, Filter, Loader2 } from "lucide-react";
+import {
+  ArrowLeft,
+  FileSpreadsheet,
+  Filter,
+  Loader2,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  deleteAttendanceForCourseAndDate,
   getAttendanceExportByCourseAndDate,
   type AttendanceExportRow,
 } from "@/app/actions/attendance";
@@ -19,6 +26,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Table,
@@ -48,6 +66,7 @@ function toDisplayDate(dateIso: string) {
 }
 
 export default function AttendanceListDetailsPage() {
+  const router = useRouter();
   const params = useParams<{ idCurso: string; date: string }>();
   const idCurso = Number(params.idCurso ?? 0);
   const date = String(params.date ?? "");
@@ -58,6 +77,9 @@ export default function AttendanceListDetailsPage() {
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [draftFilters, setDraftFilters] = useState(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState(EMPTY_FILTERS);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [isDeletingList, setIsDeletingList] = useState(false);
 
   useEffect(() => {
     async function loadRows() {
@@ -138,6 +160,32 @@ export default function AttendanceListDetailsPage() {
     }
   }
 
+  async function handleDeleteCurrentList() {
+    if (deleteConfirmText.trim() !== "ELIMINAR") {
+      toast.error("Debe escribir ELIMINAR para confirmar");
+      return;
+    }
+
+    setIsDeletingList(true);
+    const result = await deleteAttendanceForCourseAndDate({
+      idCurso,
+      date,
+    });
+    setIsDeletingList(false);
+
+    if (!result.success) {
+      toast.error(result.error ?? "No fue posible eliminar la lista");
+      return;
+    }
+
+    toast.success(
+      `Lista eliminada (${result.deletedCount ?? 0} registros eliminados)`,
+    );
+    setIsDeleteDialogOpen(false);
+    setDeleteConfirmText("");
+    router.replace(`/dashboard/attendance-lists/${idCurso}`);
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -155,6 +203,19 @@ export default function AttendanceListDetailsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setDeleteConfirmText("");
+              setIsDeleteDialogOpen(true);
+            }}
+            className="border-[#b92f2d]/50 text-[#b92f2d] hover:bg-[#b92f2d]/10"
+            disabled={isDeletingList || rows.length === 0}
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            Eliminar registros
+          </Button>
           <Button
             type="button"
             onClick={handleExport}
@@ -253,6 +314,43 @@ export default function AttendanceListDetailsPage() {
           ) : null}
         </CardContent>
       </Card>
+
+      <AlertDialog
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-bold text-[#b92f2d]">
+              Eliminar lista de asistencia
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción eliminará todos los registros de asistencia del curso
+              #{idCurso} para la fecha {date}. Esta operación no se puede
+              deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            placeholder="Escriba ELIMINAR"
+            value={deleteConfirmText}
+            onChange={(event) => setDeleteConfirmText(event.target.value)}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingList}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteCurrentList}
+              disabled={
+                isDeletingList || deleteConfirmText.trim() !== "ELIMINAR"
+              }
+              className="bg-[#b92f2d] text-white hover:bg-[#982725]"
+            >
+              {isDeletingList ? "Eliminando..." : "Eliminar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
         <DialogContent>

@@ -1,19 +1,23 @@
 const DUPLICATE_FIELD_MESSAGES: Array<{ pattern: RegExp; message: string }> = [
   {
     pattern: /(estudiantes?_pkey|profesores?_pkey|numero_identificacion)/i,
-    message: "Ya existe un usuario con el mismo numero de identificacion.",
+    message: "Ya existe un usuario con el mismo número de identificación.",
   },
   {
     pattern: /(estudiantes?_no_matricula_key|no_matricula)/i,
-    message: "Ya existe un usuario con el mismo numero de matricula.",
+    message: "Ya existe un usuario con el mismo número de matrícula.",
   },
   {
     pattern: /(email|profiles_email_key|auth_user_id|already\s+registered)/i,
-    message: "Ya existe un usuario con el mismo correo electronico.",
+    message: "Ya existe un usuario con el mismo correo electrónico.",
   },
   {
     pattern: /(uq_course_material_folders_course_parent_name_lower)/i,
     message: "Ya existe una carpeta con ese nombre en el mismo nivel.",
+  },
+  {
+    pattern: /(uq_course_material_files_folder_youtube_url)/i,
+    message: "Ese video de YouTube ya existe en esta carpeta.",
   },
 ];
 
@@ -39,7 +43,7 @@ function translateDuplicateMessage(rawMessage: string): string | null {
     }
   }
 
-  return "Ya existe un registro con uno de los valores unicos que intenta guardar.";
+  return "Ya existe un registro con uno de los valores únicos que intenta guardar.";
 }
 
 export function translateErrorMessage(
@@ -63,26 +67,26 @@ export function translateErrorMessage(
   }
 
   if (lower.includes("invalid json payload")) {
-    return "La solicitud enviada al servidor es invalida.";
+    return "La solicitud enviada al servidor es inválida.";
   }
 
   if (lower.includes("backend error")) {
-    return "El servidor devolvio un error procesando la solicitud.";
+    return "El servidor devolvió un error al procesar la solicitud.";
   }
 
   if (lower.includes("chk_estudiantes_coordinador")) {
-    return "El coordinador academico seleccionado no es valido para este entorno. Seleccione uno de los coordinadores autorizados.";
+    return "El coordinador académico seleccionado no es válido para este entorno. Seleccione uno de los coordinadores autorizados.";
   }
 
   if (
     lower.includes("supabase auth admin request failed with status 409") ||
     lower.includes("supabase auth admin request failed with status 422")
   ) {
-    return "Ya existe un usuario con el mismo correo electronico. Use un correo diferente.";
+    return "Ya existe un usuario con el mismo correo electrónico. Use un correo diferente.";
   }
 
   if (lower.includes("failed to fetch") || lower.includes("networkerror")) {
-    return "No fue posible conectar con el servidor. Verifique su conexion e intente nuevamente.";
+    return "No fue posible conectar con el servidor. Verifique su conexión e intente nuevamente.";
   }
 
   if (lower.includes("supabase error:")) {

@@ -115,7 +115,7 @@ async function identifyPerson(
       payload ?? {
         success: false,
         found: false,
-        error: "Respuesta invalida del servidor",
+        error: "Respuesta inválida del servidor",
       }
     );
   } catch {
@@ -194,7 +194,7 @@ export default function PersonIdentificationPage() {
   async function handleSearchByFingerprint() {
     if (!readerReady) {
       toast.error(
-        "El lector no esta listo. Verifique la conexion y el servicio local.",
+        "El lector no está listo. Verifique la conexión y el servicio local.",
       );
       return;
     }

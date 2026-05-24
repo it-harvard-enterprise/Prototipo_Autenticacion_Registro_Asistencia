@@ -226,7 +226,7 @@ export function Sidebar({
               src="/logos/Logo_Nuevo.png"
               alt="Logo Harvard Enterprise"
               width={150}
-              height={150}
+              height={141}
               priority
             />
           </div>

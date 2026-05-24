@@ -52,15 +52,21 @@ export async function createAdmin(
   }
 
   try {
+    const normalizedEmail = data.email.trim().toLowerCase();
+    const normalizedNombres = upper(data.nombres);
+    const normalizedApellidos = upper(data.apellidos);
+    const normalizedTipoIdentificacion = upper(data.tipo_identificacion);
+    const normalizedNumeroIdentificacion = upper(data.numero_identificacion);
+
     // 1. Create auth user
     const authResult = await createManagedAuthUser({
-      email: data.email.trim().toLowerCase(),
+      email: normalizedEmail,
       password: data.password || "TempPassword123",
       role: "administrador",
-      nombres: upper(data.nombres),
-      apellidos: upper(data.apellidos),
-      tipoIdentificacion: upper(data.tipo_identificacion),
-      numeroIdentificacion: upper(data.numero_identificacion),
+      nombres: normalizedNombres,
+      apellidos: normalizedApellidos,
+      tipoIdentificacion: normalizedTipoIdentificacion,
+      numeroIdentificacion: normalizedNumeroIdentificacion,
       approvedByAdmin: true,
     });
 
@@ -73,8 +79,33 @@ export async function createAdmin(
       };
     }
 
-    // 2. Get admin data from database
+    // 2. Ensure profile exists and is approved for dashboard-created admins.
     const supabase = createAdminClient();
+    const { error: profileError } = await supabase.from("profiles").upsert(
+      {
+        id: authResult.userId,
+        nombre: normalizedNombres,
+        apellido: normalizedApellidos,
+        email: normalizedEmail,
+        role: "administrador",
+        approved: true,
+      },
+      {
+        onConflict: "id",
+      },
+    );
+
+    if (profileError) {
+      return {
+        success: false,
+        error: translateErrorMessage(
+          profileError.message,
+          "Se creó el administrador, pero no fue posible aprobar su perfil automáticamente.",
+        ),
+      };
+    }
+
+    // 3. Get admin data from database
     const { data: admin, error: fetchError } = await supabase
       .from("administrador")
       .select("*")
@@ -86,7 +117,7 @@ export async function createAdmin(
         success: false,
         error: translateErrorMessage(
           fetchError?.message,
-          "Se creo el usuario pero no se pudieron recuperar los datos del administrador.",
+          "Se creó el usuario pero no se pudieron recuperar los datos del administrador.",
         ),
       };
     }

@@ -185,18 +185,18 @@ func (a *App) ExtractTemplate(base64PNG string) (string, *templates.SearchTempla
 	}
 	if len(pngBytes) < minFingerprintSize {
 		a.ZeroBytes(pngBytes)
-		return "", nil, errors.New("fingerprintTemplate PNG demasiado pequena para ser valida")
+		return "", nil, errors.New("fingerprintTemplate PNG demasiado pequeña para ser válida")
 	}
 
 	cfg, format, err := image.DecodeConfig(bytes.NewReader(pngBytes))
 	if err != nil || format != "png" {
 		a.ZeroBytes(pngBytes)
-		return "", nil, errors.New("fingerprintTemplate debe ser un PNG en base64 valido")
+			return "", nil, errors.New("fingerprintTemplate debe ser un PNG en base64 válido")
 	}
 
 	if cfg.Width < 80 || cfg.Height < 80 {
 		a.ZeroBytes(pngBytes)
-		return "", nil, errors.New("el PNG de la huella es demasiado pequeno")
+		return "", nil, errors.New("el PNG de la huella es demasiado pequeño")
 	}
 
 	img, _, err := image.Decode(bytes.NewReader(pngBytes))

@@ -71,7 +71,7 @@ export async function signIn(email: string, password: string) {
   } catch (err) {
     return {
       success: false,
-      error: err instanceof Error ? err.message : "Unknown error",
+      error: err instanceof Error ? err.message : "Error desconocido",
     };
   }
 }
@@ -141,7 +141,7 @@ export async function signUp(
   } catch (err) {
     return {
       success: false,
-      error: err instanceof Error ? err.message : "Unknown error",
+      error: err instanceof Error ? err.message : "Error desconocido",
     };
   }
 }
