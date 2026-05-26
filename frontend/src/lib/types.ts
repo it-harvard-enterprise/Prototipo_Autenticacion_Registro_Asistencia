@@ -53,6 +53,7 @@ export interface Student {
   deuda_actual?: number;
   estado_pago?: "DEBE" | "ADELANTADO" | "AL_DIA" | string;
   ultima_actualizacion_saldo?: string | null;
+  attended_count?: number;
   fingerprint_right?: string | null;
   fingerprint_left?: string | null;
   huella_indice_derecho: string | null;
