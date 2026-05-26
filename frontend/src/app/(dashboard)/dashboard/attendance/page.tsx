@@ -17,6 +17,7 @@ import {
   type CourseOption,
 } from "@/app/actions/attendance";
 import { useDigitalPersonaFingerprintReader } from "@/lib/biometrics/digitalpersona";
+import { matchesPeopleQuery } from "@/lib/people-search";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -139,6 +140,7 @@ export default function AttendancePage() {
   const [isCapturingFingerprint, setIsCapturingFingerprint] = useState(false);
   const [courseSearch, setCourseSearch] = useState("");
   const [showCourseList, setShowCourseList] = useState(false);
+  const [rosterSearch, setRosterSearch] = useState("");
   const [isRosterDirty, setIsRosterDirty] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
@@ -195,6 +197,20 @@ export default function AttendancePage() {
       return idMatch || nameMatch;
     });
   }, [courseSearch, courses]);
+
+  // Filtra el roster para visualización. La lista subyacente (`students`)
+  // permanece intacta — al guardar se envía la lista completa,
+  // independientemente de lo que esté visible.
+  const displayedStudents = useMemo(() => {
+    if (!rosterSearch.trim()) return students;
+    return students.filter((student) =>
+      matchesPeopleQuery(rosterSearch, {
+        nombres: student.nombres,
+        apellidos: student.apellidos,
+        numero_identificacion: student.numero_identificacion,
+      }),
+    );
+  }, [students, rosterSearch]);
 
   useEffect(() => {
     if (!courses.length) return;
@@ -784,6 +800,16 @@ export default function AttendancePage() {
                 </CardContent>
               </Card>
 
+              {students.length > 0 && (
+                <div className="rounded-md border bg-white p-3">
+                  <Input
+                    value={rosterSearch}
+                    onChange={(event) => setRosterSearch(event.target.value)}
+                    placeholder="Buscar estudiante por nombre, apellidos o cédula"
+                  />
+                </div>
+              )}
+
               <div className="rounded-md border bg-white overflow-hidden">
                 <Table>
                   <TableHeader>
@@ -804,8 +830,17 @@ export default function AttendancePage() {
                           Cargue un curso para ver estudiantes asociados.
                         </TableCell>
                       </TableRow>
+                    ) : displayedStudents.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={4}
+                          className="py-8 text-center text-gray-500"
+                        >
+                          Ningún estudiante coincide con la búsqueda.
+                        </TableCell>
+                      </TableRow>
                     ) : (
-                      students.map((student) => {
+                      displayedStudents.map((student) => {
                         const advanceClasses = getAdvanceClassesCount(student);
                         const hasAdvanceClasses = advanceClasses > 0;
 

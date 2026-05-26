@@ -18,6 +18,7 @@ import {
   type AttendanceExportRow,
 } from "@/app/actions/attendance";
 import { exportAttendanceRowsToExcel } from "@/lib/attendance-export-excel";
+import { matchesPeopleQuery } from "@/lib/people-search";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -80,6 +81,7 @@ export default function AttendanceListDetailsPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [isDeletingList, setIsDeletingList] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     async function loadRows() {
@@ -117,12 +119,23 @@ export default function AttendanceListDetailsPage() {
       if (appliedFilters.balance === "cancelado" && row.saldo !== "cancelado") {
         return false;
       }
+      if (
+        !matchesPeopleQuery(searchQuery, {
+          nombres: row.nombres,
+          apellidos: row.apellidos,
+          numero_identificacion: row.numero_identificacion,
+        })
+      ) {
+        return false;
+      }
       return true;
     });
-  }, [rows, appliedFilters]);
+  }, [rows, appliedFilters, searchQuery]);
 
   const hasAppliedFilters =
-    appliedFilters.attendance !== "all" || appliedFilters.balance !== "all";
+    appliedFilters.attendance !== "all" ||
+    appliedFilters.balance !== "all" ||
+    searchQuery.trim().length > 0;
 
   function openFilterDialog() {
     setDraftFilters(appliedFilters);
@@ -137,6 +150,7 @@ export default function AttendanceListDetailsPage() {
   function clearAllFilters() {
     setDraftFilters(EMPTY_FILTERS);
     setAppliedFilters(EMPTY_FILTERS);
+    setSearchQuery("");
   }
 
   async function handleExport() {
@@ -239,9 +253,14 @@ export default function AttendanceListDetailsPage() {
 
       <div className="rounded-md border bg-white p-4">
         <p className="text-sm font-medium text-gray-800 mb-3">
-          Filtrar lista por asistencia y estado de saldo
+          Buscar estudiante o filtrar por asistencia y saldo
         </p>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Input
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Buscar por nombre, apellidos o cédula"
+          />
           <Button type="button" variant="outline" onClick={openFilterDialog}>
             <Filter className="mr-2 h-4 w-4" />
             Filtrar
