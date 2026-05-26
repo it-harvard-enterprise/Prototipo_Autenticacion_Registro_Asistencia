@@ -153,7 +153,7 @@ Tabla principal: `estudiantes`. Tablas relacionadas: `saldo_estudiantes`, `profi
 |---|---|---|---|
 | `POST` | `/api/students/enroll` | `StudentEnrollRequest` | Inserta estudiante **sin** crear usuario auth. Devuelve `{success, data:{numero_identificacion,nombres,apellidos,created_at}}`. Decifra huellas si vienen como `EncryptedPayload` (AES-GCM), extrae plantilla CBOR vía SourceAFIS y la re-encripta antes de guardar. Si la huella resuelve a `PENDING_FINGERPRINT` se guarda `null`. |
 | `POST` | `/api/students/create` | `StudentEnrollRequest` (requiere `email`) | Crea **además** el usuario en Supabase Auth (`role:"estudiante"`, password = `numero_identificacion`, `approved_by_admin:true`). Si el insert falla, hace rollback del auth user. Respuesta: `{success, data, auth_user_id, requires_password_change:false}`. |
-| `GET` | `/api/students` | — | Lista estudiantes ordenados por `apellidos asc`, con `saldo_estudiantes` embebido y campos derivados `estado_pago`, `deuda_actual`, `perfil_usuario`, `profile_id`, `profile_role`, `profile_approved`. |
+| `GET` | `/api/students` | — | Lista estudiantes ordenados por `apellidos asc`, con `saldo_estudiantes` embebido y campos derivados `estado_pago`, `deuda_actual`, `perfil_usuario`, `profile_id`, `profile_role`, `profile_approved`, **`attended_count`** (entero: total de filas en `registro_asistencia` con `asistio=true` para cada estudiante; calculado server-side, best-effort: si el lookup falla cae a `0` sin romper la respuesta). |
 | `GET` | `/api/students/:numero_identificacion` | — | Devuelve un estudiante con las mismas anotaciones. `404` si no existe. |
 | `POST` | `/api/students/exists` | `{ numero_identificacion }` | `{success, exists: bool}` |
 | `POST` | `/api/students/update` | `{ numero_identificacion, data:{...} }` | PATCH parcial. Campos válidos: `tipo_identificacion, numero_identificacion, nombres, apellidos, email, grado, telefono, direccion, barrio, nombre_acudiente, telefono_acudiente, eps, programa, fecha_inicio, fecha_matricula, valor_matricula, medio_pago_matricula, valor_apoyo_semanal`. |
@@ -303,9 +303,9 @@ Tablas: `pagos`, `saldo_estudiantes`, vista `vista_reporte_pagos`.
 | Método | Ruta | Body / Query | Notas |
 |---|---|---|---|
 | `GET` | `/api/payments/student/:numero_identificacion/status` | — | `{ student, recent_payments }`. |
-| `POST` | `/api/payments/process` | `ProcessStudentPaymentRequest` | Inserta en `pagos` y ajusta `saldo_estudiantes` (resta deuda o suma adelanto). Modalidades: `DEUDA_TOTAL`, `DEUDA_PARCIAL`, `ADELANTO`. Métodos: `EFECTIVO`, `TRANSFERENCIA`, `OTRO`. |
+| `POST` | `/api/payments/process` | `ProcessStudentPaymentRequest` | Inserta en `pagos` y ajusta `saldo_estudiantes` (resta deuda o suma adelanto). Modalidades: `DEUDA_TOTAL`, `DEUDA_PARCIAL`, `ADELANTO`. Métodos: `EFECTIVO`, `TRANSFERENCIA`, `OTRO`. La respuesta `payment` incluye **`registrado_por_nombre`** (string o `null`) resuelto contra `profiles` con fallback a `administrador`. |
 | `POST` | `/api/payments/manual-status` | `ManualStudentPaymentStatusUpdateRequest` | Sobrescribe `clases_adeudadas` y `clases_adelantadas` directamente. Crea la fila si no existe. |
-| `GET` | `/api/payments/report` | query `numero_identificacion?`, `from? (YYYY-MM-DD)`, `to?`, `scope? (AMBOS \| ASISTENCIA \| PROCESADOR)`, `limit?` (default 50, max 5000) | Consulta `vista_reporte_pagos`. Ordenada por `fecha_pago desc`. |
+| `GET` | `/api/payments/report` | query `numero_identificacion?`, `from? (YYYY-MM-DD)`, `to?`, `scope? (AMBOS \| ASISTENCIA \| PROCESADOR)`, `limit?` (default 50, max 5000) | Consulta `vista_reporte_pagos`. Ordenada por `fecha_pago desc`. Cada fila incluye **`registrado_por_nombre`** (string o `null`) resuelto server-side desde los UUIDs de `registrado_por` con una sola query `in.()` a `profiles` (fallback a `administrador`). Best-effort: si el lookup falla, las filas conservan sus campos originales y `registrado_por_nombre = null`. |
 
 `ProcessStudentPaymentRequest`:
 ```jsonc
