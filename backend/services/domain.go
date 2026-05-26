@@ -755,7 +755,49 @@ func (a *App) ListStudents(ctx context.Context) ([]map[string]any, error) {
 		attachProfileStatus(row, profilesByID, profilesByEmail)
 	}
 
+	attendedCounts := a.loadAttendedCountsIndex(ctx)
+	for _, row := range rows {
+		numero, _ := asString(row["numero_identificacion"])
+		row["attended_count"] = attendedCounts[normalizeUpper(numero)]
+	}
+
 	return rows, nil
+}
+
+// loadAttendedCountsIndex returns a map of numero_identificacion (UPPER) to the
+// total number of confirmed attendance rows (asistio=true) for that student.
+// It performs a single lightweight read against registro_asistencia. Errors are
+// swallowed by design: enrichment is best-effort and must NOT break /api/students.
+// When the lookup fails, every student gets attended_count=0 (and the frontend
+// filter degrades gracefully to "Todos").
+func (a *App) loadAttendedCountsIndex(ctx context.Context) map[string]int {
+	counts := map[string]int{}
+
+	query := url.Values{}
+	query.Set("asistio", "eq.true")
+	query.Set("select", "numero_identificacion")
+
+	body, _, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/registro_asistencia", query, nil, false)
+	if err != nil {
+		return counts
+	}
+
+	var rows []struct {
+		NumeroIdentificacion string `json:"numero_identificacion"`
+	}
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return counts
+	}
+
+	for _, row := range rows {
+		key := normalizeUpper(row.NumeroIdentificacion)
+		if key == "" {
+			continue
+		}
+		counts[key]++
+	}
+
+	return counts
 }
 
 func (a *App) GetStudentByNumero(ctx context.Context, numeroIdentificacion string) (map[string]any, int, error) {
