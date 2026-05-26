@@ -347,6 +347,64 @@ export async function getStudentById(
   }
 }
 
+export interface StudentCourseInfo {
+  id_curso: number;
+  nombre_curso: string;
+  nivel_curso: string;
+  salon: string | null;
+  hora_inicio: string;
+  hora_fin: string;
+}
+
+interface PersonLookupRecord {
+  role: string;
+  cursos?: StudentCourseInfo[];
+}
+
+interface PersonLookupPayload {
+  found: boolean;
+  numero_identificacion: string;
+  records: PersonLookupRecord[];
+}
+
+/** Devuelve los cursos en los que el estudiante está matriculado (rol ESTUDIANTE). */
+export async function getStudentCoursesByNumero(
+  numeroIdentificacion: string,
+): Promise<{ success: boolean; error?: string; data?: StudentCourseInfo[] }> {
+  const approval = await ensureApprovedAdmin();
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
+  }
+
+  try {
+    const payload = await callBackend<BackendResponse<PersonLookupPayload>>(
+      `/api/person/by-id/${encodeURIComponent(upper(numeroIdentificacion))}`,
+      {
+        method: "GET",
+      },
+    );
+
+    if (!payload.success || !payload.data) {
+      return {
+        success: false,
+        error: payload.error ?? "No se pudo cargar los cursos del estudiante",
+      };
+    }
+
+    if (!payload.data.found) {
+      return { success: true, data: [] };
+    }
+
+    const studentRecord = payload.data.records.find(
+      (record) => record.role === "ESTUDIANTE",
+    );
+
+    return { success: true, data: studentRecord?.cursos ?? [] };
+  } catch (err) {
+    return { success: false, error: toErrorMessage(err) };
+  }
+}
+
 export async function studentExists(numeroIdentificacion: string): Promise<{
   success: boolean;
   error?: string;
