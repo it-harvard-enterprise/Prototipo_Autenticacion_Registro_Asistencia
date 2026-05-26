@@ -800,6 +800,82 @@ func (a *App) loadAttendedCountsIndex(ctx context.Context) map[string]int {
 	return counts
 }
 
+// resolveAdminNames returns a map from auth user UUID to display name
+// ("Nombre Apellido"). It first looks up profiles.{nombre,apellido}; any
+// UUIDs not present there fall back to administrador.{nombres,apellidos}.
+// Errors are swallowed: callers receive whatever partial mapping could be
+// resolved, never an error. Empty input returns an empty map.
+func (a *App) resolveAdminNames(ctx context.Context, uuids []string) map[string]string {
+	names := map[string]string{}
+	if len(uuids) == 0 {
+		return names
+	}
+
+	uniq := map[string]bool{}
+	for _, u := range uuids {
+		trimmed := strings.TrimSpace(u)
+		if trimmed != "" {
+			uniq[trimmed] = true
+		}
+	}
+	if len(uniq) == 0 {
+		return names
+	}
+
+	list := make([]string, 0, len(uniq))
+	for u := range uniq {
+		list = append(list, u)
+	}
+
+	profileQuery := url.Values{}
+	profileQuery.Set("id", buildStringInFilter(list))
+	profileQuery.Set("select", "id,nombre,apellido")
+	if body, _, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/profiles", profileQuery, nil, false); err == nil {
+		var rows []struct {
+			ID       string `json:"id"`
+			Nombre   string `json:"nombre"`
+			Apellido string `json:"apellido"`
+		}
+		if err := json.Unmarshal(body, &rows); err == nil {
+			for _, row := range rows {
+				full := strings.TrimSpace(strings.TrimSpace(row.Nombre) + " " + strings.TrimSpace(row.Apellido))
+				if full != "" {
+					names[strings.TrimSpace(row.ID)] = full
+				}
+			}
+		}
+	}
+
+	missing := make([]string, 0)
+	for _, u := range list {
+		if _, ok := names[u]; !ok {
+			missing = append(missing, u)
+		}
+	}
+	if len(missing) > 0 {
+		adminQuery := url.Values{}
+		adminQuery.Set("id", buildStringInFilter(missing))
+		adminQuery.Set("select", "id,nombres,apellidos")
+		if body, _, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/administrador", adminQuery, nil, false); err == nil {
+			var rows []struct {
+				ID        string `json:"id"`
+				Nombres   string `json:"nombres"`
+				Apellidos string `json:"apellidos"`
+			}
+			if err := json.Unmarshal(body, &rows); err == nil {
+				for _, row := range rows {
+					full := strings.TrimSpace(strings.TrimSpace(row.Nombres) + " " + strings.TrimSpace(row.Apellidos))
+					if full != "" {
+						names[strings.TrimSpace(row.ID)] = full
+					}
+				}
+			}
+		}
+	}
+
+	return names
+}
+
 func (a *App) GetStudentByNumero(ctx context.Context, numeroIdentificacion string) (map[string]any, int, error) {
 	numero := normalizeUpper(numeroIdentificacion)
 	if numero == "" {
@@ -1110,6 +1186,14 @@ func (a *App) ProcessStudentPayment(ctx context.Context, req models.ProcessStude
 	var pago map[string]any
 	if len(pagoRows) > 0 {
 		pago = pagoRows[0]
+		if uid, ok := asString(pago["registrado_por"]); ok && strings.TrimSpace(uid) != "" {
+			adminNames := a.resolveAdminNames(ctx, []string{uid})
+			if name, ok := adminNames[strings.TrimSpace(uid)]; ok {
+				pago["registrado_por_nombre"] = name
+			} else {
+				pago["registrado_por_nombre"] = nil
+			}
+		}
 	}
 
 	if modalidad == "DEUDA_TOTAL" || modalidad == "DEUDA_PARCIAL" {
@@ -1257,6 +1341,22 @@ func (a *App) ListPaymentsReport(ctx context.Context, filters PaymentReportFilte
 	rows, err := unmarshalRows(body)
 	if err != nil {
 		return nil, http.StatusInternalServerError, err
+	}
+
+	uuids := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if uid, ok := asString(row["registrado_por"]); ok {
+			uuids = append(uuids, uid)
+		}
+	}
+	adminNames := a.resolveAdminNames(ctx, uuids)
+	for _, row := range rows {
+		uid, _ := asString(row["registrado_por"])
+		if name, ok := adminNames[strings.TrimSpace(uid)]; ok {
+			row["registrado_por_nombre"] = name
+		} else {
+			row["registrado_por_nombre"] = nil
+		}
 	}
 
 	return rows, http.StatusOK, nil
