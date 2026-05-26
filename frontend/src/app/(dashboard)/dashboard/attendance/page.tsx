@@ -479,29 +479,9 @@ export default function AttendancePage() {
       return;
     }
 
-    for (const student of students) {
-      const advanceClasses = getAdvanceClassesCount(student);
-      const hasAdvanceClasses = student.asistio && advanceClasses > 0;
-
-      if (student.asistio && !hasAdvanceClasses && !student.saldo) {
-        toast.error(
-          `Debe seleccionar saldo para ${student.nombres} ${student.apellidos}`,
-        );
-        return;
-      }
-
-      if (
-        student.asistio &&
-        !hasAdvanceClasses &&
-        student.saldo === "cancelado" &&
-        !student.metodo_pago
-      ) {
-        toast.error(
-          `Debe seleccionar metodo de pago para ${student.nombres} ${student.apellidos}`,
-        );
-        return;
-      }
-    }
+    // Saldo y método de pago se permiten en null incluso cuando el
+    // estudiante está marcado como presente: el admin puede registrar
+    // la asistencia y completar la información de pago después.
 
     const savePressedAtIso = new Date().toISOString();
 
