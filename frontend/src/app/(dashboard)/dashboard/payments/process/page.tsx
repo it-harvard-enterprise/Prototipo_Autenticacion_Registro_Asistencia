@@ -117,6 +117,8 @@ async function generatePaymentConfirmationPdf(params: {
     toStringOrNull(payment?.tipo_pago) ?? resolvePaymentModeLabel(modalidad);
   const paymentValue = toNumber(payment?.valor) ?? valor;
   const paymentNotes = (toStringOrNull(payment?.notas) ?? notas) || "N/A";
+  const registradoPorNombre =
+    toStringOrNull(payment?.registrado_por_nombre) ?? "N/A";
 
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -201,6 +203,7 @@ async function generatePaymentConfirmationPdf(params: {
     ["Método de pago", paymentMethod],
     ["Clases registradas", String(clases)],
     ["Valor pagado", formatCurrency(paymentValue)],
+    ["Registrado por", registradoPorNombre],
     ["Grado", student.grado ?? "N/A"],
     ["No. matrícula", student.no_matricula ?? "N/A"],
     ["Notas", paymentNotes],
@@ -665,6 +668,7 @@ export default function ProcessPaymentPage() {
                         <TableHead className="text-right">
                           Clases adelantadas
                         </TableHead>
+                        <TableHead>Registrado por</TableHead>
                         <TableHead>Notas</TableHead>
                         <TableHead className="text-right">
                           Comprobante
@@ -686,6 +690,9 @@ export default function ProcessPaymentPage() {
                           </TableCell>
                           <TableCell className="text-right">
                             {payment.clases_adelantadas ?? 0}
+                          </TableCell>
+                          <TableCell>
+                            {payment.registrado_por_nombre?.trim() || "—"}
                           </TableCell>
                           <TableCell>{payment.notas ?? "-"}</TableCell>
                           <TableCell className="text-right">
