@@ -1237,10 +1237,35 @@ func (a *App) ProcessStudentPayment(ctx context.Context, req models.ProcessStude
 		return nil, status, err
 	}
 
+	// SMS confirmation to the acudiente. Fire-and-forget with a detached
+	// context so the goroutine survives the HTTP response being written;
+	// failures are logged inside Notify* and never bubble up.
+	go a.NotifyPaymentConfirmation(context.Background(), SMSPaymentEvent{
+		TelefonoAcudiente:  asStringFrom(updatedStudent, "telefono_acudiente"),
+		EstudianteFullName: strings.TrimSpace(asStringFrom(updatedStudent, "nombres") + " " + asStringFrom(updatedStudent, "apellidos")),
+		EstudianteNumeroID: asStringFrom(updatedStudent, "numero_identificacion"),
+		PaymentID:          asStringFrom(pago, "id"),
+		PaymentValue:       valor,
+		Clases:             clases,
+		MetodoPago:         metodoPago,
+		AdminName:          asStringFrom(pago, "registrado_por_nombre"),
+	})
+
 	return map[string]any{
 		"payment": pago,
 		"student": updatedStudent,
 	}, http.StatusOK, nil
+}
+
+// asStringFrom is a tiny convenience over asString for map lookups: returns
+// the string value (trimmed) or "" if the key is missing / not a string.
+// Lives next to the SMS hook because it's only used there for now.
+func asStringFrom(m map[string]any, key string) string {
+	if m == nil {
+		return ""
+	}
+	s, _ := asString(m[key])
+	return strings.TrimSpace(s)
 }
 
 func (a *App) UpdateStudentPaymentStatusManual(ctx context.Context, req models.ManualStudentPaymentStatusUpdateRequest) (map[string]any, int, error) {
