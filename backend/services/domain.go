@@ -3244,7 +3244,76 @@ func (a *App) SaveAttendance(ctx context.Context, req models.AttendanceSaveReque
 		}
 	}
 
+	// Notify acudientes by SMS. Gated by req.Notify so autosave never
+	// fires SMS — only the explicit "Guardar" submit does. All gating,
+	// dry-run handling and failure logging live in notifications.go.
+	if req.Notify {
+		a.dispatchAttendanceSMS(ctx, req.IDCurso, req.Date, normalizedRows, studentIDs)
+	}
+
 	return map[string]any{"savedCount": savedCount}, http.StatusOK, nil
+}
+
+// dispatchAttendanceSMS resolves the data needed to render the per-row SMS
+// (acudiente phone, student name, course name) with two extra lightweight
+// reads and then fires one goroutine per row. It is best-effort: any lookup
+// failure is logged inside the SMS helpers and never bubbles up to the
+// caller. Called only when req.Notify is true.
+func (a *App) dispatchAttendanceSMS(
+	ctx context.Context,
+	idCurso int,
+	date string,
+	rows []models.AttendanceSaveRow,
+	studentIDs []string,
+) {
+	if len(rows) == 0 || len(studentIDs) == 0 {
+		return
+	}
+
+	// Pull SMS-relevant fields for the students in the roster.
+	studentsQuery := url.Values{}
+	studentsQuery.Set("select", "numero_identificacion,nombres,apellidos,telefono_acudiente")
+	studentsQuery.Set("numero_identificacion", buildStringInFilter(studentIDs))
+
+	studentsByID := map[string]map[string]any{}
+	if body, _, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/estudiantes", studentsQuery, nil, false); err == nil {
+		if studentRows, err := unmarshalRows(body); err == nil {
+			for _, row := range studentRows {
+				if id, _ := asString(row["numero_identificacion"]); id != "" {
+					studentsByID[id] = row
+				}
+			}
+		}
+	}
+
+	// Resolve the course name (single row).
+	courseName := ""
+	courseQuery := url.Values{}
+	courseQuery.Set("select", "nombre_curso")
+	courseQuery.Set("id_curso", fmt.Sprintf("eq.%d", idCurso))
+	if body, _, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/cursos", courseQuery, nil, false); err == nil {
+		if courseRows, err := unmarshalRows(body); err == nil && len(courseRows) > 0 {
+			courseName, _ = asString(courseRows[0]["nombre_curso"])
+		}
+	}
+
+	// One goroutine per row. Twilio handles the queue; Notify* methods
+	// are best-effort and never throw.
+	for _, row := range rows {
+		student := studentsByID[row.NumeroIdentificacion]
+		event := SMSAttendanceEvent{
+			TelefonoAcudiente:  asStringFrom(student, "telefono_acudiente"),
+			EstudianteFullName: strings.TrimSpace(asStringFrom(student, "nombres") + " " + asStringFrom(student, "apellidos")),
+			EstudianteNumeroID: row.NumeroIdentificacion,
+			CourseName:         strings.TrimSpace(courseName),
+			Date:               date,
+		}
+		if row.Asistio {
+			go a.NotifyAttendancePresent(context.Background(), event)
+		} else {
+			go a.NotifyAttendanceAbsent(context.Background(), event)
+		}
+	}
 }
 
 func (a *App) DeleteAttendance(ctx context.Context, idCurso int, date string) (map[string]any, int, error) {
