@@ -800,11 +800,16 @@ func (a *App) loadAttendedCountsIndex(ctx context.Context) map[string]int {
 	return counts
 }
 
-// resolveAdminNames returns a map from auth user UUID to display name
-// ("Nombre Apellido"). It first looks up profiles.{nombre,apellido}; any
-// UUIDs not present there fall back to administrador.{nombres,apellidos}.
-// Errors are swallowed: callers receive whatever partial mapping could be
-// resolved, never an error. Empty input returns an empty map.
+// resolveAdminNames returns a map from auth user UUID to a display label.
+// Resolution strategy (per UUID), in priority order:
+//  1. profiles.nombre + " " + profiles.apellido (if non-empty)
+//  2. profiles.email (if profiles row exists but name is empty)
+//  3. administrador.nombres + " " + administrador.apellidos (if non-empty)
+//  4. administrador.email (final fallback)
+// UUIDs that cannot be resolved at all are simply absent from the map; the
+// callers translate that to a null `registrado_por_nombre`. Errors against
+// either table are swallowed by design: enrichment is best-effort and must
+// never break the payment endpoints.
 func (a *App) resolveAdminNames(ctx context.Context, uuids []string) map[string]string {
 	names := map[string]string{}
 	if len(uuids) == 0 {
@@ -829,18 +834,18 @@ func (a *App) resolveAdminNames(ctx context.Context, uuids []string) map[string]
 
 	profileQuery := url.Values{}
 	profileQuery.Set("id", buildStringInFilter(list))
-	profileQuery.Set("select", "id,nombre,apellido")
+	profileQuery.Set("select", "id,nombre,apellido,email")
 	if body, _, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/profiles", profileQuery, nil, false); err == nil {
 		var rows []struct {
 			ID       string `json:"id"`
 			Nombre   string `json:"nombre"`
 			Apellido string `json:"apellido"`
+			Email    string `json:"email"`
 		}
 		if err := json.Unmarshal(body, &rows); err == nil {
 			for _, row := range rows {
-				full := strings.TrimSpace(strings.TrimSpace(row.Nombre) + " " + strings.TrimSpace(row.Apellido))
-				if full != "" {
-					names[strings.TrimSpace(row.ID)] = full
+				if label := pickAdminLabel(row.Nombre, row.Apellido, row.Email); label != "" {
+					names[strings.TrimSpace(row.ID)] = label
 				}
 			}
 		}
@@ -855,18 +860,18 @@ func (a *App) resolveAdminNames(ctx context.Context, uuids []string) map[string]
 	if len(missing) > 0 {
 		adminQuery := url.Values{}
 		adminQuery.Set("id", buildStringInFilter(missing))
-		adminQuery.Set("select", "id,nombres,apellidos")
+		adminQuery.Set("select", "id,nombres,apellidos,email")
 		if body, _, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/administrador", adminQuery, nil, false); err == nil {
 			var rows []struct {
 				ID        string `json:"id"`
 				Nombres   string `json:"nombres"`
 				Apellidos string `json:"apellidos"`
+				Email     string `json:"email"`
 			}
 			if err := json.Unmarshal(body, &rows); err == nil {
 				for _, row := range rows {
-					full := strings.TrimSpace(strings.TrimSpace(row.Nombres) + " " + strings.TrimSpace(row.Apellidos))
-					if full != "" {
-						names[strings.TrimSpace(row.ID)] = full
+					if label := pickAdminLabel(row.Nombres, row.Apellidos, row.Email); label != "" {
+						names[strings.TrimSpace(row.ID)] = label
 					}
 				}
 			}
@@ -874,6 +879,17 @@ func (a *App) resolveAdminNames(ctx context.Context, uuids []string) map[string]
 	}
 
 	return names
+}
+
+// pickAdminLabel collapses the (nombre, apellido, email) triple of an admin
+// row into a single display label. Prefers the full name when present, falls
+// back to email when the name fields are empty. Returns "" if nothing usable.
+func pickAdminLabel(nombre, apellido, email string) string {
+	full := strings.TrimSpace(strings.TrimSpace(nombre) + " " + strings.TrimSpace(apellido))
+	if full != "" {
+		return full
+	}
+	return strings.TrimSpace(email)
 }
 
 func (a *App) GetStudentByNumero(ctx context.Context, numeroIdentificacion string) (map[string]any, int, error) {
@@ -1343,23 +1359,105 @@ func (a *App) ListPaymentsReport(ctx context.Context, filters PaymentReportFilte
 		return nil, http.StatusInternalServerError, err
 	}
 
-	uuids := make([]string, 0, len(rows))
-	for _, row := range rows {
-		if uid, ok := asString(row["registrado_por"]); ok {
-			uuids = append(uuids, uid)
+	// vista_reporte_pagos hides the admin UUID and exposes
+	// `registrado_por` as a pre-joined name string from `profiles` (empty
+	// when no profile row exists). To resolve the admin reliably we need
+	// the real UUID, so we hit the pagos table directly with the row ids
+	// we just got from the view.
+	pagoIDToUUID := a.loadPagoRegistradoPorIndex(ctx, rows)
+
+	uniqUUIDs := map[string]bool{}
+	for _, uid := range pagoIDToUUID {
+		uid = strings.TrimSpace(uid)
+		if uid != "" {
+			uniqUUIDs[uid] = true
 		}
 	}
-	adminNames := a.resolveAdminNames(ctx, uuids)
+	uuidList := make([]string, 0, len(uniqUUIDs))
+	for uid := range uniqUUIDs {
+		uuidList = append(uuidList, uid)
+	}
+	adminNames := a.resolveAdminNames(ctx, uuidList)
+
 	for _, row := range rows {
-		uid, _ := asString(row["registrado_por"])
-		if name, ok := adminNames[strings.TrimSpace(uid)]; ok {
+		pagoID, _ := asString(row["id"])
+		uid := strings.TrimSpace(pagoIDToUUID[pagoID])
+
+		if uid != "" {
+			row["registrado_por_id"] = uid
+		} else {
+			row["registrado_por_id"] = nil
+		}
+
+		if name, ok := adminNames[uid]; ok && name != "" {
 			row["registrado_por_nombre"] = name
 		} else {
-			row["registrado_por_nombre"] = nil
+			// Last-resort: the view's pre-joined string. It can carry a
+			// usable name even when our lookup misses (e.g. RLS lets the
+			// view see profile rows that our query cannot). Empty
+			// strings collapse to null so the UI shows the "—" fallback.
+			viewLabel, _ := asString(row["registrado_por"])
+			viewLabel = strings.TrimSpace(viewLabel)
+			if viewLabel != "" {
+				row["registrado_por_nombre"] = viewLabel
+			} else {
+				row["registrado_por_nombre"] = nil
+			}
 		}
 	}
 
 	return rows, http.StatusOK, nil
+}
+
+// loadPagoRegistradoPorIndex fetches `registrado_por` (UUID) for each pago id
+// in the supplied view rows. Returns a map pagoID -> UUID. Errors are
+// swallowed; on failure the returned map is empty and callers fall back to
+// the view's pre-joined name.
+func (a *App) loadPagoRegistradoPorIndex(
+	ctx context.Context,
+	rows []map[string]any,
+) map[string]string {
+	out := map[string]string{}
+	if len(rows) == 0 {
+		return out
+	}
+
+	ids := make([]string, 0, len(rows))
+	seen := map[string]bool{}
+	for _, row := range rows {
+		if id, ok := asString(row["id"]); ok {
+			trimmed := strings.TrimSpace(id)
+			if trimmed != "" && !seen[trimmed] {
+				seen[trimmed] = true
+				ids = append(ids, trimmed)
+			}
+		}
+	}
+	if len(ids) == 0 {
+		return out
+	}
+
+	query := url.Values{}
+	query.Set("id", buildStringInFilter(ids))
+	query.Set("select", "id,registrado_por")
+
+	body, _, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/pagos", query, nil, false)
+	if err != nil {
+		return out
+	}
+
+	var pagoRows []struct {
+		ID            string `json:"id"`
+		RegistradoPor string `json:"registrado_por"`
+	}
+	if err := json.Unmarshal(body, &pagoRows); err != nil {
+		return out
+	}
+
+	for _, row := range pagoRows {
+		out[strings.TrimSpace(row.ID)] = strings.TrimSpace(row.RegistradoPor)
+	}
+	return out
 }
 
 func buildStudentUpdatePayload(data map[string]any) map[string]any {
