@@ -225,6 +225,13 @@ export async function saveAttendanceForCourseAndDate(params: {
   date: string;
   rows: AttendanceSaveRow[];
   saveTimestampIso?: string;
+  /**
+   * Whether to dispatch SMS notifications to acudientes on success.
+   * The page sets this to true only on the explicit "Guardar" submit
+   * and false (or omitted) for the autosave loop — otherwise the
+   * autosave would spam acudientes every 450ms while the admin edits.
+   */
+  notify?: boolean;
 }): Promise<{ success: boolean; error?: string; savedCount?: number }> {
   const approval = await ensureApprovedRoles(["administrador", "profesor"]);
   if (!approval.ok) {
@@ -252,6 +259,7 @@ export async function saveAttendanceForCourseAndDate(params: {
         rows: normalizedRows,
         save_timestamp_iso: params.saveTimestampIso?.trim() || null,
         registrado_por: registradoPor,
+        notify: Boolean(params.notify),
       }),
     });
 

@@ -80,6 +80,11 @@ type AttendanceSaveRequest struct {
 	Rows             []AttendanceSaveRow `json:"rows"`
 	SaveTimestampISO *string             `json:"save_timestamp_iso"`
 	RegistradoPor    *string             `json:"registrado_por"`
+	// Notify gates SMS notifications to the acudiente. The frontend sets
+	// it to true only on the explicit "Guardar" submit and to false on
+	// the autosave loop so we never spam acudientes while the admin is
+	// still editing the roster.
+	Notify bool `json:"notify"`
 }
 
 type ProcessStudentPaymentRequest struct {
