@@ -14,13 +14,6 @@ export const STUDENT_GRADE_OPTIONS = [
   "B",
 ] as const;
 
-export const STUDENT_COORDINATOR_OPTIONS = [
-  "NICOL DELGADO",
-  "SANTIAGO DELGADO",
-  "DAVID DELGADO",
-  "ELENA MARTINEZ",
-] as const;
-
 export const EPS_OTHER_OPTION = "OTRO";
 
 // Curated fallback list of EPS names used when no reliable public API is available.

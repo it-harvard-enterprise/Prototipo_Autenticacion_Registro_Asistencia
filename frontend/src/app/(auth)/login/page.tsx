@@ -2,11 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -35,10 +34,27 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
+type AuthApiResponse = {
+  success: boolean;
+  data?: Record<string, unknown>;
+  error?: string;
+};
+
+function getFriendlyLoginError(message: string): string {
+  if (message === "Invalid login credentials") {
+    return "Correo electrónico o contraseña incorrectos";
+  }
+  if (message === "Email not confirmed") {
+    return "Correo electrónico no confirmado";
+  }
+  return message;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -52,26 +68,80 @@ export default function LoginPage() {
     setIsLoading(true);
     setServerError(null);
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({
-      email: values.email,
-      password: values.password,
-    });
+    try {
+      const response = await fetch("/api/auth/sign-in", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: values.email,
+          password: values.password,
+        }),
+      });
 
-    if (error) {
+      const payload = (await response
+        .json()
+        .catch(() => null)) as AuthApiResponse | null;
+
+      if (!response.ok || !payload?.success || !payload.data) {
+        setServerError(
+          getFriendlyLoginError(
+            payload?.error ?? "No fue posible iniciar sesión",
+          ),
+        );
+        setIsLoading(false);
+        return;
+      }
+
+      const sessionCandidate =
+        (payload.data.session as Record<string, unknown> | undefined) ??
+        payload.data;
+
+      const accessToken = String(sessionCandidate.access_token ?? "").trim();
+      const refreshToken = String(sessionCandidate.refresh_token ?? "").trim();
+      if (!accessToken || !refreshToken) {
+        setServerError("No se recibió una sesión válida desde el backend");
+        setIsLoading(false);
+        return;
+      }
+
+      const supabase = createClient();
+      const { error: setSessionError } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+      if (setSessionError) {
+        setServerError(setSessionError.message);
+        setIsLoading(false);
+        return;
+      }
+
+      const user =
+        (sessionCandidate.user as Record<string, unknown> | undefined) ??
+        undefined;
+      const metadata =
+        (user?.user_metadata as Record<string, unknown> | undefined) ??
+        undefined;
+      const role = metadata?.role ?? metadata?.rol;
+
+      if (metadata?.must_change_password === true && role === "administrador") {
+        router.push("/reset-password?forced=1");
+        router.refresh();
+        return;
+      }
+
+      router.push("/dashboard");
+      router.refresh();
+    } catch (err) {
       setServerError(
-        error.message === "Invalid login credentials"
-          ? "Correo electrónico o contraseña incorrectos"
-          : error.message === "Email not confirmed"
-            ? "Correo electrónico no confirmado"
-            : error.message,
+        err instanceof Error
+          ? getFriendlyLoginError(err.message)
+          : "No fue posible iniciar sesión",
       );
       setIsLoading(false);
       return;
     }
-
-    router.push("/dashboard");
-    router.refresh();
   }
 
   return (
@@ -84,7 +154,11 @@ export default function LoginPage() {
       </CardHeader>
       <CardContent>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+          <form
+            method="post"
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="space-y-5"
+          >
             {serverError && (
               <div className="rounded-md bg-red-50 border border-red-200 p-3">
                 <p className="text-sm text-red-700">{serverError}</p>
@@ -120,13 +194,36 @@ export default function LoginPage() {
                 <FormItem>
                   <FormLabel className="text-base">Contraseña</FormLabel>
                   <FormControl>
-                    <Input
-                      type="password"
-                      placeholder="••••••••"
-                      autoComplete="current-password"
-                      className="h-11 text-base"
-                      {...field}
-                    />
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        autoComplete="current-password"
+                        className="h-11 pr-11 text-base"
+                        {...field}
+                      />
+                      <button
+                        type="button"
+                        className="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center text-gray-500 hover:text-gray-700"
+                        onClick={() => setShowPassword((prev) => !prev)}
+                        aria-label={
+                          showPassword
+                            ? "Ocultar contraseña"
+                            : "Mostrar contraseña"
+                        }
+                        title={
+                          showPassword
+                            ? "Ocultar contraseña"
+                            : "Mostrar contraseña"
+                        }
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -150,17 +247,6 @@ export default function LoginPage() {
           </form>
         </Form>
       </CardContent>
-      <CardFooter className="flex justify-center">
-        <p className="text-base text-gray-600">
-          ¿No tiene cuenta de administrador?{" "}
-          <Link
-            href="/register"
-            className="font-medium text-gray-900 hover:underline"
-          >
-            Registrarse
-          </Link>
-        </p>
-      </CardFooter>
     </Card>
   );
 }

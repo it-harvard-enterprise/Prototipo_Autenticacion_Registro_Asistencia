@@ -16,11 +16,12 @@ export default function AuthLayout({
         <div className="w-full max-w-lg">
           <div className="mb-8 text-center lg:text-left">
             <h1 className="text-4xl font-semibold text-gray-900 tracking-tight">
-              SysAsistencia - Harvard Enterprise
+              Aula Virtual - Harvard Enterprise
             </h1>
             <p className="text-gray-500 mt-2 text-base">
-              Sistema de Creación de Estudiantes, Cursos y Registro de
-              Asistencia de Harvard Enterprise.
+              Ingrese al aula virtual para gestionar sus cursos y acceder a sus
+              materiales de estudio. Si aún no tiene una cuenta, contacte a un
+              administrador para obtener acceso.
             </p>
           </div>
           {children}
@@ -32,8 +33,8 @@ export default function AuthLayout({
               src="/logos/Logo_Nuevo.png"
               alt="Logo Harvard Enterprise"
               width={500}
-              height={500}
-              className="h-[500px] w-[500px]"
+              height={470}
+              className="h-auto w-[500px]"
               priority
             />
           </div>

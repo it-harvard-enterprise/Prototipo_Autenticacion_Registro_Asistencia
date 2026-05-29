@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Pencil } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { ArrowLeft, BookOpen, Pencil } from "lucide-react";
+import { getCourseById, getStudentsByCourseId } from "@/app/actions/courses";
 import { Course } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,24 +14,18 @@ export default async function CourseDetailPage({
   params,
 }: CourseDetailPageProps) {
   const { id } = await params;
-  const supabase = await createClient();
+  const idCurso = Number(id);
+  const courseResult = await getCourseById(idCurso);
+  const linkedStudentsResult = await getStudentsByCourseId(idCurso);
 
-  const { data: course, error } = await supabase
-    .from("cursos")
-    .select("*")
-    .eq("id_curso", Number(id))
-    .single();
-
-  const { data: linkedStudents } = await supabase
-    .from("cursos_x_estudiantes")
-    .select("numero_identificacion, estudiantes(nombres, apellidos)")
-    .eq("id_curso", Number(id));
-
-  if (error || !course) {
+  if (!courseResult.success || !courseResult.data) {
     notFound();
   }
 
-  const c = course as Course;
+  const c = courseResult.data as Course;
+  const linkedStudents = linkedStudentsResult.success
+    ? (linkedStudentsResult.data ?? [])
+    : [];
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return "N/A";
@@ -65,6 +59,12 @@ export default async function CourseDetailPage({
           <h1 className="text-2xl font-bold text-gray-900">{c.nombre_curso}</h1>
           <p className="text-gray-500 mt-0.5 text-sm">Detalle del curso</p>
         </div>
+        <Button variant="outline" asChild>
+          <Link href={`/dashboard/courses/${c.id_curso}/materials`}>
+            <BookOpen className="mr-2 h-4 w-4" />
+            Material del Curso
+          </Link>
+        </Button>
         <Button asChild>
           <Link href={`/dashboard/courses/${c.id_curso}/edit`}>
             <Pencil className="mr-2 h-4 w-4" />
@@ -123,18 +123,6 @@ export default async function CourseDetailPage({
             </div>
             <div>
               <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Fecha de inicio
-              </dt>
-              <dd className="mt-1 text-sm text-gray-900">{c.fecha_inicio}</dd>
-            </div>
-            <div>
-              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Fecha de fin
-              </dt>
-              <dd className="mt-1 text-sm text-gray-900">{c.fecha_fin}</dd>
-            </div>
-            <div>
-              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Creado
               </dt>
               <dd className="mt-1 text-sm text-gray-900">
@@ -158,6 +146,11 @@ export default async function CourseDetailPage({
           <CardTitle className="text-lg">Estudiantes Asociados</CardTitle>
         </CardHeader>
         <CardContent>
+          {!linkedStudentsResult.success ? (
+            <p className="text-sm text-red-600">
+              Error cargando estudiantes asociados: {linkedStudentsResult.error}
+            </p>
+          ) : null}
           {!linkedStudents || linkedStudents.length === 0 ? (
             <p className="text-sm text-gray-500">
               Este curso no tiene estudiantes asociados.
@@ -165,16 +158,13 @@ export default async function CourseDetailPage({
           ) : (
             <ul className="space-y-2">
               {linkedStudents.map((row, index) => {
-                const student = Array.isArray(row.estudiantes)
-                  ? row.estudiantes[0]
-                  : row.estudiantes;
                 return (
                   <li
                     key={`${row.numero_identificacion}-${index}`}
                     className="rounded-md border px-3 py-2 text-sm"
                   >
                     <span className="font-medium text-gray-900">
-                      {student?.apellidos ?? ""}, {student?.nombres ?? ""}
+                      {row.apellidos ?? ""}, {row.nombres ?? ""}
                     </span>
                     <span className="ml-2 text-gray-500">
                       ({row.numero_identificacion})

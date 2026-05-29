@@ -225,7 +225,7 @@ export default function CourseStudentAssociationPage() {
     const idCurso = Number(idCursoRaw);
 
     if (!idCursoRaw || !Number.isInteger(idCurso) || idCurso <= 0) {
-      form.setError("idCurso", { message: "Ingrese un id_curso valido" });
+      form.setError("idCurso", { message: "Ingrese un id_curso válido" });
       return;
     }
 
@@ -489,14 +489,6 @@ export default function CourseStudentAssociationPage() {
                       <span className="font-semibold">Horario:</span>{" "}
                       {course.hora_inicio} - {course.hora_fin}
                     </p>
-                    <p>
-                      <span className="font-semibold">Fecha inicio:</span>{" "}
-                      {course.fecha_inicio}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Fecha fin:</span>{" "}
-                      {course.fecha_fin}
-                    </p>
                   </CardContent>
                 </Card>
               )}
@@ -524,15 +516,15 @@ export default function CourseStudentAssociationPage() {
                         <Table>
                           <TableHeader>
                             <TableRow className="bg-gray-50">
-                              <TableHead>Identificacion</TableHead>
+                              <TableHead>Identificación</TableHead>
                               <TableHead>Rol</TableHead>
                               <TableHead>Tipo</TableHead>
-                              <TableHead>No. Matricula</TableHead>
+                              <TableHead>No. Matrícula</TableHead>
                               <TableHead>Nombres</TableHead>
                               <TableHead>Apellidos</TableHead>
                               <TableHead>Grado</TableHead>
                               <TableHead className="text-right">
-                                Accion
+                                Acción
                               </TableHead>
                             </TableRow>
                           </TableHeader>

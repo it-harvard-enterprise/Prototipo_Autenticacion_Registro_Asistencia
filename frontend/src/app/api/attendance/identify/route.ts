@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { ensureApprovedAdmin } from "@/lib/auth/approved-admin";
+import { ensureApprovedRoles } from "@/lib/auth/approved-admin";
 import {
   biometricBackendConfigHint,
   resolveBiometricBackendBaseUrl,
@@ -19,7 +19,7 @@ type IdentifyRequestBody = {
 };
 
 export async function POST(request: NextRequest) {
-  const approval = await ensureApprovedAdmin();
+  const approval = await ensureApprovedRoles(["administrador", "profesor"]);
   if (!approval.ok) {
     return NextResponse.json(
       {
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         matched: false,
-        error: "idCurso invalido",
+        error: "idCurso inválido.",
       },
       { status: 400 },
     );
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         matched: false,
-        error: "fingerprintTemplate es requerido",
+        error: "fingerprintTemplate es obligatorio",
       },
       { status: 400 },
     );
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         matched: false,
-        error: `No se ha configurado la URL del backend biometrico. ${biometricBackendConfigHint()}`,
+        error: `No se ha configurado la URL del backend biométrico. ${biometricBackendConfigHint()}`,
       },
       { status: 500 },
     );
@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
           source: "backend",
           error:
             payload?.error ??
-            `Error del backend biometrico: ${response.status}`,
+            `Error del backend biométrico: ${response.status}`,
         },
         { status: response.status },
       );
@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         matched: false,
-        error: `No fue posible conectar con el backend biometrico configurado (${backendUrl}).`,
+        error: `No fue posible conectar con el backend biométrico configurado (${backendUrl}).`,
       },
       { status: 502 },
     );

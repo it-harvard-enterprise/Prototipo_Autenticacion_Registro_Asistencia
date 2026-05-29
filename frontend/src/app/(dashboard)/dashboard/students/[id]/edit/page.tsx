@@ -9,8 +9,8 @@ import { z } from "zod";
 import { ArrowLeft, Fingerprint, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { createClient } from "@/lib/supabase/client";
-// Use API route instead of importing server action into client
+import { getStudentById } from "@/app/actions/students";
+import { updateStudentPaymentStatusManual } from "@/app/actions/payments";
 import { useDigitalPersonaFingerprintReader } from "@/lib/biometrics/digitalpersona";
 import {
   deriveKeyFromPassphrase,
@@ -25,7 +25,6 @@ import {
   COLOMBIA_EPS_OPTIONS,
   EPS_OTHER_OPTION,
   PAYMENT_METHOD_OPTIONS,
-  STUDENT_COORDINATOR_OPTIONS,
   STUDENT_GRADE_OPTIONS,
 } from "@/lib/student-options";
 import { Student } from "@/lib/types";
@@ -46,6 +45,12 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+
+interface AdminCoordinator {
+  id: string;
+  nombres: string;
+  apellidos: string;
+}
 
 const studentSchema = z
   .object({
@@ -76,9 +81,9 @@ const studentSchema = z
       .max(20),
     eps_select: z.string().min(1, "Debe seleccionar una EPS"),
     eps_otra: z.string().optional(),
-    coordinador_academico: z.enum(STUDENT_COORDINATOR_OPTIONS, {
-      message: "Debe seleccionar un coordinador académico",
-    }),
+    coordinador_academico: z
+      .string()
+      .min(1, "Debe seleccionar un coordinador académico"),
     programa: z.string().min(1, "El programa es requerido").max(100),
     fecha_inicio: z.string().min(1, "La fecha de inicio es requerida"),
     fecha_matricula: z.string().min(1, "La fecha de matrícula es requerida"),
@@ -133,6 +138,8 @@ export default function EditStudentPage() {
   const [isFetching, setIsFetching] = useState(true);
   const [student, setStudent] = useState<Student | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [coordinatorOptions, setCoordinatorOptions] = useState<string[]>([]);
+  const [isLoadingCoordinators, setIsLoadingCoordinators] = useState(true);
   const [capturingSide, setCapturingSide] = useState<
     "huella_indice_derecho" | "huella_indice_izquierdo" | null
   >(null);
@@ -140,6 +147,11 @@ export default function EditStudentPage() {
     right: false,
     left: false,
   });
+  const [manualClasesAdeudadas, setManualClasesAdeudadas] = useState(0);
+  const [manualClasesAdelantadas, setManualClasesAdelantadas] = useState(0);
+  const [manualNotasPago, setManualNotasPago] = useState("");
+  const [isSavingManualPaymentStatus, setIsSavingManualPaymentStatus] =
+    useState(false);
 
   const {
     ready: readerReady,
@@ -178,7 +190,7 @@ export default function EditStudentPage() {
       telefono_acudiente: "",
       eps_select: "NUEVA EPS",
       eps_otra: "",
-      coordinador_academico: "NICOL DELGADO",
+      coordinador_academico: "",
       huella_indice_derecho: "",
       huella_indice_izquierdo: "",
       programa: "",
@@ -197,21 +209,54 @@ export default function EditStudentPage() {
   }, []);
 
   useEffect(() => {
-    async function fetchStudent() {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("estudiantes")
-        .select("*")
-        .eq("numero_identificacion", id)
-        .single();
+    async function fetchCoordinators() {
+      setIsLoadingCoordinators(true);
 
-      if (error || !data) {
+      try {
+        const res = await fetch("/api/admins", { method: "GET" });
+        const result = (await res.json().catch(() => null)) as {
+          success?: boolean;
+          data?: AdminCoordinator[];
+          error?: string;
+        } | null;
+
+        if (!res.ok || !result?.success) {
+          toast.error(
+            result?.error ?? "No fue posible cargar coordinadores académicos",
+          );
+          setCoordinatorOptions([]);
+          return;
+        }
+
+        const options = (result.data ?? [])
+          .map((admin) => `${admin.nombres ?? ""} ${admin.apellidos ?? ""}`)
+          .map((name) => name.trim())
+          .filter((name) => name.length > 0)
+          .sort((a, b) => a.localeCompare(b, "es"));
+
+        setCoordinatorOptions(options);
+      } catch {
+        toast.error("No fue posible cargar coordinadores académicos");
+        setCoordinatorOptions([]);
+      } finally {
+        setIsLoadingCoordinators(false);
+      }
+    }
+
+    void fetchCoordinators();
+  }, []);
+
+  useEffect(() => {
+    async function fetchStudent() {
+      const result = await getStudentById(id);
+
+      if (!result.success || !result.data) {
         setFetchError("No se encontró el estudiante");
         setIsFetching(false);
         return;
       }
 
-      const s = data as Student;
+      const s = result.data as Student;
       setStudent(s);
       const tipoIdentificacion = IDENTIFICATION_TYPE_VALUES.includes(
         s.tipo_identificacion as (typeof IDENTIFICATION_TYPE_VALUES)[number],
@@ -219,12 +264,7 @@ export default function EditStudentPage() {
         ? (s.tipo_identificacion as StudentFormValues["tipo_identificacion"])
         : "CC";
 
-      const normalizedCoordinator = (s.coordinador_academico ?? "")
-        .trim()
-        .toUpperCase();
-      const coordinatorInList = STUDENT_COORDINATOR_OPTIONS.includes(
-        normalizedCoordinator as (typeof STUDENT_COORDINATOR_OPTIONS)[number],
-      );
+      const normalizedCoordinator = (s.coordinador_academico ?? "").trim();
 
       const epsInList = COLOMBIA_EPS_OPTIONS.includes(
         s.eps as (typeof COLOMBIA_EPS_OPTIONS)[number],
@@ -251,9 +291,7 @@ export default function EditStudentPage() {
         telefono_acudiente: s.telefono_acudiente,
         eps_select: epsInList ? s.eps : EPS_OTHER_OPTION,
         eps_otra: epsInList ? "" : s.eps,
-        coordinador_academico: coordinatorInList
-          ? (normalizedCoordinator as StudentFormValues["coordinador_academico"])
-          : "NICOL DELGADO",
+        coordinador_academico: normalizedCoordinator,
         huella_indice_derecho: "",
         huella_indice_izquierdo: "",
         programa: s.programa,
@@ -265,12 +303,31 @@ export default function EditStudentPage() {
           : "EFECTIVO",
         valor_apoyo_semanal: String(s.valor_apoyo_semanal),
       });
+      setManualClasesAdeudadas(Math.max(0, Number(s.clases_adeudadas ?? 0)));
+      setManualClasesAdelantadas(
+        Math.max(0, Number(s.clases_adelantadas ?? 0)),
+      );
+      setManualNotasPago("");
       setCapturedFingerprintSides({ right: false, left: false });
       setIsFetching(false);
     }
 
     fetchStudent();
   }, [id, form]);
+
+  useEffect(() => {
+    if (isLoadingCoordinators || coordinatorOptions.length === 0) {
+      return;
+    }
+
+    const current = (form.getValues("coordinador_academico") ?? "").trim();
+
+    if (!current || !coordinatorOptions.includes(current)) {
+      form.setValue("coordinador_academico", coordinatorOptions[0], {
+        shouldValidate: true,
+      });
+    }
+  }, [coordinatorOptions, isLoadingCoordinators, form]);
 
   async function onSubmit(values: StudentFormValues) {
     const epsValue =
@@ -293,11 +350,17 @@ export default function EditStudentPage() {
     setIsLoading(true);
 
     try {
-      // Derive encryption key from a static passphrase (in production, use KMS or secure key exchange)
-      const encryptionKey = await deriveKeyFromPassphrase(
-        "student-biometric-default-key",
-      );
+      const frontendPassphrase =
+        process.env.NEXT_PUBLIC_BIOMETRIC_PASSPHRASE_PNG?.trim() ?? "";
+      if (!frontendPassphrase) {
+        toast.error(
+          "Falta NEXT_PUBLIC_BIOMETRIC_PASSPHRASE_PNG en el entorno del frontend.",
+        );
+        setIsLoading(false);
+        return;
+      }
 
+      const encryptionKey = await deriveKeyFromPassphrase(frontendPassphrase);
       const rightEncrypted: EncryptedPayload | null = rightFingerprint
         ? await encryptAESGCM(rightFingerprint, encryptionKey)
         : null;
@@ -355,8 +418,8 @@ export default function EditStudentPage() {
     } catch (err) {
       toast.error(
         err instanceof Error
-          ? `Error de encriptación: ${err.message}`
-          : "Error desconocido durante encriptación",
+          ? `Error actualizando estudiante: ${err.message}`
+          : "Error desconocido actualizando estudiante",
       );
     } finally {
       setIsLoading(false);
@@ -368,7 +431,7 @@ export default function EditStudentPage() {
   ) {
     if (!readerReady) {
       toast.error(
-        "El lector no esta listo. Verifique la conexion y el servicio de DigitalPersona.",
+        "El lector no está listo. Verifique la conexión y el servicio de DigitalPersona.",
       );
       return;
     }
@@ -396,6 +459,47 @@ export default function EditStudentPage() {
     }));
 
     toast.success("Huella capturada correctamente");
+  }
+
+  async function handleSaveManualPaymentStatus() {
+    if (!student) {
+      toast.error("No hay estudiante cargado para actualizar");
+      return;
+    }
+
+    if (manualClasesAdeudadas < 0 || manualClasesAdelantadas < 0) {
+      toast.error("Las clases adeudadas y adelantadas no pueden ser negativas");
+      return;
+    }
+
+    setIsSavingManualPaymentStatus(true);
+
+    const result = await updateStudentPaymentStatusManual({
+      numeroIdentificacion: student.numero_identificacion,
+      clasesAdeudadas: manualClasesAdeudadas,
+      clasesAdelantadas: manualClasesAdelantadas,
+      notas: manualNotasPago,
+    });
+
+    setIsSavingManualPaymentStatus(false);
+
+    if (!result.success || !result.data?.student) {
+      toast.error(
+        result.error ?? "No fue posible actualizar el estado de pagos",
+      );
+      return;
+    }
+
+    const updatedStudent = result.data.student;
+    setStudent(updatedStudent);
+    setManualClasesAdeudadas(
+      Math.max(0, Number(updatedStudent.clases_adeudadas ?? 0)),
+    );
+    setManualClasesAdelantadas(
+      Math.max(0, Number(updatedStudent.clases_adelantadas ?? 0)),
+    );
+    setManualNotasPago("");
+    toast.success("Estado de pagos actualizado correctamente");
   }
 
   const rightFingerprintValue = form.watch("huella_indice_derecho") ?? "";
@@ -701,13 +805,24 @@ export default function EditStudentPage() {
                           onBlur={field.onBlur}
                           name={field.name}
                           ref={field.ref}
+                          disabled={isLoadingCoordinators}
                           className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
                         >
-                          {STUDENT_COORDINATOR_OPTIONS.map((coordinator) => (
-                            <option key={coordinator} value={coordinator}>
-                              {coordinator}
-                            </option>
-                          ))}
+                          {isLoadingCoordinators && (
+                            <option value="">Cargando coordinadores...</option>
+                          )}
+                          {!isLoadingCoordinators &&
+                            coordinatorOptions.map((coordinator) => (
+                              <option key={coordinator} value={coordinator}>
+                                {coordinator}
+                              </option>
+                            ))}
+                          {!isLoadingCoordinators &&
+                            coordinatorOptions.length === 0 && (
+                              <option value="">
+                                No hay administradores disponibles
+                              </option>
+                            )}
                         </select>
                       </FormControl>
                       <FormMessage />
@@ -838,11 +953,11 @@ export default function EditStudentPage() {
                       {deviceStatus}
                     </p>
                   </div>
-                  <div className="rounded-md border p-3 bg-white">
+                  <div className="rounded-md border p-3 bg-white h-[88px] flex flex-col">
                     <p className="text-[11px] uppercase tracking-wide text-gray-500">
                       Estado de captura
                     </p>
-                    <p className="text-sm mt-1 text-gray-700">
+                    <p className="text-sm mt-1 text-gray-700 flex-1 overflow-y-auto break-words leading-5 pr-1">
                       {captureStatus}
                     </p>
                   </div>
@@ -995,6 +1110,82 @@ export default function EditStudentPage() {
               </div>
             </form>
           </Form>
+        </CardContent>
+      </Card>
+
+      <Card className="max-w-4xl mx-auto">
+        <CardHeader>
+          <CardTitle className="text-lg">
+            Ajuste Manual de Estado de Pagos
+          </CardTitle>
+          <CardDescription>
+            Utilice esta sección para corregir clases adeudadas o adelantadas en
+            pagos no registrados electrónicamente.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="text-sm font-medium text-gray-700">
+                Clases adeudadas
+              </label>
+              <Input
+                type="number"
+                min={0}
+                step={1}
+                value={manualClasesAdeudadas}
+                onChange={(event) =>
+                  setManualClasesAdeudadas(
+                    Math.max(0, Number(event.target.value || 0)),
+                  )
+                }
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700">
+                Clases adelantadas
+              </label>
+              <Input
+                type="number"
+                min={0}
+                step={1}
+                value={manualClasesAdelantadas}
+                onChange={(event) =>
+                  setManualClasesAdelantadas(
+                    Math.max(0, Number(event.target.value || 0)),
+                  )
+                }
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700">
+                Nota de ajuste (opcional)
+              </label>
+              <Input
+                value={manualNotasPago}
+                onChange={(event) => setManualNotasPago(event.target.value)}
+                placeholder="Motivo del ajuste"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              className="bg-[#b92f2d] hover:bg-[#982725] text-white"
+              onClick={handleSaveManualPaymentStatus}
+              disabled={isSavingManualPaymentStatus}
+            >
+              {isSavingManualPaymentStatus ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Guardando estado...
+                </>
+              ) : (
+                "Guardar estado de pagos"
+              )}
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

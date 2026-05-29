@@ -1,7 +1,19 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+
 import { ensureApprovedAdmin } from "@/lib/auth/approved-admin";
-import { resolveBiometricBackendBaseUrl } from "@/lib/biometric-backend";
+import { callBackend } from "@/lib/backend/server-api";
+
+function upper(value: string): string {
+  return value.trim().toUpperCase();
+}
+
+type BackendCreateStudentResponse = {
+  success: boolean;
+  data?: unknown;
+  error?: string;
+  auth_user_id?: string;
+  requires_password_change?: boolean;
+};
 
 export async function POST(req: Request) {
   try {
@@ -13,43 +25,66 @@ export async function POST(req: Request) {
       );
     }
 
-    const payload = await req.json();
-    const frontendOrigin = req.headers.get("origin") ?? new URL(req.url).origin;
+    const payload = (await req.json()) as Record<string, unknown>;
+    const numeroIdentificacion = upper(
+      String(payload.numero_identificacion ?? ""),
+    );
+    const tipoIdentificacion = upper(
+      String(payload.tipo_identificacion ?? "CC"),
+    );
+    const email = String(payload.email ?? "")
+      .trim()
+      .toLowerCase();
 
-    const backendUrl = resolveBiometricBackendBaseUrl();
-    if (!backendUrl) {
+    if (!numeroIdentificacion) {
       return NextResponse.json(
-        { success: false, error: "Backend URL not configured" },
-        { status: 500 },
+        {
+          success: false,
+          error: "El número de identificación es obligatorio.",
+        },
+        { status: 400 },
       );
     }
 
-    const res = await fetch(`${backendUrl}/api/students/enroll`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Frontend-Origin": frontendOrigin,
+    if (!email) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "El correo electrónico del estudiante es obligatorio.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const backendPayload = await callBackend<BackendCreateStudentResponse>(
+      "/api/students/create",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ...payload,
+          numero_identificacion: numeroIdentificacion,
+          tipo_identificacion: tipoIdentificacion,
+          email,
+        }),
       },
-      body: JSON.stringify(payload),
-    });
+    );
 
-    if (!res.ok) {
-      const body = await res.json().catch(() => null);
+    if (!backendPayload.success) {
       return NextResponse.json(
-        { success: false, error: body?.error || `Backend error ${res.status}` },
-        { status: 502 },
+        {
+          success: false,
+          error: backendPayload.error ?? "No fue posible crear el estudiante",
+        },
+        { status: 400 },
       );
     }
 
-    const body = await res.json().catch(() => null);
-
-    // Return backend response; frontend may fetch the created student separately
-    return NextResponse.json(body, { status: 200 });
+    return NextResponse.json(backendPayload, { status: 200 });
   } catch (err) {
     return NextResponse.json(
       {
         success: false,
-        error: err instanceof Error ? err.message : "Unknown error",
+        error: err instanceof Error ? err.message : "Error desconocido",
       },
       { status: 500 },
     );

@@ -221,7 +221,7 @@ function useDigitalPersonaFingerprintReaderState(): UseFingerprintReaderResult {
               MAX_DEVICE_CHECK_FAILURES_BEFORE_RECREATE
             ) {
               setCaptureStatus(
-                "Reconstruyendo sesion del lector por fallos repetidos de deteccion...",
+                "Reconstruyendo sesión del lector por fallos repetidos de detección...",
               );
               await destroyReader();
               deviceCheckFailureCountRef.current = 0;
@@ -242,7 +242,7 @@ function useDigitalPersonaFingerprintReaderState(): UseFingerprintReaderResult {
             MAX_DEVICE_CHECK_FAILURES_BEFORE_RECREATE
           ) {
             setCaptureStatus(
-              "Reconstruyendo sesion del lector por errores repetidos de comunicacion...",
+              "Reconstruyendo sesión del lector por errores repetidos de comunicación...",
             );
             await destroyReader();
             deviceCheckFailureCountRef.current = 0;
@@ -273,7 +273,7 @@ function useDigitalPersonaFingerprintReaderState(): UseFingerprintReaderResult {
           setReady(false);
           setDeviceStatus("Esperando runtime WebSdk...");
           setCaptureStatus(
-            "Inicializando runtime del lector. Reintentando automaticamente...",
+            "Inicializando runtime del lector. Reintentando automáticamente...",
           );
           initRetryDelayRef.current = Math.min(
             initRetryDelayRef.current * 2,
@@ -287,9 +287,9 @@ function useDigitalPersonaFingerprintReaderState(): UseFingerprintReaderResult {
           (globalThis.dp?.devices as FingerprintSdk | undefined) ?? {};
         if (!sdk.FingerprintReader || !sdk.SampleFormat?.PngImage) {
           setReady(false);
-          setDeviceStatus("Esperando modulos de DigitalPersona...");
+          setDeviceStatus("Esperando módulos de DigitalPersona...");
           setCaptureStatus(
-            "Cargando bundles de DigitalPersona. Reintentando automaticamente...",
+            "Cargando bundles de DigitalPersona. Reintentando automáticamente...",
           );
           initRetryDelayRef.current = Math.min(
             initRetryDelayRef.current * 2,
@@ -361,7 +361,7 @@ function useDigitalPersonaFingerprintReaderState(): UseFingerprintReaderResult {
           commFailureCountRef.current += 1;
           setReady(false);
           setCaptureStatus(
-            "Fallo de comunicacion con el lector. Verifique el servicio local de DigitalPersona.",
+            "Fallo de comunicación con el lector. Verifique el servicio local de DigitalPersona.",
           );
           setDeviceStatus("Reconectando lector...");
 
@@ -384,7 +384,7 @@ function useDigitalPersonaFingerprintReaderState(): UseFingerprintReaderResult {
           const sample = extractPngSample(event);
           if (!sample) {
             setCaptureStatus(
-              "Se adquirio una muestra vacia. Verifique formato PNG y compatibilidad del lector.",
+              "Se adquirió una muestra vacía. Verifique el formato PNG y la compatibilidad del lector.",
             );
             pendingResolveRef.current?.(null);
             pendingResolveRef.current = null;
@@ -408,7 +408,7 @@ function useDigitalPersonaFingerprintReaderState(): UseFingerprintReaderResult {
         setReady(false);
         setDeviceStatus("No se pudo inicializar el lector");
         setCaptureStatus(
-          error instanceof Error ? error.message : "Error de inicializacion",
+          error instanceof Error ? error.message : "Error de inicialización",
         );
         initRetryDelayRef.current = Math.min(
           initRetryDelayRef.current * 2,
@@ -422,7 +422,7 @@ function useDigitalPersonaFingerprintReaderState(): UseFingerprintReaderResult {
       setIsReconnecting(true);
       setReady(false);
       setDeviceStatus("Reconectando lector...");
-      setCaptureStatus("Reiniciando sesion del lector...");
+      setCaptureStatus("Reiniciando sesión del lector...");
       clearInitRetryTimer();
       clearReconnectTimer();
       initRetryDelayRef.current = INIT_RETRY_MIN_DELAY_MS;
@@ -436,7 +436,7 @@ function useDigitalPersonaFingerprintReaderState(): UseFingerprintReaderResult {
 
         const activeReader = readerRef.current;
         if (!activeReader) {
-          setCaptureStatus("No se pudo recrear la sesion del lector");
+          setCaptureStatus("No se pudo recrear la sesión del lector");
           return false;
         }
 

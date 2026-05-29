@@ -33,8 +33,6 @@ type CourseInfo = {
   salon: string | null;
   hora_inicio: string;
   hora_fin: string;
-  fecha_inicio: string;
-  fecha_fin: string;
 };
 
 type PersonRecord = {
@@ -72,19 +70,6 @@ function normalizeId(value: string): string {
   return value.trim().toUpperCase();
 }
 
-function formatDate(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleDateString("es-CO", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-}
-
 function formatHour(value: string): string {
   if (!value) return "N/A";
   return value.length >= 5 ? value.slice(0, 5) : value;
@@ -96,17 +81,6 @@ function roleBadgeClass(role: PersonRecord["role"]): string {
   }
 
   return "bg-blue-100 text-blue-800 border-0";
-}
-
-function isCurrentCourse(course: CourseInfo, now: Date): boolean {
-  const start = new Date(`${course.fecha_inicio}T00:00:00`);
-  const end = new Date(`${course.fecha_fin}T23:59:59`);
-
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-    return false;
-  }
-
-  return start <= now && now <= end;
 }
 
 async function identifyPerson(
@@ -141,7 +115,7 @@ async function identifyPerson(
       payload ?? {
         success: false,
         found: false,
-        error: "Respuesta invalida del servidor",
+        error: "Respuesta inválida del servidor",
       }
     );
   } catch {
@@ -220,7 +194,7 @@ export default function PersonIdentificationPage() {
   async function handleSearchByFingerprint() {
     if (!readerReady) {
       toast.error(
-        "El lector no esta listo. Verifique la conexion y el servicio local.",
+        "El lector no está listo. Verifique la conexión y el servicio local.",
       );
       return;
     }
@@ -260,12 +234,6 @@ export default function PersonIdentificationPage() {
     toast.success("Persona identificada por huella correctamente");
   }
 
-  const now = useMemo(() => {
-    const current = new Date();
-    current.setHours(12, 0, 0, 0);
-    return current;
-  }, []);
-
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -278,7 +246,7 @@ export default function PersonIdentificationPage() {
           </h1>
           <p className="text-gray-500 mt-1">
             Identifique estudiantes o profesores por huella o numero de
-            identificacion y consulte sus cursos vigentes.
+            identificacion y consulte sus cursos asociados.
           </p>
         </div>
       </div>
@@ -409,11 +377,7 @@ export default function PersonIdentificationPage() {
               </div>
             ) : (
               result.person.records.map((record) => {
-                const currentCourses = record.cursos.filter((course) =>
-                  isCurrentCourse(course, now),
-                );
-                const coursesToDisplay =
-                  currentCourses.length > 0 ? currentCourses : record.cursos;
+                const coursesToDisplay = record.cursos;
 
                 return (
                   <Card key={`${record.role}-${record.numero_identificacion}`}>
@@ -437,11 +401,9 @@ export default function PersonIdentificationPage() {
                     </CardHeader>
                     <CardContent className="space-y-3">
                       <div className="rounded-md border border-[#b92f2d]/20 bg-[#b92f2d]/5 px-3 py-2 text-sm text-[#982725]">
-                        {currentCourses.length > 0
-                          ? `Cursos vigentes encontrados: ${currentCourses.length}`
-                          : record.cursos.length > 0
-                            ? "No hay cursos vigentes hoy. Mostrando cursos asociados."
-                            : "No tiene cursos asociados actualmente."}
+                        {record.cursos.length > 0
+                          ? `Cursos asociados encontrados: ${record.cursos.length}`
+                          : "No tiene cursos asociados actualmente."}
                       </div>
 
                       {coursesToDisplay.length > 0 && (
@@ -454,14 +416,11 @@ export default function PersonIdentificationPage() {
                                 <TableHead>Nivel</TableHead>
                                 <TableHead>Salon</TableHead>
                                 <TableHead>Horario</TableHead>
-                                <TableHead>Vigencia</TableHead>
                                 <TableHead>Estado</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
                               {coursesToDisplay.map((course) => {
-                                const active = isCurrentCourse(course, now);
-
                                 return (
                                   <TableRow
                                     key={`${record.numero_identificacion}-${course.id_curso}`}
@@ -479,18 +438,8 @@ export default function PersonIdentificationPage() {
                                       {formatHour(course.hora_fin)}
                                     </TableCell>
                                     <TableCell>
-                                      {formatDate(course.fecha_inicio)} -{" "}
-                                      {formatDate(course.fecha_fin)}
-                                    </TableCell>
-                                    <TableCell>
-                                      <Badge
-                                        className={
-                                          active
-                                            ? "bg-emerald-100 text-emerald-800 border-0"
-                                            : "bg-slate-100 text-slate-700 border-0"
-                                        }
-                                      >
-                                        {active ? "VIGENTE" : "NO VIGENTE"}
+                                      <Badge className="bg-emerald-100 text-emerald-800 border-0">
+                                        ASOCIADO
                                       </Badge>
                                     </TableCell>
                                   </TableRow>

@@ -8,9 +8,11 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 
-	"golang.org/x/crypto/pbkdf2"
 	"fingerprint-backend/models"
+	"golang.org/x/crypto/pbkdf2"
 )
 
 const (
@@ -34,7 +36,11 @@ func DeriveKeyFromPassphrase(passphrase string, iterations int) ([]byte, error) 
 // Returns the encrypted payload (IV + ciphertext as base64).
 func (a *App) EncryptPNG(pngBase64 string) (*models.EncryptedPayload, error) {
 	// Derive encryption key (in production, fetch from KMS)
-	encryptionKey, err := DeriveKeyFromPassphrase("student-biometric-default-key", 100000)
+	pass := strings.TrimSpace(os.Getenv("BIOMETRIC_PASSPHRASE_PNG"))
+	if pass == "" {
+		return nil, errors.New("missing BIOMETRIC_PASSPHRASE_PNG environment variable")
+	}
+	encryptionKey, err := DeriveKeyFromPassphrase(pass, 100000)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +55,11 @@ func (a *App) DecryptPNG(payload *models.EncryptedPayload) (string, error) {
 	}
 
 	// Derive the same encryption key used during encryption
-	encryptionKey, err := DeriveKeyFromPassphrase("student-biometric-default-key", 100000)
+	pass := strings.TrimSpace(os.Getenv("BIOMETRIC_PASSPHRASE_PNG"))
+	if pass == "" {
+		return "", errors.New("missing BIOMETRIC_PASSPHRASE_PNG environment variable")
+	}
+	encryptionKey, err := DeriveKeyFromPassphrase(pass, 100000)
 	if err != nil {
 		return "", err
 	}
@@ -66,7 +76,11 @@ func (a *App) DecryptPNG(payload *models.EncryptedPayload) (string, error) {
 // Returns the encrypted payload (IV + ciphertext as base64).
 func (a *App) EncryptTemplate(templateBase64 string) (*models.EncryptedPayload, error) {
 	// Derive encryption key (same passphrase for now; ideally use KMS with tenant isolation)
-	encryptionKey, err := DeriveKeyFromPassphrase("student-biometric-template-key", 100000)
+	pass := strings.TrimSpace(os.Getenv("BIOMETRIC_PASSPHRASE_TEMPLATE"))
+	if pass == "" {
+		return nil, errors.New("missing BIOMETRIC_PASSPHRASE_TEMPLATE environment variable")
+	}
+	encryptionKey, err := DeriveKeyFromPassphrase(pass, 100000)
 	if err != nil {
 		return nil, err
 	}
@@ -79,8 +93,11 @@ func (a *App) DecryptTemplate(payload *models.EncryptedPayload) (string, error) 
 	if payload == nil {
 		return "", errors.New("encrypted payload is nil")
 	}
-
-	encryptionKey, err := DeriveKeyFromPassphrase("student-biometric-template-key", 100000)
+	pass := strings.TrimSpace(os.Getenv("BIOMETRIC_PASSPHRASE_TEMPLATE"))
+	if pass == "" {
+		return "", errors.New("missing BIOMETRIC_PASSPHRASE_TEMPLATE environment variable")
+	}
+	encryptionKey, err := DeriveKeyFromPassphrase(pass, 100000)
 	if err != nil {
 		return "", err
 	}

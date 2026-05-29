@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -8,20 +9,28 @@ import {
   BookOpen,
   Link2,
   ClipboardList,
+  HandCoins,
+  BarChart3,
   Fingerprint,
-  FileSpreadsheet,
+  FolderOpen,
   LogOut,
   X,
+  Shield,
+  UserRound,
+  CreditCard,
+  FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { createClient } from "@/lib/supabase/client";
+import { ResolvedRole } from "@/lib/auth/resolved-access";
 
 interface SidebarProps {
   userEmail?: string;
   userName?: string;
+  userRole: ResolvedRole;
   onClose?: () => void;
 }
 
@@ -34,7 +43,7 @@ type NavItem = {
   badge?: string;
 };
 
-const navItems: NavItem[] = [
+const adminNavItems: NavItem[] = [
   {
     label: "Dashboard",
     href: "/dashboard",
@@ -52,6 +61,11 @@ const navItems: NavItem[] = [
     icon: Users,
   },
   {
+    label: "Administradores",
+    href: "/dashboard/admins",
+    icon: Shield,
+  },
+  {
     label: "Cursos",
     href: "/dashboard/courses",
     icon: BookOpen,
@@ -67,20 +81,111 @@ const navItems: NavItem[] = [
     icon: ClipboardList,
   },
   {
+    label: "Procesar pago",
+    href: "/dashboard/payments/process",
+    icon: HandCoins,
+  },
+  {
+    label: "Reporte de Pagos",
+    href: "/dashboard/payments/report",
+    icon: BarChart3,
+  },
+  {
     label: "Identificar Persona",
     href: "/dashboard/person-identification",
     icon: Fingerprint,
   },
   {
-    label: "Exportar Lista de Asistencia a Excel",
-    href: "/dashboard/export",
-    icon: FileSpreadsheet,
+    label: "Listas de Asistencia",
+    href: "/dashboard/attendance-lists",
+    icon: FolderOpen,
+  },
+  {
+    label: "Calificaciones",
+    href: "/dashboard/grades",
+    icon: FileText,
   },
 ];
 
-export function Sidebar({ userEmail, userName, onClose }: SidebarProps) {
+const studentNavItems: NavItem[] = [
+  {
+    label: "Dashboard",
+    href: "/dashboard",
+    icon: LayoutDashboard,
+    exact: true,
+  },
+  {
+    label: "Mi Perfil",
+    href: "/dashboard/my-profile",
+    icon: UserRound,
+  },
+  {
+    label: "Mis Cursos",
+    href: "/dashboard/my-courses",
+    icon: BookOpen,
+  },
+  {
+    label: "Mis Pagos",
+    href: "/dashboard/my-payments",
+    icon: CreditCard,
+  },
+];
+
+const professorNavItems: NavItem[] = [
+  {
+    label: "Dashboard",
+    href: "/dashboard",
+    icon: LayoutDashboard,
+    exact: true,
+  },
+  {
+    label: "Mi Perfil",
+    href: "/dashboard/my-profile",
+    icon: UserRound,
+  },
+  {
+    label: "Mis Cursos",
+    href: "/dashboard/my-courses",
+    icon: BookOpen,
+  },
+  {
+    label: "Identificar Persona",
+    href: "/dashboard/person-identification",
+    icon: Fingerprint,
+  },
+  {
+    label: "Tomar Asistencia",
+    href: "/dashboard/attendance",
+    icon: ClipboardList,
+  },
+  {
+    label: "Calificaciones",
+    href: "/dashboard/grades",
+    icon: FileText,
+  },
+];
+
+function resolveNavItems(role: ResolvedRole): NavItem[] {
+  if (role === "administrador") {
+    return adminNavItems;
+  }
+
+  if (role === "profesor") {
+    return professorNavItems;
+  }
+
+  return studentNavItems;
+}
+
+export function Sidebar({
+  userEmail,
+  userName,
+  userRole,
+  onClose,
+}: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const navItems = resolveNavItems(userRole);
 
   const initials = userName
     ? userName
@@ -95,6 +200,21 @@ export function Sidebar({ userEmail, userName, onClose }: SidebarProps) {
 
   async function handleSignOut() {
     const supabase = createClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    const accessToken = session?.access_token?.trim();
+    if (accessToken) {
+      await fetch("/api/auth/sign-out", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ access_token: accessToken }),
+      }).catch(() => undefined);
+    }
+
     await supabase.auth.signOut();
     router.push("/login");
     router.refresh();
@@ -111,12 +231,21 @@ export function Sidebar({ userEmail, userName, onClose }: SidebarProps) {
     <div className="flex flex-col h-full bg-[#3d100f] text-white w-64">
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-5 border-b border-[#6b1e1d]">
-        <div>
-          <h2 className="text-lg font-bold text-white">SysAsistencia</h2>
-          <p className="text-xs text-[#d49392]">
+        <div className="flex-1">
+          <div className="mb-2 flex justify-center">
+            <Image
+              src="/logos/Logo_Nuevo.png"
+              alt="Logo Harvard Enterprise"
+              width={150}
+              height={141}
+              priority
+            />
+          </div>
+          <h2 className="text-lg font-bold text-white">Aula Virtual</h2>
+          {/* <p className="text-xs text-[#d49392]">
             Sistema de Creación de Estudiantes, Cursos y Registro de Asistencia
             de Harvard Enterprise.
-          </p>
+          </p> */}
         </div>
         {onClose && (
           <button
@@ -174,10 +303,10 @@ export function Sidebar({ userEmail, userName, onClose }: SidebarProps) {
       </nav>
 
       {/* User section */}
-      <div className="px-4 pb-4 border-t border-[#6b1e1d] pt-4">
-        <div className="flex items-center gap-3 px-3 py-2 mb-2">
+      <div className="border-t border-[#6b1e1d] p-4 space-y-3">
+        <div className="flex items-center gap-3">
           <Avatar className="h-9 w-9">
-            <AvatarFallback className="bg-[#8a2826] text-white text-sm font-semibold">
+            <AvatarFallback className="bg-[#6b1e1d] text-white">
               {initials}
             </AvatarFallback>
           </Avatar>

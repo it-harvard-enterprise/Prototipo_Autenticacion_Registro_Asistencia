@@ -16,16 +16,17 @@ export function NewStudentButton() {
       if (res.ok) {
         const json = await res.json();
         console.info(
-          json?.message || "Fingerprint capture service is up and running.",
+          json?.message || "El servicio de captura de huellas está activo.",
         );
       } else {
         const json = await res.json().catch(() => null);
         toast.error(
-          json?.message || "Fingerprint capture service could not be started",
+          json?.message ||
+            "No se pudo iniciar el servicio de captura de huellas",
         );
       }
     } catch {
-      toast.error("Error contacting fingerprint service");
+      toast.error("Error al contactar el servicio de captura de huellas");
     }
   }
 

@@ -30,6 +30,7 @@ const (
 type App struct {
 	SupabaseURL       string
 	ServiceKey        string
+	AnonKey           string
 	FrontendHealthURL string
 	Threshold         float64
 	HTTPClient        *http.Client
@@ -44,9 +45,12 @@ type supabaseError struct {
 }
 
 func NewApp(supabaseURL, serviceKey, frontendHealthURL string, threshold float64) *App {
+	trimmedServiceKey := strings.TrimSpace(serviceKey)
+
 	return &App{
 		SupabaseURL:       strings.TrimSuffix(strings.TrimSpace(supabaseURL), "/"),
-		ServiceKey:        strings.TrimSpace(serviceKey),
+		ServiceKey:        trimmedServiceKey,
+		AnonKey:           trimmedServiceKey,
 		FrontendHealthURL: strings.TrimSpace(frontendHealthURL),
 		Threshold:         threshold,
 		HTTPClient:        &http.Client{Timeout: 25 * time.Second},
@@ -181,18 +185,18 @@ func (a *App) ExtractTemplate(base64PNG string) (string, *templates.SearchTempla
 	}
 	if len(pngBytes) < minFingerprintSize {
 		a.ZeroBytes(pngBytes)
-		return "", nil, errors.New("fingerprintTemplate PNG demasiado pequena para ser valida")
+		return "", nil, errors.New("fingerprintTemplate PNG demasiado pequeña para ser válida")
 	}
 
 	cfg, format, err := image.DecodeConfig(bytes.NewReader(pngBytes))
 	if err != nil || format != "png" {
 		a.ZeroBytes(pngBytes)
-		return "", nil, errors.New("fingerprintTemplate debe ser un PNG en base64 valido")
+			return "", nil, errors.New("fingerprintTemplate debe ser un PNG en base64 válido")
 	}
 
 	if cfg.Width < 80 || cfg.Height < 80 {
 		a.ZeroBytes(pngBytes)
-		return "", nil, errors.New("el PNG de la huella es demasiado pequeno")
+		return "", nil, errors.New("el PNG de la huella es demasiado pequeño")
 	}
 
 	img, _, err := image.Decode(bytes.NewReader(pngBytes))
@@ -284,21 +288,90 @@ func (a *App) Round4(value float64) float64 {
 	return float64(int(value*10000+0.5)) / 10000
 }
 
+var coordinatorCaseVariants = map[string][2]string{
+	"NICOL DELGADO":    {"Nicol Delgado", "NICOL DELGADO"},
+	"SANTIAGO DELGADO": {"Santiago Delgado", "SANTIAGO DELGADO"},
+	"DAVID DELGADO":    {"David Delgado", "DAVID DELGADO"},
+	"ELENA MARTINEZ":   {"Elena Martinez", "ELENA MARTINEZ"},
+}
+
+func normalizeCoordinatorKey(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return ""
+	}
+	replacer := strings.NewReplacer(
+		"Á", "A", "É", "E", "Í", "I", "Ó", "O", "Ú", "U",
+		"á", "A", "é", "E", "í", "I", "ó", "O", "ú", "U",
+	)
+	return strings.ToUpper(replacer.Replace(trimmed))
+}
+
+func coordinatorInsertCandidates(value string) []string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return []string{trimmed}
+	}
+
+	candidates := []string{trimmed}
+	seen := map[string]bool{trimmed: true}
+
+	if variants, ok := coordinatorCaseVariants[normalizeCoordinatorKey(trimmed)]; ok {
+		for _, candidate := range variants {
+			if !seen[candidate] {
+				seen[candidate] = true
+				candidates = append(candidates, candidate)
+			}
+		}
+	}
+
+	return candidates
+}
+
 func (a *App) InsertStudent(ctx context.Context, payload map[string]any) ([]map[string]any, int, error) {
 	query := url.Values{}
 	query.Set("select", "numero_identificacion,nombres,apellidos,created_at")
 
-	body, status, err := a.CallSupabase(ctx, http.MethodPost, "/rest/v1/estudiantes", query, payload, true)
-	if err != nil {
-		return nil, status, err
+	coordinatorValue, hasCoordinator := payload["coordinador_academico"].(string)
+	candidates := []string{coordinatorValue}
+	if hasCoordinator {
+		candidates = coordinatorInsertCandidates(coordinatorValue)
 	}
 
-	var rows []map[string]any
-	if err := json.Unmarshal(body, &rows); err != nil {
-		return nil, http.StatusInternalServerError, err
+	var lastErr error
+	var lastStatus int
+	for _, candidate := range candidates {
+		attemptPayload := make(map[string]any, len(payload))
+		for k, v := range payload {
+			attemptPayload[k] = v
+		}
+		if hasCoordinator {
+			attemptPayload["coordinador_academico"] = candidate
+		}
+
+		body, status, err := a.CallSupabase(ctx, http.MethodPost, "/rest/v1/estudiantes", query, attemptPayload, true)
+		if err != nil {
+			lastErr = err
+			lastStatus = status
+			if !strings.Contains(strings.ToLower(err.Error()), "chk_estudiantes_coordinador") {
+				return nil, status, err
+			}
+			continue
+		}
+
+		var rows []map[string]any
+		if err := json.Unmarshal(body, &rows); err != nil {
+			return nil, http.StatusInternalServerError, err
+		}
+
+		return rows, status, nil
 	}
 
-	return rows, status, nil
+	if lastErr != nil {
+		return nil, lastStatus, lastErr
+	}
+
+	return nil, http.StatusBadRequest, errors.New("no se pudo crear el estudiante")
 }
 
 func (a *App) UpdateStudentByNumero(ctx context.Context, numeroIdentificacion string, payload map[string]any) ([]map[string]any, int, error) {

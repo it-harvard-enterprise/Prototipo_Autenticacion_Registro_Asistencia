@@ -1,7 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { type EmailOtpType } from "@supabase/supabase-js";
 
+import { callBackend } from "@/lib/backend/server-api";
 import { createClient } from "@/lib/supabase/server";
+
+type BackendAuthResponse = {
+  success: boolean;
+  data?: Record<string, unknown>;
+  error?: string;
+};
 
 function sanitizeNextPath(next: string | null): string {
   if (!next || !next.startsWith("/") || next.startsWith("//")) {
@@ -55,7 +62,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const tokenHash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
-  const nextPath = sanitizeNextPath(searchParams.get("next"));
 
   if (!tokenHash || !type) {
     return NextResponse.redirect(
@@ -67,26 +73,85 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.verifyOtp({
-    type,
-    token_hash: tokenHash,
-  });
+  const requestedNext = searchParams.get("next");
+  const fallbackNext = type === "recovery" ? "/reset-password" : "/";
+  const nextPath = sanitizeNextPath(requestedNext ?? fallbackNext);
 
-  if (error) {
+  let backendPayload: BackendAuthResponse;
+  try {
+    backendPayload = await callBackend<BackendAuthResponse>(
+      "/api/auth/verify-otp",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type,
+          token_hash: tokenHash,
+        }),
+      },
+    );
+  } catch (err) {
     return NextResponse.redirect(
       buildLoginErrorRedirect(
         appOrigin,
-        error.code ?? "otp_expired",
-        error.message || "Email link is invalid or has expired",
+        "otp_expired",
+        err instanceof Error
+          ? err.message
+          : "Email link is invalid or has expired",
+      ),
+    );
+  }
+
+  if (!backendPayload.success || !backendPayload.data) {
+    return NextResponse.redirect(
+      buildLoginErrorRedirect(
+        appOrigin,
+        "otp_expired",
+        backendPayload.error || "Email link is invalid or has expired",
+      ),
+    );
+  }
+
+  const sessionCandidate =
+    (backendPayload.data.session as Record<string, unknown> | undefined) ??
+    backendPayload.data;
+  const accessToken = String(sessionCandidate.access_token ?? "").trim();
+  const refreshToken = String(sessionCandidate.refresh_token ?? "").trim();
+
+  if (!accessToken || !refreshToken) {
+    return NextResponse.redirect(
+      buildLoginErrorRedirect(
+        appOrigin,
+        "otp_expired",
+        "No se recibió una sesión válida para completar la verificación",
+      ),
+    );
+  }
+
+  const supabase = await createClient();
+  const { error: setSessionError } = await supabase.auth.setSession({
+    access_token: accessToken,
+    refresh_token: refreshToken,
+  });
+  if (setSessionError) {
+    return NextResponse.redirect(
+      buildLoginErrorRedirect(
+        appOrigin,
+        "otp_expired",
+        setSessionError.message || "Email link is invalid or has expired",
       ),
     );
   }
 
   const redirectUrl = new URL(nextPath, appOrigin);
-  redirectUrl.searchParams.set("invite", "1");
-  if (data.user?.email) {
-    redirectUrl.searchParams.set("invited_email", data.user.email);
+  if (type === "invite") {
+    redirectUrl.searchParams.set("invite", "1");
+    const user =
+      (sessionCandidate.user as Record<string, unknown> | undefined) ??
+      (backendPayload.data.user as Record<string, unknown> | undefined);
+    const invitedEmail = String(user?.email ?? "").trim();
+    if (invitedEmail) {
+      redirectUrl.searchParams.set("invited_email", invitedEmail);
+    }
   }
 
   return NextResponse.redirect(redirectUrl);

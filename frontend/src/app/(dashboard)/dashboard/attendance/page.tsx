@@ -17,6 +17,7 @@ import {
   type CourseOption,
 } from "@/app/actions/attendance";
 import { useDigitalPersonaFingerprintReader } from "@/lib/biometrics/digitalpersona";
+import { matchesPeopleQuery } from "@/lib/people-search";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -73,6 +74,15 @@ type MetodoPagoValue =
   | "OTRO"
   | null;
 
+function getAdvanceClassesCount(student: AttendanceStudentRow): number {
+  const value = Number(student.clases_adelantadas ?? 0);
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+
+  return Math.trunc(value);
+}
+
 function createAttendanceTimestamp(selectedDate: string): string {
   const now = new Date();
   const [year, month, day] = selectedDate
@@ -104,6 +114,21 @@ function getTodayIsoDate() {
   return `${year}-${month}-${day}`;
 }
 
+function toSaveAttendanceRow(student: AttendanceStudentRow) {
+  const advanceClasses = getAdvanceClassesCount(student);
+  const hasAdvanceClasses = student.asistio && advanceClasses > 0;
+
+  return {
+    numero_identificacion: student.numero_identificacion,
+    asistio: student.asistio,
+    saldo: (hasAdvanceClasses ? "cancelado" : student.saldo) as SaldoValue,
+    metodo_pago: (hasAdvanceClasses
+      ? null
+      : student.metodo_pago) as MetodoPagoValue,
+    marcado_en: student.marcado_en,
+  };
+}
+
 export default function AttendancePage() {
   const [courses, setCourses] = useState<CourseOption[]>([]);
   const [students, setStudents] = useState<AttendanceStudentRow[]>([]);
@@ -115,6 +140,7 @@ export default function AttendancePage() {
   const [isCapturingFingerprint, setIsCapturingFingerprint] = useState(false);
   const [courseSearch, setCourseSearch] = useState("");
   const [showCourseList, setShowCourseList] = useState(false);
+  const [rosterSearch, setRosterSearch] = useState("");
   const [isRosterDirty, setIsRosterDirty] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
@@ -172,6 +198,20 @@ export default function AttendancePage() {
     });
   }, [courseSearch, courses]);
 
+  // Filtra el roster para visualización. La lista subyacente (`students`)
+  // permanece intacta — al guardar se envía la lista completa,
+  // independientemente de lo que esté visible.
+  const displayedStudents = useMemo(() => {
+    if (!rosterSearch.trim()) return students;
+    return students.filter((student) =>
+      matchesPeopleQuery(rosterSearch, {
+        nombres: student.nombres,
+        apellidos: student.apellidos,
+        numero_identificacion: student.numero_identificacion,
+      }),
+    );
+  }, [students, rosterSearch]);
+
   useEffect(() => {
     if (!courses.length) return;
     const currentId = form.getValues("idCurso");
@@ -199,13 +239,7 @@ export default function AttendancePage() {
     const result = await saveAttendanceForCourseAndDate({
       idCurso: Number(values.idCurso),
       date: values.fecha,
-      rows: rowsToPersist.map((student) => ({
-        numero_identificacion: student.numero_identificacion,
-        asistio: student.asistio,
-        saldo: student.saldo as SaldoValue,
-        metodo_pago: student.metodo_pago as MetodoPagoValue,
-        marcado_en: student.marcado_en,
-      })),
+      rows: rowsToPersist.map((student) => toSaveAttendanceRow(student)),
     });
     setIsAutoSaving(false);
 
@@ -267,7 +301,18 @@ export default function AttendancePage() {
       return null;
     }
 
-    const rows = result.data ?? [];
+    const rows = (result.data ?? []).map((student) => {
+      const advanceClasses = getAdvanceClassesCount(student);
+      if (student.asistio && advanceClasses > 0) {
+        return {
+          ...student,
+          saldo: "cancelado" as const,
+          metodo_pago: null,
+        };
+      }
+
+      return student;
+    });
     setStudents(rows);
     setHasLoadedRoster(true);
     setIsRosterDirty(false);
@@ -289,7 +334,7 @@ export default function AttendancePage() {
 
     if (!readerReady) {
       toast.error(
-        "El lector no esta listo. Verifique la conexion y el servicio de DigitalPersona.",
+        "El lector no está listo. Verifique la conexión y el servicio de DigitalPersona.",
       );
       return;
     }
@@ -376,6 +421,7 @@ export default function AttendancePage() {
 
         const wasPresent = student.asistio;
         const next = { ...student, ...patch };
+        const hasAdvanceClasses = getAdvanceClassesCount(next) > 0;
 
         if (!wasPresent && next.asistio) {
           next.marcado_en = createAttendanceTimestamp(selectedDate);
@@ -385,6 +431,9 @@ export default function AttendancePage() {
           next.saldo = null;
           next.metodo_pago = null;
           next.marcado_en = null;
+        } else if (hasAdvanceClasses) {
+          next.saldo = "cancelado";
+          next.metodo_pago = null;
         } else if (next.saldo !== "cancelado") {
           next.metodo_pago = null;
         }
@@ -446,25 +495,9 @@ export default function AttendancePage() {
       return;
     }
 
-    for (const student of students) {
-      if (student.asistio && !student.saldo) {
-        toast.error(
-          `Debe seleccionar saldo para ${student.nombres} ${student.apellidos}`,
-        );
-        return;
-      }
-
-      if (
-        student.asistio &&
-        student.saldo === "cancelado" &&
-        !student.metodo_pago
-      ) {
-        toast.error(
-          `Debe seleccionar metodo de pago para ${student.nombres} ${student.apellidos}`,
-        );
-        return;
-      }
-    }
+    // Saldo y método de pago se permiten en null incluso cuando el
+    // estudiante está marcado como presente: el admin puede registrar
+    // la asistencia y completar la información de pago después.
 
     const savePressedAtIso = new Date().toISOString();
 
@@ -473,13 +506,7 @@ export default function AttendancePage() {
       idCurso: Number(values.idCurso),
       date: values.fecha,
       saveTimestampIso: savePressedAtIso,
-      rows: students.map((student) => ({
-        numero_identificacion: student.numero_identificacion,
-        asistio: student.asistio,
-        saldo: student.saldo as SaldoValue,
-        metodo_pago: student.metodo_pago as MetodoPagoValue,
-        marcado_en: student.marcado_en,
-      })),
+      rows: students.map((student) => toSaveAttendanceRow(student)),
     });
     setIsSaving(false);
 
@@ -503,7 +530,7 @@ export default function AttendancePage() {
     }
 
     if (deleteConfirmText.trim() !== "ELIMINAR") {
-      toast.error("Debe escribir ELIMINAR para confirmar la eliminacion");
+      toast.error("Debe escribir ELIMINAR para confirmar la eliminación");
       return;
     }
 
@@ -679,17 +706,11 @@ export default function AttendancePage() {
                 </Button>
               </div>
 
-              {hasLoadedRoster && selectedCourseName && students.length > 0 && (
+              {hasLoadedRoster && selectedCourseName && (
                 <div className="rounded-md border border-[#b92f2d]/20 bg-[#b92f2d]/5 p-3 text-sm text-[#982725]">
                   Curso seleccionado:{" "}
                   <span className="font-semibold">{selectedCourseName}</span>
                 </div>
-              )}
-
-              {isAutoSaving && (
-                <p className="text-xs text-gray-500">
-                  Guardando progreso automaticamente...
-                </p>
               )}
 
               <Card className="border-dashed border-[#b92f2d]/30 bg-[#b92f2d]/5">
@@ -717,11 +738,11 @@ export default function AttendancePage() {
                         {deviceStatus}
                       </p>
                     </div>
-                    <div className="rounded-md border p-3 bg-white">
+                    <div className="rounded-md border p-3 bg-white h-[88px] flex flex-col">
                       <p className="text-[11px] uppercase tracking-wide text-gray-500">
                         Estado de captura
                       </p>
-                      <p className="text-sm mt-1 text-gray-700">
+                      <p className="text-sm mt-1 text-gray-700 flex-1 overflow-y-auto break-words leading-5 pr-1">
                         {captureStatus}
                       </p>
                     </div>
@@ -779,6 +800,16 @@ export default function AttendancePage() {
                 </CardContent>
               </Card>
 
+              {students.length > 0 && (
+                <div className="rounded-md border bg-white p-3">
+                  <Input
+                    value={rosterSearch}
+                    onChange={(event) => setRosterSearch(event.target.value)}
+                    placeholder="Buscar estudiante por nombre, apellidos o cédula"
+                  />
+                </div>
+              )}
+
               <div className="rounded-md border bg-white overflow-hidden">
                 <Table>
                   <TableHeader>
@@ -799,94 +830,127 @@ export default function AttendancePage() {
                           Cargue un curso para ver estudiantes asociados.
                         </TableCell>
                       </TableRow>
+                    ) : displayedStudents.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={4}
+                          className="py-8 text-center text-gray-500"
+                        >
+                          Ningún estudiante coincide con la búsqueda.
+                        </TableCell>
+                      </TableRow>
                     ) : (
-                      students.map((student) => (
-                        <TableRow key={student.numero_identificacion}>
-                          <TableCell className="whitespace-normal">
-                            <p className="font-medium text-gray-900">
-                              {student.apellidos}, {student.nombres}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              ID: {student.numero_identificacion}
-                            </p>
-                          </TableCell>
-                          <TableCell>
-                            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-                              <input
-                                type="checkbox"
-                                checked={student.asistio}
+                      displayedStudents.map((student) => {
+                        const advanceClasses = getAdvanceClassesCount(student);
+                        const hasAdvanceClasses = advanceClasses > 0;
+
+                        return (
+                          <TableRow key={student.numero_identificacion}>
+                            <TableCell className="whitespace-normal">
+                              <p className="font-medium text-gray-900">
+                                {student.apellidos}, {student.nombres}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                ID: {student.numero_identificacion}
+                              </p>
+                              {hasAdvanceClasses && (
+                                <p className="mt-1 inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                                  Tiene {advanceClasses} clase
+                                  {advanceClasses === 1 ? "" : "s"} pagada
+                                  {advanceClasses === 1 ? "" : "s"} por
+                                  adelantado
+                                </p>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                                <input
+                                  type="checkbox"
+                                  checked={student.asistio}
+                                  onChange={(event) =>
+                                    updateStudentAttendance(
+                                      student.numero_identificacion,
+                                      { asistio: event.target.checked },
+                                    )
+                                  }
+                                />
+                                Presente
+                              </label>
+                            </TableCell>
+                            <TableCell>
+                              <select
+                                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
+                                value={student.saldo ?? ""}
+                                disabled={!student.asistio || hasAdvanceClasses}
                                 onChange={(event) =>
                                   updateStudentAttendance(
                                     student.numero_identificacion,
-                                    { asistio: event.target.checked },
+                                    {
+                                      saldo: (event.target.value || null) as
+                                        | "cancelado"
+                                        | "debe"
+                                        | null,
+                                    },
                                   )
                                 }
-                              />
-                              Presente
-                            </label>
-                          </TableCell>
-                          <TableCell>
-                            <select
-                              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
-                              value={student.saldo ?? ""}
-                              disabled={!student.asistio}
-                              onChange={(event) =>
-                                updateStudentAttendance(
-                                  student.numero_identificacion,
-                                  {
-                                    saldo: (event.target.value || null) as
-                                      | "cancelado"
-                                      | "debe"
-                                      | null,
-                                  },
-                                )
-                              }
-                            >
-                              <option value="">Seleccione</option>
-                              <option value="cancelado">Cancelado</option>
-                              <option value="debe">Debe</option>
-                            </select>
-                          </TableCell>
-                          <TableCell>
-                            <select
-                              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
-                              value={student.metodo_pago ?? ""}
-                              disabled={
-                                !student.asistio ||
-                                student.saldo !== "cancelado"
-                              }
-                              onChange={(event) =>
-                                updateStudentAttendance(
-                                  student.numero_identificacion,
-                                  {
-                                    metodo_pago: (event.target.value ||
-                                      null) as
-                                      | "EFECTIVO"
-                                      | "TRANSFERENCIA"
-                                      | "NEQUI"
-                                      | "DAVIPLATA"
-                                      | "OTRO"
-                                      | null,
-                                  },
-                                )
-                              }
-                            >
-                              <option value="">Seleccione</option>
-                              <option value="EFECTIVO">EFECTIVO</option>
-                              <option value="TRANSFERENCIA">
-                                TRANSFERENCIA
-                              </option>
-                              <option value="NEQUI">NEQUI</option>
-                              <option value="DAVIPLATA">DAVIPLATA</option>
-                              <option value="OTRO">OTRO</option>
-                            </select>
-                          </TableCell>
-                        </TableRow>
-                      ))
+                              >
+                                <option value="">
+                                  {hasAdvanceClasses
+                                    ? "Se descuenta adelanto"
+                                    : "Seleccione"}
+                                </option>
+                                <option value="cancelado">Cancelado</option>
+                                <option value="debe">Debe</option>
+                              </select>
+                            </TableCell>
+                            <TableCell>
+                              <select
+                                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
+                                value={student.metodo_pago ?? ""}
+                                disabled={
+                                  !student.asistio ||
+                                  student.saldo !== "cancelado" ||
+                                  hasAdvanceClasses
+                                }
+                                onChange={(event) =>
+                                  updateStudentAttendance(
+                                    student.numero_identificacion,
+                                    {
+                                      metodo_pago: (event.target.value ||
+                                        null) as
+                                        | "EFECTIVO"
+                                        | "TRANSFERENCIA"
+                                        | "NEQUI"
+                                        | "DAVIPLATA"
+                                        | "OTRO"
+                                        | null,
+                                    },
+                                  )
+                                }
+                              >
+                                <option value="">Seleccione</option>
+                                <option value="EFECTIVO">EFECTIVO</option>
+                                <option value="TRANSFERENCIA">
+                                  TRANSFERENCIA
+                                </option>
+                                <option value="NEQUI">NEQUI</option>
+                                <option value="DAVIPLATA">DAVIPLATA</option>
+                                <option value="OTRO">OTRO</option>
+                              </select>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
                     )}
                   </TableBody>
                 </Table>
               </div>
+
+              {isAutoSaving && (
+                <p className="text-xs text-gray-500">
+                  Guardando progreso automáticamente...
+                </p>
+              )}
 
               <div className="flex flex-wrap items-center justify-between gap-3">
                 {hasLoadedRoster && (
@@ -913,7 +977,7 @@ export default function AttendancePage() {
                           Advertencia
                         </AlertDialogTitle>
                         <AlertDialogDescription>
-                          Esta operacion es irreversible. ¿Está seguro de que
+                          Esta operación es irreversible. ¿Está seguro de que
                           quiere eliminar la lista de asistencia actual?
                         </AlertDialogDescription>
                       </AlertDialogHeader>

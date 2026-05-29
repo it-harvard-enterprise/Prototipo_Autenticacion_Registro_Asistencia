@@ -26,7 +26,7 @@ func EnrollStudentHandler(app *services.App) gin.HandlerFunc {
 		req.Nombres = strings.ToUpper(strings.TrimSpace(req.Nombres))
 		req.Apellidos = strings.ToUpper(strings.TrimSpace(req.Apellidos))
 		req.Grado = strings.ToUpper(strings.TrimSpace(req.Grado))
-		req.CoordinadorAcademico = strings.ToUpper(strings.TrimSpace(req.CoordinadorAcademico))
+		req.CoordinadorAcademico = strings.TrimSpace(req.CoordinadorAcademico)
 		req.MedioPagoMatricula = strings.ToUpper(strings.TrimSpace(req.MedioPagoMatricula))
 
 		normalizeOptionalUpper := func(value *string) *string {
@@ -77,13 +77,13 @@ func EnrollStudentHandler(app *services.App) gin.HandlerFunc {
 		// Extract templates from PNG and encrypt them for storage
 		rightTemplate, err := app.ResolveStoredFingerprintTemplate(rightPNG)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Huella derecha invalida: " + err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Huella derecha inválida: " + err.Error()})
 			return
 		}
 
 		leftTemplate, err := app.ResolveStoredFingerprintTemplate(leftPNG)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Huella izquierda invalida: " + err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Huella izquierda inválida: " + err.Error()})
 			return
 		}
 
@@ -138,11 +138,7 @@ func EnrollStudentHandler(app *services.App) gin.HandlerFunc {
 
 		rows, status, err := app.InsertStudent(c.Request.Context(), payload)
 		if err != nil {
-			if status == http.StatusConflict {
-				c.JSON(http.StatusConflict, gin.H{"error": "Error: En la base datos ya existe un usuario con el mismo número de identificación."})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			c.JSON(status, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -211,7 +207,7 @@ func UpdateStudentFingerprintsHandler(app *services.App) gin.HandlerFunc {
 
 			rightTemplate, err := app.ResolveStoredFingerprintTemplate(rightPNG)
 			if err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Huella derecha invalida: " + err.Error()})
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Huella derecha inválida: " + err.Error()})
 				return
 			}
 
@@ -242,7 +238,7 @@ func UpdateStudentFingerprintsHandler(app *services.App) gin.HandlerFunc {
 
 			leftTemplate, err := app.ResolveStoredFingerprintTemplate(leftPNG)
 			if err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Huella izquierda invalida: " + err.Error()})
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Huella izquierda inválida: " + err.Error()})
 				return
 			}
 
@@ -286,7 +282,7 @@ func IdentifyAttendanceHandler(app *services.App) gin.HandlerFunc {
 		}
 
 		if req.IDCurso <= 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "id_curso invalido"})
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "id_curso inválido"})
 			return
 		}
 

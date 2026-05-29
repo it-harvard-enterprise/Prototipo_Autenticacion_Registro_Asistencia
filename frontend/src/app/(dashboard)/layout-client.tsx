@@ -3,20 +3,23 @@
 import { useState } from "react";
 import { Menu } from "lucide-react";
 import { Sidebar } from "@/components/sidebar";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { DigitalPersonaFingerprintProvider } from "@/lib/biometrics/digitalpersona";
+import { ResolvedRole } from "@/lib/auth/resolved-access";
 
 interface DashboardLayoutClientProps {
   children: React.ReactNode;
   userName?: string;
   userEmail?: string;
+  userRole: ResolvedRole;
 }
 
 export function DashboardLayoutClient({
   children,
   userName,
   userEmail,
+  userRole,
 }: DashboardLayoutClientProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -25,7 +28,11 @@ export function DashboardLayoutClient({
       <div className="flex h-screen bg-gray-100 overflow-hidden">
         {/* Desktop Sidebar */}
         <aside className="hidden md:flex shrink-0">
-          <Sidebar userName={userName} userEmail={userEmail} />
+          <Sidebar
+            userName={userName}
+            userEmail={userEmail}
+            userRole={userRole}
+          />
         </aside>
 
         {/* Mobile sidebar via Sheet */}
@@ -34,6 +41,7 @@ export function DashboardLayoutClient({
             <Sidebar
               userName={userName}
               userEmail={userEmail}
+              userRole={userRole}
               onClose={() => setMobileOpen(false)}
             />
           </SheetContent>

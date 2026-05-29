@@ -1,16 +1,11 @@
-import { createClient } from "@/lib/supabase/server";
+import { getProfessors } from "@/app/actions/professors";
 import { NewProfessorButton } from "@/components/new-professor-button";
 import { DetailLookup } from "@/components/detail-lookup";
 import { ProfessorsTable } from "@/components/professors-table";
 import { Professor } from "@/lib/types";
 
 export default async function ProfessorsPage() {
-  const supabase = await createClient();
-
-  const { data: professors, error } = await supabase
-    .from("profesores")
-    .select("*")
-    .order("apellidos", { ascending: true });
+  const result = await getProfessors();
 
   return (
     <div className="space-y-6">
@@ -26,14 +21,14 @@ export default async function ProfessorsPage() {
 
       <DetailLookup type="professor" />
 
-      {error ? (
+      {!result.success ? (
         <div className="rounded-md bg-red-50 border border-red-200 p-4">
           <p className="text-sm text-red-700">
-            Error al cargar los profesores: {error.message}
+            Error al cargar los profesores: {result.error}
           </p>
         </div>
       ) : (
-        <ProfessorsTable professors={(professors ?? []) as Professor[]} />
+        <ProfessorsTable professors={(result.data ?? []) as Professor[]} />
       )}
     </div>
   );

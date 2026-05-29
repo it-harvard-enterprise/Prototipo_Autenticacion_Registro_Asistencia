@@ -47,6 +47,12 @@ const passwordSchema = z
 
 type PasswordFormValues = z.infer<typeof passwordSchema>;
 
+type AuthApiResponse = {
+  success: boolean;
+  data?: Record<string, unknown>;
+  error?: string;
+};
+
 function AcceptInvitationInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -57,6 +63,8 @@ function AcceptInvitationInner() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isInviteContextValid, setIsInviteContextValid] = useState(true);
   const [success, setSuccess] = useState(false);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [userMetadata, setUserMetadata] = useState<Record<string, unknown>>({});
 
   const form = useForm<PasswordFormValues>({
     resolver: zodResolver(passwordSchema),
@@ -79,33 +87,52 @@ function AcceptInvitationInner() {
       );
     }, 10000);
 
-    const getUser = async () => {
+    const getSessionUser = async () => {
       try {
         const supabase = createClient();
         const {
-          data: { user },
-          error: getUserError,
-        } = await supabase.auth.getUser();
+          data: { session },
+        } = await supabase.auth.getSession();
 
         if (cancelled) {
           return;
         }
 
-        if (getUserError) {
+        const currentAccessToken = session?.access_token?.trim() ?? "";
+        if (!currentAccessToken) {
           setIsInviteContextValid(false);
-          setError(getUserError.message || "No fue posible validar la sesión.");
-          return;
-        }
-
-        if (!user) {
-          setIsInviteContextValid(false);
+          setUserEmail(null);
           setError(
             "Sesión no válida. Por favor intenta con el enlace de la invitación nuevamente.",
           );
           return;
         }
 
-        const activeEmail = user.email?.trim() ?? "";
+        const response = await fetch("/api/auth/session-user", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ access_token: currentAccessToken }),
+        });
+
+        const payload = (await response
+          .json()
+          .catch(() => null)) as AuthApiResponse | null;
+        if (!response.ok || !payload?.success || !payload.data) {
+          setIsInviteContextValid(false);
+          setUserEmail(null);
+          setError(
+            payload?.error || "No fue posible validar la sesión de invitación.",
+          );
+          return;
+        }
+
+        const activeEmail = String(payload.data.email ?? "").trim();
+        const metadata =
+          (payload.data.user_metadata as Record<string, unknown> | undefined) ??
+          {};
+
         if (
           isInviteFlow &&
           invitedEmail &&
@@ -118,10 +145,19 @@ function AcceptInvitationInner() {
             "La sesión activa no corresponde a esta invitación. Cerramos la sesión por seguridad; abre de nuevo el enlace de invitación.",
           );
 
-          void supabase.auth.signOut().catch(() => undefined);
+          await fetch("/api/auth/sign-out", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ access_token: currentAccessToken }),
+          }).catch(() => undefined);
+          await supabase.auth.signOut().catch(() => undefined);
           return;
         }
 
+        setAccessToken(currentAccessToken);
+        setUserMetadata(metadata);
         setIsInviteContextValid(true);
         setUserEmail(activeEmail || invitedEmail || null);
       } catch (unexpectedError) {
@@ -142,7 +178,7 @@ function AcceptInvitationInner() {
       }
     };
 
-    getUser();
+    getSessionUser();
 
     return () => {
       cancelled = true;
@@ -162,25 +198,48 @@ function AcceptInvitationInner() {
     setError(null);
 
     try {
-      const supabase = createClient();
-
-      const {
-        data: { user },
-        error: getUserError,
-      } = await supabase.auth.getUser();
-
-      if (getUserError || !user) {
+      const currentAccessToken = accessToken?.trim() ?? "";
+      if (!currentAccessToken) {
         setIsInviteContextValid(false);
         setUserEmail(null);
         setError(
-          getUserError?.message ||
+          "No se pudo validar la sesión de invitación. Abre nuevamente el enlace recibido por correo.",
+        );
+        setIsLoading(false);
+        return;
+      }
+
+      const sessionUserResponse = await fetch("/api/auth/session-user", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ access_token: currentAccessToken }),
+      });
+      const sessionUserPayload = (await sessionUserResponse
+        .json()
+        .catch(() => null)) as AuthApiResponse | null;
+      if (
+        !sessionUserResponse.ok ||
+        !sessionUserPayload?.success ||
+        !sessionUserPayload.data
+      ) {
+        setIsInviteContextValid(false);
+        setUserEmail(null);
+        setError(
+          sessionUserPayload?.error ||
             "No se pudo validar la sesión de invitación. Abre nuevamente el enlace recibido por correo.",
         );
         setIsLoading(false);
         return;
       }
 
-      const activeEmail = user.email?.trim() ?? "";
+      const metadata =
+        (sessionUserPayload.data.user_metadata as
+          | Record<string, unknown>
+          | undefined) ?? userMetadata;
+
+      const activeEmail = String(sessionUserPayload.data.email ?? "").trim();
       if (
         isInviteFlow &&
         invitedEmail &&
@@ -192,19 +251,41 @@ function AcceptInvitationInner() {
         setError(
           "El usuario autenticado no coincide con la invitación. Por seguridad no se puede cambiar la contraseña.",
         );
-        void supabase.auth.signOut().catch(() => undefined);
+        const supabase = createClient();
+        await fetch("/api/auth/sign-out", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ access_token: currentAccessToken }),
+        }).catch(() => undefined);
+        await supabase.auth.signOut().catch(() => undefined);
         setIsLoading(false);
         return;
       }
 
       setUserEmail(activeEmail || invitedEmail || null);
 
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: values.password,
+      const updateResponse = await fetch("/api/auth/update-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          access_token: currentAccessToken,
+          password: values.password,
+          data: {
+            ...metadata,
+            must_change_password: false,
+          },
+        }),
       });
+      const updatePayload = (await updateResponse
+        .json()
+        .catch(() => null)) as AuthApiResponse | null;
 
-      if (updateError) {
-        setError(updateError.message || "Error al actualizar la contraseña");
+      if (!updateResponse.ok || !updatePayload?.success) {
+        setError(updatePayload?.error || "Error al actualizar la contraseña");
         setIsLoading(false);
         return;
       }
@@ -214,6 +295,15 @@ function AcceptInvitationInner() {
 
       // Redirect to login or dashboard after a short delay
       setTimeout(() => {
+        const supabase = createClient();
+        void fetch("/api/auth/sign-out", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ access_token: currentAccessToken }),
+        }).catch(() => undefined);
+        void supabase.auth.signOut().catch(() => undefined);
         router.push("/login");
       }, 2000);
     } catch (err) {

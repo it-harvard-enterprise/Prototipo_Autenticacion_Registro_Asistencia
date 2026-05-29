@@ -1,11 +1,9 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
-import { ensureApprovedAdmin } from "@/lib/auth/approved-admin";
-import {
-  biometricBackendConfigHint,
-  resolveBiometricBackendBaseUrl,
-} from "@/lib/biometric-backend";
+import { ensureApprovedRoles } from "@/lib/auth/approved-admin";
+import { resolveCurrentUserAccess } from "@/lib/auth/resolved-access";
+import { callBackend } from "@/lib/backend/server-api";
+import { toAppErrorMessage } from "@/lib/error-messages";
 
 type Saldo = "cancelado" | "debe" | null;
 type MetodoPago =
@@ -29,6 +27,7 @@ export interface AttendanceStudentRow {
   saldo: Saldo;
   metodo_pago: MetodoPago;
   marcado_en: string | null;
+  clases_adelantadas?: number;
 }
 
 export interface AttendanceSaveRow {
@@ -53,11 +52,22 @@ export interface AttendanceExportRow {
   metodo_pago: MetodoPago;
 }
 
+export interface AttendanceDateOption {
+  date: string;
+}
+
 interface FingerprintBackendResponse {
   success: boolean;
-  numero_identificacion?: string;
+  numero_identificacion?: string | null;
   confidence?: number;
   error?: string;
+}
+
+interface BackendResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  exists?: boolean;
 }
 
 export interface FingerprintAttendanceMatch {
@@ -69,39 +79,27 @@ export interface FingerprintAttendanceMatch {
   error?: string;
 }
 
-function getBogotaDayBounds(date: string) {
-  const start = new Date(`${date}T00:00:00.000-05:00`);
-  const end = new Date(start);
-  end.setUTCDate(end.getUTCDate() + 1);
-  return {
-    startIso: start.toISOString(),
-    endIso: end.toISOString(),
-  };
+function toErrorMessage(error: unknown): string {
+  return toAppErrorMessage(error, "Error desconocido");
 }
 
-function getBogotaTimestampForDate(date: string): string {
-  const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Bogota",
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-
-  const parts = formatter.formatToParts(new Date());
-  const hour = parts.find((part) => part.type === "hour")?.value ?? "00";
-  const minute = parts.find((part) => part.type === "minute")?.value ?? "00";
-  const second = parts.find((part) => part.type === "second")?.value ?? "00";
-
-  // Persist explicit Colombia offset for consistency across deployments.
-  return `${date}T${hour}:${minute}:${second}.000-05:00`;
+function normalizeAttendanceRows(
+  rows: AttendanceSaveRow[],
+): AttendanceSaveRow[] {
+  return rows
+    .map((row) => ({
+      ...row,
+      numero_identificacion: row.numero_identificacion.trim().toUpperCase(),
+      marcado_en: row.marcado_en ?? null,
+    }))
+    .filter((row) => row.numero_identificacion.length > 0);
 }
 
 export async function identifyStudentByFingerprintForAttendance(params: {
   idCurso: number;
   fingerprintTemplate: string;
 }): Promise<FingerprintAttendanceMatch> {
-  const approval = await ensureApprovedAdmin();
+  const approval = await ensureApprovedRoles(["administrador", "profesor"]);
   if (!approval.ok) {
     return {
       success: false,
@@ -110,51 +108,18 @@ export async function identifyStudentByFingerprintForAttendance(params: {
     };
   }
 
-  const backendUrl = resolveBiometricBackendBaseUrl();
-
-  if (!backendUrl) {
-    return {
-      success: false,
-      matched: false,
-      error: `No se ha configurado la URL del backend biometrico. ${biometricBackendConfigHint()}`,
-    };
-  }
-
-  const backendAccessKey = process.env.BIOMETRIC_BACKEND_ACCESS_KEY?.trim();
-  const frontendOrigin =
-    process.env.FRONTEND_ORIGIN?.split(",")[0]?.trim() ||
-    "http://localhost:3000";
-
   try {
-    const response = await fetch(`${backendUrl}/api/attendance/identify`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Frontend-Origin": frontendOrigin,
-        ...(backendAccessKey
-          ? {
-              "X-Backend-Access-Key": backendAccessKey,
-            }
-          : {}),
+    const payload = await callBackend<FingerprintBackendResponse>(
+      "/api/attendance/identify",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          id_curso: params.idCurso,
+          fingerprint_template: params.fingerprintTemplate,
+        }),
       },
-      body: JSON.stringify({
-        id_curso: params.idCurso,
-        fingerprint_template: params.fingerprintTemplate,
-      }),
-      cache: "no-store",
-      signal: AbortSignal.timeout(15000),
-    });
+    );
 
-    if (!response.ok) {
-      return {
-        success: false,
-        matched: false,
-        source: "backend",
-        error: `Error del backend biometrico: ${response.status}`,
-      };
-    }
-
-    const payload = (await response.json()) as FingerprintBackendResponse;
     if (!payload.success) {
       return {
         success: false,
@@ -181,11 +146,12 @@ export async function identifyStudentByFingerprintForAttendance(params: {
       confidence: payload.confidence,
       source: "backend",
     };
-  } catch {
+  } catch (error) {
     return {
       success: false,
       matched: false,
-      error: `No fue posible conectar con el backend biometrico configurado (${backendUrl})`,
+      source: "backend",
+      error: toErrorMessage(error),
     };
   }
 }
@@ -195,23 +161,27 @@ export async function getCourseOptions(): Promise<{
   error?: string;
   data?: CourseOption[];
 }> {
-  const approval = await ensureApprovedAdmin();
+  const approval = await ensureApprovedRoles(["administrador", "profesor"]);
   if (!approval.ok) {
     return { success: false, error: approval.error };
   }
 
-  const supabase = await createClient();
+  try {
+    const payload = await callBackend<BackendResponse<CourseOption[]>>(
+      "/api/courses/options",
+      {
+        method: "GET",
+      },
+    );
 
-  const { data, error } = await supabase
-    .from("cursos")
-    .select("id_curso, nombre_curso")
-    .order("id_curso", { ascending: true });
+    if (!payload.success) {
+      return { success: false, error: payload.error || "Error desconocido" };
+    }
 
-  if (error) {
-    return { success: false, error: error.message };
+    return { success: true, data: payload.data ?? [] };
+  } catch (error) {
+    return { success: false, error: toErrorMessage(error) };
   }
-
-  return { success: true, data: (data ?? []) as CourseOption[] };
 }
 
 export async function getAttendanceRosterByCourseAndDate(
@@ -222,86 +192,32 @@ export async function getAttendanceRosterByCourseAndDate(
   error?: string;
   data?: AttendanceStudentRow[];
 }> {
-  const approval = await ensureApprovedAdmin();
+  const approval = await ensureApprovedRoles(["administrador", "profesor"]);
   if (!approval.ok) {
     return { success: false, error: approval.error };
   }
 
-  const supabase = await createClient();
-
-  const { startIso, endIso } = getBogotaDayBounds(date);
-
-  const { data: enrolledStudents, error: enrolledError } = await supabase
-    .from("cursos_x_estudiantes")
-    .select(
-      "numero_identificacion, estudiantes(numero_identificacion, nombres, apellidos)",
-    )
-    .eq("id_curso", idCurso)
-    .order("numero_identificacion", { ascending: true });
-
-  if (enrolledError) {
-    return { success: false, error: enrolledError.message };
-  }
-
-  const identifiers = (enrolledStudents ?? [])
-    .map((item) => item.numero_identificacion)
-    .filter(Boolean);
-
-  if (identifiers.length === 0) {
-    return { success: true, data: [] };
-  }
-
-  const { data: attendanceRows, error: attendanceError } = await supabase
-    .from("registro_asistencia")
-    .select("numero_identificacion, asistio, saldo, metodo_pago, fecha")
-    .eq("id_curso", idCurso)
-    .in("numero_identificacion", identifiers)
-    .gte("fecha", startIso)
-    .lt("fecha", endIso);
-
-  if (attendanceError) {
-    return { success: false, error: attendanceError.message };
-  }
-
-  const attendanceByStudent = new Map<
-    string,
-    {
-      asistio: boolean;
-      saldo: Saldo;
-      metodo_pago: MetodoPago;
-      marcado_en: string;
-    }
-  >();
-
-  for (const row of attendanceRows ?? []) {
-    attendanceByStudent.set(row.numero_identificacion, {
-      asistio: row.asistio,
-      saldo: row.saldo as Saldo,
-      metodo_pago: row.metodo_pago as MetodoPago,
-      marcado_en: row.fecha,
+  try {
+    const query = new URLSearchParams({
+      id_curso: String(idCurso),
+      date,
     });
+
+    const payload = await callBackend<BackendResponse<AttendanceStudentRow[]>>(
+      `/api/attendance/roster?${query.toString()}`,
+      {
+        method: "GET",
+      },
+    );
+
+    if (!payload.success) {
+      return { success: false, error: payload.error || "Error desconocido" };
+    }
+
+    return { success: true, data: payload.data ?? [] };
+  } catch (error) {
+    return { success: false, error: toErrorMessage(error) };
   }
-
-  const normalizedRows: AttendanceStudentRow[] = (enrolledStudents ?? []).map(
-    (item) => {
-      const student = Array.isArray(item.estudiantes)
-        ? item.estudiantes[0]
-        : item.estudiantes;
-      const attendance = attendanceByStudent.get(item.numero_identificacion);
-
-      return {
-        numero_identificacion: item.numero_identificacion,
-        nombres: student?.nombres ?? "",
-        apellidos: student?.apellidos ?? "",
-        asistio: attendance?.asistio ?? false,
-        saldo: attendance?.saldo ?? null,
-        metodo_pago: attendance?.metodo_pago ?? null,
-        marcado_en: attendance?.marcado_en ?? null,
-      };
-    },
-  );
-
-  return { success: true, data: normalizedRows };
 }
 
 export async function saveAttendanceForCourseAndDate(params: {
@@ -310,204 +226,75 @@ export async function saveAttendanceForCourseAndDate(params: {
   rows: AttendanceSaveRow[];
   saveTimestampIso?: string;
 }): Promise<{ success: boolean; error?: string; savedCount?: number }> {
-  const approval = await ensureApprovedAdmin();
+  const approval = await ensureApprovedRoles(["administrador", "profesor"]);
   if (!approval.ok) {
     return { success: false, error: approval.error };
   }
 
-  const supabase = await createClient();
-  const manualSaveTimestamp = params.saveTimestampIso?.trim() || null;
-
-  const normalizedRows = params.rows
-    .map((row) => {
-      const numero_identificacion = row.numero_identificacion.trim();
-
-      if (!row.asistio) {
-        return {
-          numero_identificacion,
-          asistio: false,
-          saldo: null as Saldo,
-          metodo_pago: null as MetodoPago,
-          marcado_en: null as string | null,
-        };
-      }
-
-      // For autosave, keep DB-valid intermediate states while the user completes fields.
-      if (row.saldo === "debe") {
-        return {
-          numero_identificacion,
-          asistio: true,
-          saldo: "debe" as Saldo,
-          metodo_pago: null as MetodoPago,
-          marcado_en: row.marcado_en ?? null,
-        };
-      }
-
-      if (row.saldo === "cancelado" && row.metodo_pago) {
-        return {
-          numero_identificacion,
-          asistio: true,
-          saldo: "cancelado" as Saldo,
-          metodo_pago: row.metodo_pago,
-          marcado_en: row.marcado_en ?? null,
-        };
-      }
-
-      // If saldo is still incomplete (or cancelado without metodo), persist as pending.
-      return {
-        numero_identificacion,
-        asistio: true,
-        saldo: null as Saldo,
-        metodo_pago: null as MetodoPago,
-        marcado_en: row.marcado_en ?? null,
-      };
-    })
-    .filter((row) => row.numero_identificacion);
-
+  const normalizedRows = normalizeAttendanceRows(params.rows);
   if (normalizedRows.length === 0) {
     return { success: false, error: "No hay estudiantes para registrar" };
   }
 
-  const { startIso, endIso } = getBogotaDayBounds(params.date);
+  const access = await resolveCurrentUserAccess();
+  const registradoPor = access.user?.id?.trim() || null;
 
-  const studentIds = normalizedRows.map((row) => row.numero_identificacion);
-
-  const { data: existingRows, error: existingError } = await supabase
-    .from("registro_asistencia")
-    .select("id, numero_identificacion, asistio, fecha")
-    .eq("id_curso", params.idCurso)
-    .in("numero_identificacion", studentIds)
-    .gte("fecha", startIso)
-    .lt("fecha", endIso);
-
-  if (existingError) {
-    return { success: false, error: existingError.message };
-  }
-
-  const existingByStudent = new Map<
-    string,
-    { id: number; asistio: boolean; fecha: string }
-  >();
-  for (const row of existingRows ?? []) {
-    existingByStudent.set(row.numero_identificacion, {
-      id: row.id,
-      asistio: row.asistio,
-      fecha: row.fecha,
-    });
-  }
-
-  const toUpdate = normalizedRows.filter((row) =>
-    existingByStudent.has(row.numero_identificacion),
-  );
-  const toInsert = normalizedRows.filter(
-    (row) => !existingByStudent.has(row.numero_identificacion),
-  );
-
-  for (const row of toUpdate) {
-    const existing = existingByStudent.get(row.numero_identificacion);
-    if (!existing) continue;
-
-    const fechaMarcado = row.asistio
-      ? existing.asistio
-        ? existing.fecha
-        : (row.marcado_en ?? getBogotaTimestampForDate(params.date))
-      : existing.fecha;
-
-    const payload: {
-      fecha: string;
-      asistio: boolean;
-      saldo: Saldo;
-      metodo_pago: MetodoPago;
-      created_at?: string;
-    } = {
-      fecha: fechaMarcado,
-      asistio: row.asistio,
-      saldo: row.asistio ? row.saldo : null,
-      metodo_pago:
-        row.asistio && row.saldo === "cancelado" ? row.metodo_pago : null,
-    };
-
-    if (!row.asistio && manualSaveTimestamp) {
-      payload.created_at = manualSaveTimestamp;
-    }
-
-    const { error } = await supabase
-      .from("registro_asistencia")
-      .update(payload)
-      .eq("id", existing.id);
-
-    if (error) {
-      return { success: false, error: error.message };
-    }
-  }
-
-  if (toInsert.length > 0) {
-    const payload = toInsert.map((row) => {
-      const insertRow: {
-        numero_identificacion: string;
-        id_curso: number;
-        fecha: string;
-        asistio: boolean;
-        saldo: Saldo;
-        metodo_pago: MetodoPago;
-        created_at?: string;
-      } = {
-        numero_identificacion: row.numero_identificacion,
+  try {
+    const payload = await callBackend<
+      BackendResponse<{
+        savedCount?: number;
+      }>
+    >("/api/attendance/save", {
+      method: "POST",
+      body: JSON.stringify({
         id_curso: params.idCurso,
-        fecha: row.asistio
-          ? (row.marcado_en ?? getBogotaTimestampForDate(params.date))
-          : startIso,
-        asistio: row.asistio,
-        saldo: row.asistio ? row.saldo : null,
-        metodo_pago:
-          row.asistio && row.saldo === "cancelado" ? row.metodo_pago : null,
-      };
-
-      if (!row.asistio && manualSaveTimestamp) {
-        insertRow.created_at = manualSaveTimestamp;
-      }
-
-      return insertRow;
+        date: params.date,
+        rows: normalizedRows,
+        save_timestamp_iso: params.saveTimestampIso?.trim() || null,
+        registrado_por: registradoPor,
+      }),
     });
 
-    const { error } = await supabase
-      .from("registro_asistencia")
-      .upsert(payload, {
-        onConflict: "numero_identificacion,id_curso,fecha",
-      });
-
-    if (error) {
-      return { success: false, error: error.message };
+    if (!payload.success) {
+      return { success: false, error: payload.error || "Error desconocido" };
     }
-  }
 
-  return { success: true, savedCount: normalizedRows.length };
+    return { success: true, savedCount: payload.data?.savedCount ?? 0 };
+  } catch (error) {
+    return { success: false, error: toErrorMessage(error) };
+  }
 }
 
 export async function deleteAttendanceForCourseAndDate(params: {
   idCurso: number;
   date: string;
 }): Promise<{ success: boolean; error?: string; deletedCount?: number }> {
-  const approval = await ensureApprovedAdmin();
+  const approval = await ensureApprovedRoles(["administrador", "profesor"]);
   if (!approval.ok) {
     return { success: false, error: approval.error };
   }
 
-  const supabase = await createClient();
-  const { startIso, endIso } = getBogotaDayBounds(params.date);
+  try {
+    const payload = await callBackend<
+      BackendResponse<{
+        deletedCount?: number;
+      }>
+    >("/api/attendance/delete", {
+      method: "POST",
+      body: JSON.stringify({
+        id_curso: params.idCurso,
+        date: params.date,
+      }),
+    });
 
-  const { error, count } = await supabase
-    .from("registro_asistencia")
-    .delete({ count: "exact" })
-    .eq("id_curso", params.idCurso)
-    .gte("fecha", startIso)
-    .lt("fecha", endIso);
+    if (!payload.success) {
+      return { success: false, error: payload.error || "Error desconocido" };
+    }
 
-  if (error) {
-    return { success: false, error: error.message };
+    return { success: true, deletedCount: payload.data?.deletedCount ?? 0 };
+  } catch (error) {
+    return { success: false, error: toErrorMessage(error) };
   }
-
-  return { success: true, deletedCount: count ?? 0 };
 }
 
 export async function getAttendanceExportByCourseAndDate(
@@ -518,48 +305,69 @@ export async function getAttendanceExportByCourseAndDate(
   error?: string;
   data?: AttendanceExportRow[];
 }> {
-  const approval = await ensureApprovedAdmin();
+  const approval = await ensureApprovedRoles(["administrador", "profesor"]);
   if (!approval.ok) {
     return { success: false, error: approval.error };
   }
 
-  const supabase = await createClient();
-  const { startIso, endIso } = getBogotaDayBounds(date);
+  try {
+    const query = new URLSearchParams({
+      id_curso: String(idCurso),
+      date,
+    });
 
-  const { data, error } = await supabase
-    .from("registro_asistencia")
-    .select(
-      "id, id_curso, numero_identificacion, fecha, asistio, saldo, metodo_pago, estudiantes(tipo_identificacion, nombres, apellidos), cursos(nombre_curso)",
-    )
-    .eq("id_curso", idCurso)
-    .gte("fecha", startIso)
-    .lt("fecha", endIso)
-    .order("numero_identificacion", { ascending: true });
+    const payload = await callBackend<BackendResponse<AttendanceExportRow[]>>(
+      `/api/attendance/export?${query.toString()}`,
+      {
+        method: "GET",
+      },
+    );
 
-  if (error) {
-    return { success: false, error: error.message };
+    if (!payload.success) {
+      return { success: false, error: payload.error || "Error desconocido" };
+    }
+
+    return { success: true, data: payload.data ?? [] };
+  } catch (error) {
+    return { success: false, error: toErrorMessage(error) };
+  }
+}
+
+export async function getAttendanceDatesByCourse(idCurso: number): Promise<{
+  success: boolean;
+  error?: string;
+  data?: AttendanceDateOption[];
+}> {
+  const approval = await ensureApprovedRoles(["administrador", "profesor"]);
+  if (!approval.ok) {
+    return { success: false, error: approval.error };
   }
 
-  const rows: AttendanceExportRow[] = (data ?? []).map((row) => {
-    const student = Array.isArray(row.estudiantes)
-      ? row.estudiantes[0]
-      : row.estudiantes;
-    const course = Array.isArray(row.cursos) ? row.cursos[0] : row.cursos;
+  if (!Number.isInteger(idCurso) || idCurso <= 0) {
+    return { success: false, error: "id_curso inválido" };
+  }
+
+  try {
+    const query = new URLSearchParams({
+      id_curso: String(idCurso),
+    });
+
+    const payload = await callBackend<BackendResponse<string[]>>(
+      `/api/attendance/dates?${query.toString()}`,
+      {
+        method: "GET",
+      },
+    );
+
+    if (!payload.success) {
+      return { success: false, error: payload.error || "Error desconocido" };
+    }
 
     return {
-      id: row.id,
-      id_curso: row.id_curso,
-      nombre_curso: course?.nombre_curso ?? "",
-      tipo_identificacion: student?.tipo_identificacion ?? null,
-      numero_identificacion: row.numero_identificacion,
-      nombres: student?.nombres ?? "",
-      apellidos: student?.apellidos ?? "",
-      fecha: row.fecha,
-      asistio: row.asistio,
-      saldo: row.saldo as Saldo,
-      metodo_pago: row.metodo_pago as MetodoPago,
+      success: true,
+      data: (payload.data ?? []).map((date) => ({ date })),
     };
-  });
-
-  return { success: true, data: rows };
+  } catch (error) {
+    return { success: false, error: toErrorMessage(error) };
+  }
 }

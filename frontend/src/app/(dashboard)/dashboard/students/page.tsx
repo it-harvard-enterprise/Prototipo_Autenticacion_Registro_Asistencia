@@ -1,19 +1,14 @@
-import Link from "next/link";
-import { Plus } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
-import { Button } from "@/components/ui/button";
+import { getCourses } from "@/app/actions/courses";
+import { getStudents } from "@/app/actions/students";
 import { NewStudentButton } from "@/components/new-student-button";
-import { DetailLookup } from "@/components/detail-lookup";
-import { StudentsTable } from "@/components/students-table";
-import { Student } from "@/lib/types";
+import { StudentsDashboardContent } from "@/components/students-dashboard-content";
+import { Course, Student } from "@/lib/types";
 
 export default async function StudentsPage() {
-  const supabase = await createClient();
-
-  const { data: students, error } = await supabase
-    .from("estudiantes")
-    .select("*")
-    .order("apellidos", { ascending: true });
+  const [studentsResult, coursesResult] = await Promise.all([
+    getStudents(),
+    getCourses(),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -27,16 +22,17 @@ export default async function StudentsPage() {
         <NewStudentButton />
       </div>
 
-      <DetailLookup type="student" />
-
-      {error ? (
+      {!studentsResult.success ? (
         <div className="rounded-md bg-red-50 border border-red-200 p-4">
           <p className="text-sm text-red-700">
-            Error al cargar los estudiantes: {error.message}
+            Error al cargar los estudiantes: {studentsResult.error}
           </p>
         </div>
       ) : (
-        <StudentsTable students={(students ?? []) as Student[]} />
+        <StudentsDashboardContent
+          students={(studentsResult.data ?? []) as Student[]}
+          courses={(coursesResult.data ?? []) as Course[]}
+        />
       )}
     </div>
   );

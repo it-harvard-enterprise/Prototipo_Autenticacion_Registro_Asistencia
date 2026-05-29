@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
@@ -21,6 +21,7 @@ import {
   encryptAESGCM,
   type EncryptedPayload,
 } from "@/lib/crypto/aes-gcm";
+import { translateErrorMessage } from "@/lib/error-messages";
 import {
   IDENTIFICATION_TYPE_OPTIONS,
   IDENTIFICATION_TYPE_VALUES,
@@ -29,7 +30,6 @@ import {
   COLOMBIA_EPS_OPTIONS,
   EPS_OTHER_OPTION,
   PAYMENT_METHOD_OPTIONS,
-  STUDENT_COORDINATOR_OPTIONS,
   STUDENT_GRADE_OPTIONS,
 } from "@/lib/student-options";
 import { Button } from "@/components/ui/button";
@@ -74,7 +74,11 @@ function formatCurrencyInput(value: string): string {
   return currencyFormatter.format(parsed);
 }
 
-const TEMP_FINGERPRINT_PLACEHOLDER = "PENDING_FINGERPRINT";
+interface AdminCoordinator {
+  id: string;
+  nombres: string;
+  apellidos: string;
+}
 
 const studentSchema = z
   .object({
@@ -105,9 +109,9 @@ const studentSchema = z
       .max(20),
     eps_select: z.string().min(1, "Debe seleccionar una EPS"),
     eps_otra: z.string().optional(),
-    coordinador_academico: z.enum(STUDENT_COORDINATOR_OPTIONS, {
-      message: "Debe seleccionar un coordinador académico",
-    }),
+    coordinador_academico: z
+      .string()
+      .min(1, "Debe seleccionar un coordinador académico"),
     programa: z.string().min(1, "El programa es requerido").max(100),
     fecha_inicio: z.string().min(1, "La fecha de inicio es requerida"),
     fecha_matricula: z.string().min(1, "La fecha de matrícula es requerida"),
@@ -156,6 +160,8 @@ type StudentFormValues = z.input<typeof studentSchema>;
 export default function NewStudentPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [coordinatorOptions, setCoordinatorOptions] = useState<string[]>([]);
+  const [isLoadingCoordinators, setIsLoadingCoordinators] = useState(true);
   const [capturingSide, setCapturingSide] = useState<
     "huella_indice_derecho" | "huella_indice_izquierdo" | null
   >(null);
@@ -197,7 +203,7 @@ export default function NewStudentPage() {
       telefono_acudiente: "",
       eps_select: "NUEVA EPS",
       eps_otra: "",
-      coordinador_academico: "NICOL DELGADO",
+      coordinador_academico: "",
       huella_indice_derecho: "",
       huella_indice_izquierdo: "",
       programa: "",
@@ -214,6 +220,64 @@ export default function NewStudentPage() {
       // Keep this fire-and-forget on page load.
     });
   }, []);
+
+  // Sincronización automática: email = <cedula>@harvard.com.
+  // Se desactiva en cuanto el admin edite el email a mano y se
+  // reactiva si vuelve a dejarlo en blanco.
+  const userEditedEmailRef = useRef(false);
+  const watchedNumeroIdentificacion = form.watch("numero_identificacion");
+  useEffect(() => {
+    if (userEditedEmailRef.current) return;
+    const cedula = watchedNumeroIdentificacion?.trim() ?? "";
+    const autoEmail = cedula ? `${cedula}@harvard.com` : "";
+    if (form.getValues("email") !== autoEmail) {
+      form.setValue("email", autoEmail, { shouldValidate: false });
+    }
+  }, [watchedNumeroIdentificacion, form]);
+
+  useEffect(() => {
+    async function fetchCoordinators() {
+      setIsLoadingCoordinators(true);
+
+      try {
+        const res = await fetch("/api/admins", { method: "GET" });
+        const result = (await res.json().catch(() => null)) as {
+          success?: boolean;
+          data?: AdminCoordinator[];
+          error?: string;
+        } | null;
+
+        if (!res.ok || !result?.success) {
+          toast.error(
+            result?.error ?? "No fue posible cargar coordinadores académicos",
+          );
+          setCoordinatorOptions([]);
+          return;
+        }
+
+        const options = (result.data ?? [])
+          .map((admin) => `${admin.nombres ?? ""} ${admin.apellidos ?? ""}`)
+          .map((name) => name.trim())
+          .filter((name) => name.length > 0)
+          .sort((a, b) => a.localeCompare(b, "es"));
+
+        setCoordinatorOptions(options);
+
+        if (!form.getValues("coordinador_academico") && options.length > 0) {
+          form.setValue("coordinador_academico", options[0], {
+            shouldValidate: true,
+          });
+        }
+      } catch {
+        toast.error("No fue posible cargar coordinadores académicos");
+        setCoordinatorOptions([]);
+      } finally {
+        setIsLoadingCoordinators(false);
+      }
+    }
+
+    void fetchCoordinators();
+  }, [form]);
 
   async function onSubmit(values: StudentFormValues) {
     const epsValue =
@@ -232,17 +296,30 @@ export default function NewStudentPage() {
     setIsLoading(true);
 
     try {
-      // Derive encryption key from a static passphrase (in production, use KMS or secure key exchange)
-      const encryptionKey = await deriveKeyFromPassphrase(
-        "student-biometric-default-key",
-      );
+      const hasFingerprintSamples =
+        rightFingerprint.length > 0 || leftFingerprint.length > 0;
+      let rightEncrypted: EncryptedPayload | null = null;
+      let leftEncrypted: EncryptedPayload | null = null;
 
-      const rightEncrypted: EncryptedPayload | null = rightFingerprint
-        ? await encryptAESGCM(rightFingerprint, encryptionKey)
-        : null;
-      const leftEncrypted: EncryptedPayload | null = leftFingerprint
-        ? await encryptAESGCM(leftFingerprint, encryptionKey)
-        : null;
+      if (hasFingerprintSamples) {
+        const frontendPassphrase =
+          process.env.NEXT_PUBLIC_BIOMETRIC_PASSPHRASE_PNG?.trim() ?? "";
+        if (!frontendPassphrase) {
+          toast.error(
+            "Falta NEXT_PUBLIC_BIOMETRIC_PASSPHRASE_PNG en el entorno del frontend.",
+          );
+          setIsLoading(false);
+          return;
+        }
+
+        const encryptionKey = await deriveKeyFromPassphrase(frontendPassphrase);
+        rightEncrypted = rightFingerprint
+          ? await encryptAESGCM(rightFingerprint, encryptionKey)
+          : null;
+        leftEncrypted = leftFingerprint
+          ? await encryptAESGCM(leftFingerprint, encryptionKey)
+          : null;
+      }
 
       const res = await fetch(`/api/students/create`, {
         method: "POST",
@@ -284,16 +361,20 @@ export default function NewStudentPage() {
 
       if (res.ok && result?.success) {
         toast.success("Estudiante creado correctamente");
-        router.replace("/dashboard/students");
+        router.replace(
+          `/dashboard/students/${encodeURIComponent(values.numero_identificacion)}?autogenerate_pdf=1`,
+        );
       } else {
-        toast.error(result.error ?? "Error al crear el estudiante");
+        toast.error(
+          translateErrorMessage(result.error, "Error al crear el estudiante"),
+        );
         setIsLoading(false);
       }
     } catch (err) {
       toast.error(
         err instanceof Error
-          ? `Error de encriptación: ${err.message}`
-          : "Error desconocido durante encriptación",
+          ? `Error creando estudiante: ${translateErrorMessage(err.message)}`
+          : "Error desconocido creando estudiante",
       );
       setIsLoading(false);
     }
@@ -304,7 +385,7 @@ export default function NewStudentPage() {
   ) {
     if (!readerReady) {
       toast.error(
-        "El lector no esta listo. Verifique la conexion y el servicio de DigitalPersona.",
+        "El lector no está listo. Verifique la conexión y el servicio de DigitalPersona.",
       );
       return;
     }
@@ -457,6 +538,11 @@ export default function NewStudentPage() {
                           placeholder="estudiante@correo.com"
                           autoComplete="email"
                           {...field}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            userEditedEmailRef.current = value !== "";
+                            field.onChange(value);
+                          }}
                         />
                       </FormControl>
                       <FormMessage />
@@ -615,13 +701,24 @@ export default function NewStudentPage() {
                           onBlur={field.onBlur}
                           name={field.name}
                           ref={field.ref}
+                          disabled={isLoadingCoordinators}
                           className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
                         >
-                          {STUDENT_COORDINATOR_OPTIONS.map((coordinator) => (
-                            <option key={coordinator} value={coordinator}>
-                              {coordinator}
-                            </option>
-                          ))}
+                          {isLoadingCoordinators && (
+                            <option value="">Cargando coordinadores...</option>
+                          )}
+                          {!isLoadingCoordinators &&
+                            coordinatorOptions.map((coordinator) => (
+                              <option key={coordinator} value={coordinator}>
+                                {coordinator}
+                              </option>
+                            ))}
+                          {!isLoadingCoordinators &&
+                            coordinatorOptions.length === 0 && (
+                              <option value="">
+                                No hay administradores disponibles
+                              </option>
+                            )}
                         </select>
                       </FormControl>
                       <FormMessage />
@@ -792,11 +889,11 @@ export default function NewStudentPage() {
                       {deviceStatus}
                     </p>
                   </div>
-                  <div className="rounded-md border p-3 bg-white">
+                  <div className="rounded-md border p-3 bg-white h-[88px] flex flex-col">
                     <p className="text-[11px] uppercase tracking-wide text-gray-500">
                       Estado de captura
                     </p>
-                    <p className="text-sm mt-1 text-gray-700">
+                    <p className="text-sm mt-1 text-gray-700 flex-1 overflow-y-auto break-words leading-5 pr-1">
                       {captureStatus}
                     </p>
                   </div>

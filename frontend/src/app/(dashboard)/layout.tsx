@@ -27,7 +27,11 @@ export default async function DashboardLayout({
 
   const userEmail = user.email;
 
-  if (access.role !== "administrador") {
+  if (access.role === "administrador" && access.mustChangePassword) {
+    redirect("/reset-password?forced=1");
+  }
+
+  if (!access.role) {
     redirect("/welcome");
   }
 
@@ -36,7 +40,11 @@ export default async function DashboardLayout({
   }
 
   return (
-    <DashboardLayoutClient userName={userName} userEmail={userEmail}>
+    <DashboardLayoutClient
+      userName={userName}
+      userEmail={userEmail}
+      userRole={access.role}
+    >
       {children}
     </DashboardLayoutClient>
   );

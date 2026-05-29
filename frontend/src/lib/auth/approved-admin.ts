@@ -1,11 +1,19 @@
-import { resolveCurrentUserAccess } from "@/lib/auth/resolved-access";
+import {
+  resolveCurrentUserAccess,
+  type ResolvedRole,
+  type ResolvedAccess,
+} from "@/lib/auth/resolved-access";
 
 export const APPROVAL_REQUIRED_MESSAGE =
   "Su usuario administrador no está aprobado para acceder a esta funcionalidad.";
 
-export async function ensureApprovedAdmin(): Promise<{
+export async function ensureApprovedRoles(
+  allowedRoles: ResolvedRole[],
+  unauthorizedMessage = "No tiene permisos para esta funcionalidad.",
+): Promise<{
   ok: boolean;
   error?: string;
+  access?: ResolvedAccess;
 }> {
   const access = await resolveCurrentUserAccess();
 
@@ -16,17 +24,39 @@ export async function ensureApprovedAdmin(): Promise<{
     };
   }
 
-  if (access.role !== "administrador") {
+  if (!access.role || !allowedRoles.includes(access.role)) {
     return {
       ok: false,
-      error: "No tiene permisos de administrador.",
+      error: unauthorizedMessage,
     };
   }
 
   if (!access.approved) {
     return {
       ok: false,
-      error: APPROVAL_REQUIRED_MESSAGE,
+      error: "Su usuario no está aprobado para acceder a esta funcionalidad.",
+    };
+  }
+
+  return { ok: true, access };
+}
+
+export async function ensureApprovedAdmin(): Promise<{
+  ok: boolean;
+  error?: string;
+}> {
+  const approval = await ensureApprovedRoles(
+    ["administrador"],
+    "No tiene permisos de administrador.",
+  );
+  if (!approval.ok) {
+    return {
+      ok: false,
+      error:
+        approval.error ===
+        "Su usuario no está aprobado para acceder a esta funcionalidad."
+          ? APPROVAL_REQUIRED_MESSAGE
+          : approval.error,
     };
   }
 

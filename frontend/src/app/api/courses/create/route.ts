@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         success: false,
-        error: err instanceof Error ? err.message : "Unknown error",
+        error: err instanceof Error ? err.message : "Error desconocido",
       },
       { status: 500 },
     );

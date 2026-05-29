@@ -47,12 +47,21 @@ export interface Student {
     | "DAVIPLATA"
     | "OTRO";
   valor_apoyo_semanal: number;
+  clases_adelantadas?: number;
+  clases_adeudadas?: number;
+  total_pagado?: number;
+  deuda_actual?: number;
+  estado_pago?: "DEBE" | "ADELANTADO" | "AL_DIA" | string;
+  ultima_actualizacion_saldo?: string | null;
+  attended_count?: number;
   fingerprint_right?: string | null;
   fingerprint_left?: string | null;
   huella_indice_derecho: string | null;
   huella_indice_izquierdo: string | null;
   created_at: string;
   updated_at?: string;
+  perfil_usuario?: "activo" | "inactivo";
+  profile_id?: string | null;
 }
 
 export interface Professor {
@@ -70,6 +79,8 @@ export interface Professor {
   email: string;
   created_at: string;
   updated_at?: string;
+  perfil_usuario?: "activo" | "inactivo";
+  profile_id?: string | null;
 }
 
 export interface Course {
@@ -81,8 +92,8 @@ export interface Course {
   hora_inicio: string;
   hora_fin: string;
   salon: string | null;
-  fecha_inicio: string;
-  fecha_fin: string;
+  fecha_inicio?: string;
+  fecha_fin?: string;
   description?: string | null;
   schedule?: string | null;
   created_at: string;
