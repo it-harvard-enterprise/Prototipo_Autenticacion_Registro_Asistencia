@@ -1,4 +1,54 @@
-import { Facebook, Instagram, Youtube, Phone, Mail, MapPin } from "lucide-react";
+import { Phone, Mail, MapPin } from "lucide-react";
+
+// Lucide v1 dropped brand icons (Facebook / Instagram / YouTube) over
+// trademark concerns. To avoid adding a whole new dependency for three
+// icons we inline minimal monochrome SVGs that fit the same 16x16 slot.
+type BrandIconProps = { className?: string };
+
+function FacebookIcon({ className }: BrandIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      className={className}
+    >
+      <path d="M13.5 21v-7.5h2.5l.4-3h-2.9V8.6c0-.87.24-1.46 1.5-1.46h1.6V4.43c-.28-.04-1.24-.12-2.36-.12-2.34 0-3.94 1.43-3.94 4.05V10.5H7.7v3h2.6V21h3.2z" />
+    </svg>
+  );
+}
+
+function InstagramIcon({ className }: BrandIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+    >
+      <rect x="3" y="3" width="18" height="18" rx="5" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function YoutubeIcon({ className }: BrandIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      className={className}
+    >
+      <path d="M21.6 7.2c-.23-.87-.9-1.55-1.77-1.78C18.25 5 12 5 12 5s-6.25 0-7.83.42c-.87.23-1.55.91-1.77 1.78C2 8.78 2 12 2 12s0 3.22.4 4.8c.22.87.9 1.55 1.77 1.78C5.75 19 12 19 12 19s6.25 0 7.83-.42c.87-.23 1.55-.91 1.77-1.78.4-1.58.4-4.8.4-4.8s0-3.22-.4-4.8zM10 15V9l5 3-5 3z" />
+    </svg>
+  );
+}
 
 const quickLinks = [
   { label: "Inicio", href: "#inicio" },
@@ -12,9 +62,9 @@ const quickLinks = [
 ];
 
 const social = [
-  { icon: Facebook, href: "#", label: "Facebook" },
-  { icon: Instagram, href: "#", label: "Instagram" },
-  { icon: Youtube, href: "#", label: "YouTube" },
+  { icon: FacebookIcon, href: "#", label: "Facebook" },
+  { icon: InstagramIcon, href: "#", label: "Instagram" },
+  { icon: YoutubeIcon, href: "#", label: "YouTube" },
 ];
 
 export default function Footer() {
