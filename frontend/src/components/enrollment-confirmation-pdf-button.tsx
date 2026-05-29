@@ -170,6 +170,16 @@ export function EnrollmentConfirmationPdfButton({
       doc.text(valueText, x, rowY + valueOffset);
     });
 
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(107, 114, 128);
+    doc.text(
+      "Calle 19 #7-12 LINCOLN SOACHA Tel. 3013419462.",
+      pageWidth / 2,
+      pageHeight - 6,
+      { align: "center" },
+    );
+
     const safeType = subjectType.replace(/\s+/g, "-");
     doc.save(`confirmacion-matricula-${safeType}-${identification}.pdf`);
   }, [fields, identification, fullName, subjectType]);

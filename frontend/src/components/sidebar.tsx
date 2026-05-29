@@ -18,6 +18,7 @@ import {
   Shield,
   UserRound,
   CreditCard,
+  FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -99,6 +100,11 @@ const adminNavItems: NavItem[] = [
     href: "/dashboard/attendance-lists",
     icon: FolderOpen,
   },
+  {
+    label: "Calificaciones",
+    href: "/dashboard/grades",
+    icon: FileText,
+  },
 ];
 
 const studentNavItems: NavItem[] = [
@@ -151,6 +157,11 @@ const professorNavItems: NavItem[] = [
     label: "Tomar Asistencia",
     href: "/dashboard/attendance",
     icon: ClipboardList,
+  },
+  {
+    label: "Calificaciones",
+    href: "/dashboard/grades",
+    icon: FileText,
   },
 ];
 

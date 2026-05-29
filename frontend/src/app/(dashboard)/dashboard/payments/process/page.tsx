@@ -265,6 +265,16 @@ async function generatePaymentConfirmationPdf(params: {
     }
   }
 
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(107, 114, 128);
+  doc.text(
+    "Calle 19 #7-12 LINCOLN SOACHA Tel. 3013419462.",
+    pageWidth / 2,
+    doc.internal.pageSize.getHeight() - 6,
+    { align: "center" },
+  );
+
   const safeDate = paymentDateRaw.slice(0, 10).replaceAll("-", "");
   doc.save(
     `confirmacion-pago-${student.numero_identificacion}-${safeDate}.pdf`,
@@ -577,9 +587,7 @@ export default function ProcessPaymentPage() {
           {studentCourses.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">
-                  Cursos del estudiante
-                </CardTitle>
+                <CardTitle className="text-lg">Cursos del estudiante</CardTitle>
                 <CardDescription>
                   Estos cursos se incluirán también en el comprobante PDF.
                 </CardDescription>
