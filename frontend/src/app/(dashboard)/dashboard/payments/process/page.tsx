@@ -13,6 +13,10 @@ import {
   type PaymentMode,
   type PaymentReportRow,
 } from "@/app/actions/payments";
+import {
+  getStudentCoursesByNumero,
+  type StudentCourseInfo,
+} from "@/app/actions/students";
 import { PAYMENT_METHOD_OPTIONS } from "@/lib/student-options";
 import { Student } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -102,9 +106,18 @@ async function generatePaymentConfirmationPdf(params: {
   clases: number;
   valor: number;
   notas: string;
+  courses?: StudentCourseInfo[];
 }) {
-  const { student, payment, modalidad, metodoPago, clases, valor, notas } =
-    params;
+  const {
+    student,
+    payment,
+    modalidad,
+    metodoPago,
+    clases,
+    valor,
+    notas,
+    courses,
+  } = params;
 
   const paymentId = toStringOrNull(payment?.id) ?? "N/A";
   const paymentDateRaw =
@@ -117,6 +130,8 @@ async function generatePaymentConfirmationPdf(params: {
     toStringOrNull(payment?.tipo_pago) ?? resolvePaymentModeLabel(modalidad);
   const paymentValue = toNumber(payment?.valor) ?? valor;
   const paymentNotes = (toStringOrNull(payment?.notas) ?? notas) || "N/A";
+  const registradoPorNombre =
+    toStringOrNull(payment?.registrado_por_nombre) ?? "N/A";
 
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -201,6 +216,7 @@ async function generatePaymentConfirmationPdf(params: {
     ["Método de pago", paymentMethod],
     ["Clases registradas", String(clases)],
     ["Valor pagado", formatCurrency(paymentValue)],
+    ["Registrado por", registradoPorNombre],
     ["Grado", student.grado ?? "N/A"],
     ["No. matrícula", student.no_matricula ?? "N/A"],
     ["Notas", paymentNotes],
@@ -221,6 +237,34 @@ async function generatePaymentConfirmationPdf(params: {
     y += lines.length * 4.5 + 3;
   });
 
+  if (courses && courses.length > 0) {
+    doc.setDrawColor(229, 231, 235);
+    doc.line(horizontalPadding, y, pageWidth - horizontalPadding, y);
+    y += 6;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text("Cursos del estudiante", horizontalPadding, y);
+    y += 5;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    for (const course of courses) {
+      const schedule =
+        course.hora_inicio && course.hora_fin
+          ? ` (${course.hora_inicio} - ${course.hora_fin})`
+          : "";
+      const salon = course.salon ? ` · Salón ${course.salon}` : "";
+      const line = `• ${course.nombre_curso} - ${course.nivel_curso}${schedule}${salon}`;
+      const wrapped = doc.splitTextToSize(
+        line,
+        pageWidth - horizontalPadding * 2,
+      );
+      doc.text(wrapped, horizontalPadding, y);
+      y += wrapped.length * 4.5 + 1;
+    }
+  }
+
   const safeDate = paymentDateRaw.slice(0, 10).replaceAll("-", "");
   doc.save(
     `confirmacion-pago-${student.numero_identificacion}-${safeDate}.pdf`,
@@ -239,6 +283,7 @@ export default function ProcessPaymentPage() {
   const [numeroIdentificacion, setNumeroIdentificacion] = useState("");
   const [student, setStudent] = useState<Student | null>(null);
   const [payments, setPayments] = useState<PaymentReportRow[]>([]);
+  const [studentCourses, setStudentCourses] = useState<StudentCourseInfo[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isRefreshingReport, setIsRefreshingReport] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -302,6 +347,7 @@ export default function ProcessPaymentPage() {
     if (!result.success || !result.data?.student) {
       setStudent(null);
       setPayments([]);
+      setStudentCourses([]);
       toast.error(result.error ?? "No se encontró el estudiante");
       return;
     }
@@ -314,6 +360,15 @@ export default function ProcessPaymentPage() {
 
     if (!result.data.recent_payments) {
       await refreshReport(normalized);
+    }
+
+    // Best-effort: si falla, dejamos studentCourses vacío y el recibo simplemente
+    // omitirá la sección de cursos.
+    const coursesResult = await getStudentCoursesByNumero(normalized);
+    if (coursesResult.success) {
+      setStudentCourses(coursesResult.data ?? []);
+    } else {
+      setStudentCourses([]);
     }
 
     toast.success("Estado de pagos cargado correctamente");
@@ -375,6 +430,7 @@ export default function ProcessPaymentPage() {
         clases: submittedClases,
         valor: submittedValor,
         notas: submittedNotas,
+        courses: studentCourses,
       });
     } catch {
       toast.warning("Pago registrado, pero no fue posible generar el PDF");
@@ -411,6 +467,7 @@ export default function ProcessPaymentPage() {
               ),
         valor: Number(payment.valor ?? 0),
         notas: payment.notas ?? "",
+        courses: studentCourses,
       });
     } catch {
       toast.error("No fue posible generar el PDF de ese pago");
@@ -516,6 +573,39 @@ export default function ProcessPaymentPage() {
               </div>
             </CardContent>
           </Card>
+
+          {studentCourses.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">
+                  Cursos del estudiante
+                </CardTitle>
+                <CardDescription>
+                  Estos cursos se incluirán también en el comprobante PDF.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-2 text-sm">
+                  {studentCourses.map((course) => (
+                    <li
+                      key={course.id_curso}
+                      className="flex flex-col gap-0.5 rounded-md border border-gray-200 bg-gray-50 px-3 py-2"
+                    >
+                      <span className="font-medium text-gray-900">
+                        {course.nombre_curso} — {course.nivel_curso}
+                      </span>
+                      <span className="text-xs text-gray-600">
+                        {course.hora_inicio && course.hora_fin
+                          ? `${course.hora_inicio} – ${course.hora_fin}`
+                          : "Horario sin definir"}
+                        {course.salon ? ` · Salón ${course.salon}` : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>
@@ -665,6 +755,7 @@ export default function ProcessPaymentPage() {
                         <TableHead className="text-right">
                           Clases adelantadas
                         </TableHead>
+                        <TableHead>Registrado por</TableHead>
                         <TableHead>Notas</TableHead>
                         <TableHead className="text-right">
                           Comprobante
@@ -686,6 +777,9 @@ export default function ProcessPaymentPage() {
                           </TableCell>
                           <TableCell className="text-right">
                             {payment.clases_adelantadas ?? 0}
+                          </TableCell>
+                          <TableCell>
+                            {payment.registrado_por_nombre?.trim() || "—"}
                           </TableCell>
                           <TableCell>{payment.notas ?? "-"}</TableCell>
                           <TableCell className="text-right">

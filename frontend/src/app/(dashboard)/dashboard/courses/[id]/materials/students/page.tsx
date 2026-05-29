@@ -43,7 +43,6 @@ export default async function CourseMaterialsStudentsPage({
               <th className="px-3 py-3 text-left font-semibold">Nombres</th>
               <th className="px-3 py-3 text-left font-semibold">Apellidos</th>
               <th className="px-3 py-3 text-left font-semibold">Telefono</th>
-              <th className="px-3 py-3 text-left font-semibold">Email</th>
             </tr>
           </thead>
           <tbody>
@@ -55,12 +54,11 @@ export default async function CourseMaterialsStudentsPage({
                 <td className="px-3 py-3 text-gray-900">{member.nombres}</td>
                 <td className="px-3 py-3 text-gray-900">{member.apellidos}</td>
                 <td className="px-3 py-3 text-gray-700">{member.telefono}</td>
-                <td className="px-3 py-3 text-gray-700">{member.email}</td>
               </tr>
             ))}
             {members.length === 0 ? (
               <tr className="border-t border-gray-100">
-                <td colSpan={5} className="px-3 py-6 text-center text-gray-500">
+                <td colSpan={4} className="px-3 py-6 text-center text-gray-500">
                   No hay alumnos o profesor asociados a este curso.
                 </td>
               </tr>

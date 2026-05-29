@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
@@ -220,6 +220,20 @@ export default function NewStudentPage() {
       // Keep this fire-and-forget on page load.
     });
   }, []);
+
+  // Sincronización automática: email = <cedula>@harvard.com.
+  // Se desactiva en cuanto el admin edite el email a mano y se
+  // reactiva si vuelve a dejarlo en blanco.
+  const userEditedEmailRef = useRef(false);
+  const watchedNumeroIdentificacion = form.watch("numero_identificacion");
+  useEffect(() => {
+    if (userEditedEmailRef.current) return;
+    const cedula = watchedNumeroIdentificacion?.trim() ?? "";
+    const autoEmail = cedula ? `${cedula}@harvard.com` : "";
+    if (form.getValues("email") !== autoEmail) {
+      form.setValue("email", autoEmail, { shouldValidate: false });
+    }
+  }, [watchedNumeroIdentificacion, form]);
 
   useEffect(() => {
     async function fetchCoordinators() {
@@ -524,6 +538,11 @@ export default function NewStudentPage() {
                           placeholder="estudiante@correo.com"
                           autoComplete="email"
                           {...field}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            userEditedEmailRef.current = value !== "";
+                            field.onChange(value);
+                          }}
                         />
                       </FormControl>
                       <FormMessage />

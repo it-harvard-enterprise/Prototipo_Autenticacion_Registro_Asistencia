@@ -386,6 +386,51 @@ export default function PaymentsReportPage() {
 
   const rowsPreview = useMemo(() => rows.slice(0, 250), [rows]);
 
+  // Desglose por administrador: agrupa los pagos por quien los registró
+  // y separa los subtotales por origen (asistencia vs procesador).
+  // Reactivo a los filtros porque depende de `rows`.
+  const adminBreakdown = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        key: string;
+        name: string;
+        total: number;
+        asistencia: number;
+        procesador: number;
+        count: number;
+      }
+    >();
+
+    for (const row of rows) {
+      const key =
+        (row.registrado_por_id ?? "").trim() ||
+        (row.registrado_por ?? "").trim() ||
+        "__sin_admin__";
+      const name =
+        (row.registrado_por_nombre ?? "").trim() || "Administrador sin resolver";
+      const valor = Number(row.valor ?? 0);
+      const current =
+        map.get(key) ??
+        {
+          key,
+          name,
+          total: 0,
+          asistencia: 0,
+          procesador: 0,
+          count: 0,
+        };
+
+      current.total += valor;
+      current.count += 1;
+      if (row.origen_pago === "asistencia") current.asistencia += valor;
+      if (row.origen_pago === "procesador") current.procesador += valor;
+      map.set(key, current);
+    }
+
+    return Array.from(map.values()).sort((a, b) => b.total - a.total);
+  }, [rows]);
+
   async function handleLoadReport() {
     if (rangeError) {
       toast.error(rangeError);
@@ -465,7 +510,8 @@ export default function PaymentsReportPage() {
           metodo_pago: normalizePaymentMethodLabel(row.metodo_pago),
           valor: Number(row.valor ?? 0),
           clases_adelantadas: Number(row.clases_adelantadas ?? 0),
-          registrado_por: row.registrado_por || "-",
+          registrado_por:
+            row.registrado_por_nombre || row.registrado_por || "-",
           notas: row.notas || "",
         });
       }
@@ -787,6 +833,55 @@ export default function PaymentsReportPage() {
         />
       </div>
 
+      {adminBreakdown.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Users className="h-4 w-4 text-indigo-700" />
+              Recaudo por administrador
+            </CardTitle>
+            <CardDescription>
+              Totales y subtotales por origen (Asistencia / Procesador)
+              calculados sobre el rango de fechas seleccionado.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {adminBreakdown.map((entry) => (
+                <div
+                  key={entry.key}
+                  className="rounded-lg border bg-white p-4 shadow-sm"
+                >
+                  <p className="text-sm font-semibold text-gray-900">
+                    {entry.name}
+                  </p>
+                  <p className="mt-1 text-2xl font-bold text-gray-900">
+                    {formatCurrency(entry.total)}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {entry.count} movimiento(s)
+                  </p>
+                  <div className="mt-3 space-y-1 text-sm text-gray-700">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600">Asistencia</span>
+                      <span className="font-medium">
+                        {formatCurrency(entry.asistencia)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600">Procesador</span>
+                      <span className="font-medium">
+                        {formatCurrency(entry.procesador)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader className="pb-3">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -796,7 +891,8 @@ export default function PaymentsReportPage() {
                 Detalle de pagos ({rows.length})
               </CardTitle>
               <CardDescription>
-                Incluye fecha, pagador, metodo, curso, tipo, origen y valor.
+                Incluye fecha, pagador, metodo, curso, tipo, origen, valor y
+                administrador que registró el pago.
               </CardDescription>
             </div>
             <Button
@@ -841,6 +937,7 @@ export default function PaymentsReportPage() {
                     <TableHead>Curso</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead>Origen</TableHead>
+                    <TableHead>Registrado por</TableHead>
                     <TableHead className="text-right">Valor</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -865,6 +962,9 @@ export default function PaymentsReportPage() {
                       </TableCell>
                       <TableCell>
                         {normalizeSourceLabel(row.origen_pago)}
+                      </TableCell>
+                      <TableCell>
+                        {row.registrado_por_nombre?.trim() || "—"}
                       </TableCell>
                       <TableCell className="text-right font-semibold">
                         {formatCurrency(Number(row.valor ?? 0))}

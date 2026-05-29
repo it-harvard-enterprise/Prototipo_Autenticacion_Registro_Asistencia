@@ -37,6 +37,8 @@ export interface PaymentReportRow {
   clases_adelantadas: number;
   registrado_por_id?: string;
   registrado_por: string;
+  /** Nombre completo resuelto server-side desde profiles/administrador. */
+  registrado_por_nombre?: string | null;
   notas: string | null;
 }
 
