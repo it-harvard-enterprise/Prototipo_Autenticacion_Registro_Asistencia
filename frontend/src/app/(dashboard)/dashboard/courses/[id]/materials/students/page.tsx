@@ -12,6 +12,7 @@ export default async function CourseMaterialsStudentsPage({
   const { id } = await params;
   const { course } = await getCourseMaterialsPageContext(id);
   const membersResult = await getCourseMaterialsMembers(course.id_curso);
+
   const members = membersResult.success ? (membersResult.data ?? []) : [];
 
   return (

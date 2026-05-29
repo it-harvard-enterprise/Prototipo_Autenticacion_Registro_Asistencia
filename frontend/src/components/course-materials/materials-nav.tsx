@@ -10,6 +10,7 @@ const tabs = [
   { key: "home", label: "Pagina de Inicio del Curso", path: "" },
   { key: "content", label: "Contenido", path: "/content" },
   { key: "students", label: "Listado de Alumnos", path: "/students" },
+  { key: "grades", label: "Calificaciones", path: "/grades" },
 ] as const;
 
 export function MaterialsNav({ courseId, active }: MaterialsNavProps) {
