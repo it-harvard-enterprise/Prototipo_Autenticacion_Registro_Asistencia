@@ -274,11 +274,35 @@ biometricBackendConfigHint(): string  // texto sugiriendo cómo configurar las e
 
 | Ruta | Archivo | Descripción |
 |---|---|---|
-| `/` | `app/page.tsx` | Redirect inmediato a `/dashboard`. |
+| `/` | `app/page.tsx` | **Landing marketing** de Harvard Enterprise S.A.S. (10 secciones compuestas desde `components/landing/`). Server Component. Antes redirigía a `/dashboard`; ahora la landing es la cara pública del sitio y el dashboard sigue vivo bajo `/dashboard`. |
 | `/health` | `app/health/route.ts` | `GET`/`HEAD`/`OPTIONS`. Verifica backend con `HEAD` a `{backend}/health` (timeout 3s, query `?scope=frontend` salta backend). Responde JSON `{ frontend, backend, backend_detail, overall }` con `200` u `503`. CORS `*`. |
 | `/auth/confirm` | `app/auth/confirm/route.ts` | Callback OAuth/OTP de Supabase (recover, magic link). Sanitiza `next=` y redirige según resultado. |
 | `/welcome` | `app/welcome/page.tsx` | Estado intermedio: usuario logueado sin rol resuelto. |
 | `/not-approved` | `app/not-approved/page.tsx` | Admin pendiente de aprobación. Botón sign-out. |
+
+#### Componentes de la landing (`src/components/landing/`)
+
+10 componentes presentacionales portados desde el proyecto Vite/Bolt original. Casi todos son Server Components excepto los que necesitan estado/eventos del navegador:
+
+| Componente | "use client" | Contenido |
+|---|---|---|
+| `Navbar.tsx` | ✅ | Sticky nav con cambio de fondo al hacer scroll (`useState`+`useEffect`) y menú móvil. Link "Plataforma" → `/login`. |
+| `Hero.tsx` | — | Background pexels + overlay rojo + 3 stats + 2 CTAs (`#programa` + `/login`). |
+| `About.tsx` | — | 4 highlight cards + banner "+20 años" con el logo circular. |
+| `Program.tsx` | — | 4 program cards (Inglés, Matemáticas, Sistemas, Acompañamiento). |
+| `Levels.tsx` | — | A1/A2/B1/B2 grid + panel de prueba de clasificación. |
+| `HowItWorks.tsx` | — | 5 pasos horizontales con connector line + highlight box "Clases cada sábado". |
+| `EduControl.tsx` | — | Sección dark con mock dashboard + 6 features de la plataforma. |
+| `Benefits.tsx` | — | 6 benefit cards + CTA banner final. |
+| `Contact.tsx` | ✅ | Info cards + form con submit optimista (`sleep(1000)` → success). TODO: cablear a un endpoint real de contacto. |
+| `Footer.tsx` | — | Brand + nav + contact + bottom bar. Iconos de marca (Facebook/Instagram/YouTube) inline como SVG porque lucide v1 los dropeó. |
+
+Notas:
+- Todos los colores usan **valores arbitrarios** (`bg-[#8B0000]`, `text-[#C9A84C]`) — no requieren extensión del theme de Tailwind.
+- Font `font-serif` mapea a Playfair Display vía `--font-serif` en `globals.css`.
+- Logos en `public/logos/LOGO_HARVARD_CIRCULAR_NUEVO_SISTEMAS.png` y `LOGO_HARVARD_NUEVO_SISTEMAS.png`.
+- Anchor links `#inicio`, `#quienes-somos`, `#programa`, etc. usan `scroll-behavior: smooth` configurado en `<html>` desde `globals.css`.
+- `Hero` y `Contact` cargan imágenes externas de Pexels via `<img>` (no `<Image>` para evitar configurar `images.remotePatterns`).
 
 ### 5.2 Auth group (`src/app/(auth)/`)
 
