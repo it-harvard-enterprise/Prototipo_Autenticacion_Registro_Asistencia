@@ -82,18 +82,29 @@ export default function Navbar() {
             </a>
           </div>
 
-          {/* Mobile menu button */}
-          <button
-            onClick={() => setIsOpen(!isOpen)}
-            className={`lg:hidden p-2 rounded-lg transition-colors ${
-              scrolled
-                ? "text-gray-700 hover:bg-gray-100"
-                : "text-white hover:bg-white/10"
-            }`}
-            aria-label="Menú"
-          >
-            {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-          </button>
+          {/* Mobile right cluster: always-visible Plataforma CTA + hamburger.
+              The Plataforma button stays out of the hamburger drawer so the
+              login is reachable in one tap on any phone-sized viewport. */}
+          <div className="lg:hidden flex items-center gap-2">
+            <a
+              href="/login"
+              className="flex items-center gap-1.5 bg-[#8B0000] hover:bg-[#6b0000] text-white px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-200 shadow-md border border-[#C9A84C]/40"
+            >
+              <Monitor className="w-4 h-4" />
+              Plataforma
+            </a>
+            <button
+              onClick={() => setIsOpen(!isOpen)}
+              className={`p-2 rounded-lg transition-colors ${
+                scrolled
+                  ? "text-gray-700 hover:bg-gray-100"
+                  : "text-white hover:bg-white/10"
+              }`}
+              aria-label="Menú"
+            >
+              {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
+          </div>
         </div>
       </div>
 
