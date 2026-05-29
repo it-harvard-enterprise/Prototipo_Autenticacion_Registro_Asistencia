@@ -240,6 +240,9 @@ export default function AttendancePage() {
       idCurso: Number(values.idCurso),
       date: values.fecha,
       rows: rowsToPersist.map((student) => toSaveAttendanceRow(student)),
+      // Autosave: NEVER notify acudientes — otherwise every keystroke
+      // would spam SMS every 450ms while the admin edits the roster.
+      notify: false,
     });
     setIsAutoSaving(false);
 
@@ -507,6 +510,9 @@ export default function AttendancePage() {
       date: values.fecha,
       saveTimestampIso: savePressedAtIso,
       rows: students.map((student) => toSaveAttendanceRow(student)),
+      // Manual Guardar: dispatch SMS to acudientes (backend respects
+      // the per-case SMS_NOTIFY_ATTENDANCE_* toggles).
+      notify: true,
     });
     setIsSaving(false);
 

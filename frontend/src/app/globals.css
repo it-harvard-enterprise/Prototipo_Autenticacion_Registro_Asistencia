@@ -10,6 +10,7 @@
   --font-sans: var(--font-inter);
   --font-mono: var(--font-mono);
   --font-heading: var(--font-inter);
+  --font-serif: var(--font-serif), Georgia, Cambria, serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -127,5 +128,23 @@
   html {
     @apply font-sans;
     font-size: 16.5px;
+    scroll-behavior: smooth;
+  }
+}
+
+/* Utilities ported from the legacy Bolt/Vite landing CSS. Kept here so the
+   landing components don't need their own stylesheet. */
+@utility text-shadow {
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+@utility section-padding {
+  padding-block: 5rem; /* py-20 */
+  padding-inline: 1rem; /* px-4 */
+  @media (min-width: 768px) {
+    padding-inline: 2rem; /* md:px-8 */
+  }
+  @media (min-width: 1024px) {
+    padding-inline: 4rem; /* lg:px-16 */
   }
 }

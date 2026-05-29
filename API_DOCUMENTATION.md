@@ -66,8 +66,16 @@
 | `MATCH_THRESHOLD` | opcional | Umbral SourceAFIS (default `40.0`) |
 | `PORT` | opcional | Default `4000` |
 | `SUPABASE_MATERIALS_BUCKET` | ✅ (materiales) | Bucket para covers/archivos de cursos |
+| `TWILIO_ACCOUNT_SID` | opcional (SMS) | Account SID de Twilio para enviar SMS al acudiente |
+| `TWILIO_AUTH_TOKEN` | opcional (SMS) | Auth Token de Twilio |
+| `TWILIO_MESSAGING_SERVICE_SID` | opcional (SMS) | Messaging Service de Twilio (preferido sobre `From` fijo) |
+| `SMS_NOTIFICATIONS_ENABLED` | opcional (SMS) | Master kill-switch (`true`/`false`, default `false`) |
+| `SMS_NOTIFICATIONS_DRY_RUN` | opcional (SMS) | Si `true`, loguea el SMS pero NO llama a Twilio (default `true`) |
+| `SMS_NOTIFY_PAYMENT` | opcional (SMS) | Toggle case 1: confirmación de pago (default `false`) |
+| `SMS_NOTIFY_ATTENDANCE_PRESENT` | opcional (SMS) | Toggle case 2: presencia (default `false`) |
+| `SMS_NOTIFY_ATTENDANCE_ABSENT` | opcional (SMS) | Toggle case 3: ausencia (default `false`) |
 
-> El binario aborta (`log.Fatal`) si faltan `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `BIOMETRIC_PASSPHRASE_PNG` o `BIOMETRIC_PASSPHRASE_TEMPLATE`.
+> El binario aborta (`log.Fatal`) si faltan `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `BIOMETRIC_PASSPHRASE_PNG` o `BIOMETRIC_PASSPHRASE_TEMPLATE`. Las variables de SMS son todas opcionales: el módulo cae a no-op cuando faltan o cuando `SMS_NOTIFICATIONS_ENABLED=false`.
 
 ---
 
@@ -270,7 +278,7 @@ Tabla principal: `registro_asistencia`. Afecta `saldo_estudiantes` cuando un pag
 | Método | Ruta | Body / Query | Notas |
 |---|---|---|---|
 | `GET` | `/api/attendance/roster` | query `id_curso`, `date` (YYYY-MM-DD) | Devuelve el roster con: `numero_identificacion, nombres, apellidos, asistio, saldo, metodo_pago, marcado_en, clases_adelantadas`. |
-| `POST` | `/api/attendance/save` | `AttendanceSaveRequest` | Upsert manual por fila. Si `asistio=false` se limpian `saldo`, `metodo_pago`, `marcado_en`. Si `saldo="debe"` se limpia `metodo_pago`. Actualiza `saldo_estudiantes` cuando se registra un pago `cancelado` nuevo. |
+| `POST` | `/api/attendance/save` | `AttendanceSaveRequest` | Upsert manual por fila. Si `asistio=false` se limpian `saldo`, `metodo_pago`, `marcado_en`. Si `saldo="debe"` se limpia `metodo_pago`. Actualiza `saldo_estudiantes` cuando se registra un pago `cancelado` nuevo. **Side-effect SMS**: si `notify=true` en el body, dispara un SMS por fila al `telefono_acudiente` (presente o ausente). El autosave del frontend envía `notify=false`; solo el botón "Guardar" manual envía `notify=true`. Gated por `SMS_NOTIFY_ATTENDANCE_PRESENT` y `SMS_NOTIFY_ATTENDANCE_ABSENT`. |
 | `POST` | `/api/attendance/delete` | `{ id_curso, date }` | Borra todas las filas de asistencia del curso/fecha. |
 | `GET` | `/api/attendance/export` | query `id_curso`, `date` | Filas planas con `tipo_identificacion, nombres, apellidos, nombre_curso` embebidos para exportar (ordenado por `numero_identificacion asc`). |
 | `GET` | `/api/attendance/dates` | query `id_curso` | Lista única de fechas (YYYY-MM-DD, TZ Bogotá) en orden `desc`. |
@@ -282,8 +290,9 @@ Tabla principal: `registro_asistencia`. Afecta `saldo_estudiantes` cuando un pag
 {
   "id_curso": 12,
   "date": "2026-05-26",
-  "registrado_por": "uuid del usuario",  // opcional
+  "registrado_por": "uuid del usuario",   // opcional
   "save_timestamp_iso": "2026-05-26T...", // opcional
+  "notify": true,                          // opcional, default false. true → dispara SMS por fila
   "rows": [
     {
       "numero_identificacion": "1234567890",
@@ -303,7 +312,7 @@ Tablas: `pagos`, `saldo_estudiantes`, vista `vista_reporte_pagos`.
 | Método | Ruta | Body / Query | Notas |
 |---|---|---|---|
 | `GET` | `/api/payments/student/:numero_identificacion/status` | — | `{ student, recent_payments }`. |
-| `POST` | `/api/payments/process` | `ProcessStudentPaymentRequest` | Inserta en `pagos` y ajusta `saldo_estudiantes` (resta deuda o suma adelanto). Modalidades: `DEUDA_TOTAL`, `DEUDA_PARCIAL`, `ADELANTO`. Métodos: `EFECTIVO`, `TRANSFERENCIA`, `OTRO`. La respuesta `payment` incluye **`registrado_por_nombre`** (string o `null`) resuelto contra `profiles` con fallback a `administrador`. |
+| `POST` | `/api/payments/process` | `ProcessStudentPaymentRequest` | Inserta en `pagos` y ajusta `saldo_estudiantes` (resta deuda o suma adelanto). Modalidades: `DEUDA_TOTAL`, `DEUDA_PARCIAL`, `ADELANTO`. Métodos: `EFECTIVO`, `TRANSFERENCIA`, `OTRO`. La respuesta `payment` incluye **`registrado_por_nombre`** (string o `null`) resuelto contra `profiles` con fallback a `administrador`. **Side-effect SMS**: tras el INSERT exitoso dispara `NotifyPaymentConfirmation` al `telefono_acudiente` del estudiante. Gated por `SMS_NOTIFY_PAYMENT`. |
 | `POST` | `/api/payments/manual-status` | `ManualStudentPaymentStatusUpdateRequest` | Sobrescribe `clases_adeudadas` y `clases_adelantadas` directamente. Crea la fila si no existe. |
 | `GET` | `/api/payments/report` | query `numero_identificacion?`, `from? (YYYY-MM-DD)`, `to?`, `scope? (AMBOS \| ASISTENCIA \| PROCESADOR)`, `limit?` (default 50, max 5000) | Consulta `vista_reporte_pagos`. Ordenada por `fecha_pago desc`. Cada fila incluye **`registrado_por_nombre`** (string o `null`) resuelto server-side desde los UUIDs de `registrado_por` con una sola query `in.()` a `profiles` (fallback a `administrador`). Best-effort: si el lookup falla, las filas conservan sus campos originales y `registrado_por_nombre = null`. |
 
@@ -360,6 +369,77 @@ Tablas: `pagos`, `saldo_estudiantes`, vista `vista_reporte_pagos`.
 ```
 
 `PENDING_FINGERPRINT` es el sentinela para "sin huella registrada"; se convierte en `null` antes de persistir.
+
+---
+
+## 4b. Notificaciones SMS (Twilio)
+
+Módulo: `backend/services/notifications.go`. Envía SMS al `telefono_acudiente` del estudiante para tres casos de uso, todos opt-in vía env vars.
+
+### Casos cubiertos
+
+| Caso | Disparador | Toggle env | Default |
+|---|---|---|---|
+| 1. Confirmación de pago | `POST /api/payments/process` tras INSERT exitoso en `pagos` | `SMS_NOTIFY_PAYMENT` | `false` |
+| 2. Asistencia presente | `POST /api/attendance/save` con `notify=true`, una fila por estudiante con `asistio=true` | `SMS_NOTIFY_ATTENDANCE_PRESENT` | `false` |
+| 3. Asistencia ausente | `POST /api/attendance/save` con `notify=true`, una fila por estudiante con `asistio=false` | `SMS_NOTIFY_ATTENDANCE_ABSENT` | `false` |
+
+### Capas de gating (orden de evaluación)
+
+1. **`SMS_NOTIFICATIONS_ENABLED`** (master). Si `false`, el módulo es un no-op total.
+2. **Toggle por caso** (uno de los 3 arriba). Si `false`, log `[SMS][SKIPPED][<KIND>] reason="toggle ... =false"`.
+3. **`telefono_acudiente`** del estudiante. Si está vacío o no se puede parsear como E.164 colombiano, log `[SMS][SKIPPED][<KIND>] reason="missing or invalid telefono_acudiente"`.
+4. **`SMS_NOTIFICATIONS_DRY_RUN`** (default `true`). Si `true`, log `[SMS][DRY_RUN][<KIND>] to=... body=...` y NO se llama a Twilio (cero costo).
+5. Si las credenciales `TWILIO_*` faltan, log `[SMS][CONFIG_ERROR][<KIND>]` y degrada a log.
+6. Solo si todo lo anterior pasa: POST a `https://api.twilio.com/2010-04-01/Accounts/.../Messages.json` con `MessagingServiceSid`, Body y To.
+
+### Flag `notify` en `/api/attendance/save`
+
+El autosave del frontend (cada 450ms cuando hay cambios) envía `notify=false` para evitar spam. Solo el botón "Guardar" manual envía `notify=true`. El backend respeta el flag: si `false`, no se dispara ni un solo SMS aunque los toggles estén en `true`.
+
+### Templates
+
+```
+PAYMENT:
+  "Harvard Enterprise: Recibimos pago de $20.000 (1 clase(s), EFECTIVO)
+   para JUAN PEREZ. Procesado por: Diego Albarracín el 28/05/2026. ID: a5a25927"
+
+PRESENT:
+  "Harvard Enterprise: JUAN PEREZ fue marcado/a PRESENTE en CALIFORNIA hoy 28/05/2026."
+
+ABSENT:
+  "Harvard Enterprise: JUAN PEREZ NO se presentó a CALIFORNIA hoy 28/05/2026.
+   Si fue justificado, contacte al coordinador."
+```
+
+Todos diseñados para caber en 1 segmento de SMS (≤160 caracteres).
+
+### Normalización de teléfono
+
+`normalizePhoneE164` (en `notifications.go`) acepta:
+- `"3187677436"` → `+573187677436`
+- `"318 767 7436"` → `+573187677436`
+- `"+57 318 767 7436"` → `+573187677436`
+- `"573187677436"` → `+573187677436`
+- `"+12025551234"` → pasa tal cual (E.164 cualquier país)
+- vacío / corto / no-móvil colombiano → `""` (skip silencioso)
+
+### Resiliencia
+
+Todas las funciones `Notify*` son **best-effort**: no retornan error. Cualquier fallo (network, 4xx/5xx, número inválido) se loguea con tag `[SMS][FAILED][...]` o `[SMS][NETWORK_ERROR][...]` pero **nunca rompe ni revierte** el pago/asistencia subyacente. Los callers (`ProcessStudentPayment`, `SaveAttendance`) las invocan dentro de `go ...` con `context.Background()` para que la goroutine sobreviva al cierre de la response HTTP.
+
+### Logging
+
+Todos los SMS dejan rastro en stdout con formato consistente:
+
+```
+[SMS][DRY_RUN][PAYMENT] to=+573187677436 body_len=148 body="Harvard Enterprise: ..."
+[SMS][SENT][ABSENT] to=+573187677436 status=201
+[SMS][FAILED][PAYMENT] to=+573187677436 status=400
+[SMS][NETWORK_ERROR][ABSENT] to=+573187677436 err=...
+[SMS][CONFIG_ERROR][PAYMENT] missing Twilio env vars ...
+[SMS][SKIPPED][PRESENT] reason="toggle SMS_NOTIFY_ATTENDANCE_PRESENT=false"
+```
 
 ---
 
