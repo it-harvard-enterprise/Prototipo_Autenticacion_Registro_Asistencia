@@ -384,11 +384,13 @@ export function MaterialsFolderExplorerClient({
         return;
       }
 
+      const createdFolder = payload.data;
+
       setFolders((prev) => [
         {
-          id: payload.data.id,
-          parentFolderId: payload.data.parent_folder_id,
-          name: payload.data.name,
+          id: createdFolder.id,
+          parentFolderId: createdFolder.parent_folder_id,
+          name: createdFolder.name,
           filesCount: 0,
           cardImageUrl: null,
         },
@@ -591,7 +593,9 @@ export function MaterialsFolderExplorerClient({
         return;
       }
 
-      const inserted = payload.data.map((row) => ({
+      const uploadedRows = payload.data;
+
+      const inserted = uploadedRows.map((row) => ({
         id: row.id,
         folderId: row.folder_id,
         fileName: row.file_name,
@@ -668,16 +672,18 @@ export function MaterialsFolderExplorerClient({
         return;
       }
 
+      const createdFile = payload.data;
+
       setFiles((prev) => [
         {
-          id: payload.data.id,
-          folderId: payload.data.folder_id,
-          fileName: payload.data.file_name,
-          contentType: payload.data.content_type,
-          fileSize: payload.data.file_size,
-          createdAt: payload.data.created_at,
+          id: createdFile.id,
+          folderId: createdFile.folder_id,
+          fileName: createdFile.file_name,
+          contentType: createdFile.content_type,
+          fileSize: createdFile.file_size,
+          createdAt: createdFile.created_at,
           downloadUrl: null,
-          youtubeUrl: payload.data.youtube_url ?? youtubeUrl,
+          youtubeUrl: createdFile.youtube_url ?? youtubeUrl,
         },
         ...prev,
       ]);
@@ -822,10 +828,7 @@ export function MaterialsFolderExplorerClient({
     }
   }
 
-  function renderTree(
-    folder: FolderExplorerFolder,
-    depth: number,
-  ): JSX.Element {
+  function renderTree(folder: FolderExplorerFolder, depth: number) {
     const children = childrenByParent.get(folder.id) ?? [];
     const hasChildren = children.length > 0;
     const isExpanded = expandedFolderIds.has(folder.id);

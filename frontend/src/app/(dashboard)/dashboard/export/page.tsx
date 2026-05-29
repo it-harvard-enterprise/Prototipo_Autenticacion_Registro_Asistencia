@@ -37,6 +37,22 @@ function getTodayIsoDate() {
   return `${year}-${month}-${day}`;
 }
 
+function toLocalDate(dateIso: string) {
+  return new Date(dateIso).toLocaleString("es-CO", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function toDisplayLabel(value: string | null): string {
+  if (value === null) return "NULL";
+  if (!value) return "";
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
 export default function ExportPage() {
   const [courses, setCourses] = useState<CourseOption[]>([]);
   const [rows, setRows] = useState<AttendanceExportRow[]>([]);

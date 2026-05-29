@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { translateErrorMessage } from "@/lib/error-messages";
 
-export type ManagedUserRole = "estudiante" | "profesor";
+export type ManagedUserRole = "estudiante" | "profesor" | "administrador";
 
 export function createAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

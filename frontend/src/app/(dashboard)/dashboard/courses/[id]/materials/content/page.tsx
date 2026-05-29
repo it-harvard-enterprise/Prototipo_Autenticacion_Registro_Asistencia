@@ -14,13 +14,14 @@ export default async function CourseMaterialsContentPage({
   const { course, canManage } = await getCourseMaterialsPageContext(id);
   const snapshotResult = await getCourseMaterialsSnapshot(course.id_curso);
 
-  const snapshot = snapshotResult.success
-    ? snapshotResult.data
-    : {
-        coverImageUrl: null,
-        folders: [],
-        files: [],
-      };
+  const snapshot =
+    snapshotResult.success && snapshotResult.data
+      ? snapshotResult.data
+      : {
+          coverImageUrl: null,
+          folders: [],
+          files: [],
+        };
 
   return (
     <div className="space-y-6">
