@@ -1359,23 +1359,105 @@ func (a *App) ListPaymentsReport(ctx context.Context, filters PaymentReportFilte
 		return nil, http.StatusInternalServerError, err
 	}
 
-	uuids := make([]string, 0, len(rows))
-	for _, row := range rows {
-		if uid, ok := asString(row["registrado_por"]); ok {
-			uuids = append(uuids, uid)
+	// vista_reporte_pagos hides the admin UUID and exposes
+	// `registrado_por` as a pre-joined name string from `profiles` (empty
+	// when no profile row exists). To resolve the admin reliably we need
+	// the real UUID, so we hit the pagos table directly with the row ids
+	// we just got from the view.
+	pagoIDToUUID := a.loadPagoRegistradoPorIndex(ctx, rows)
+
+	uniqUUIDs := map[string]bool{}
+	for _, uid := range pagoIDToUUID {
+		uid = strings.TrimSpace(uid)
+		if uid != "" {
+			uniqUUIDs[uid] = true
 		}
 	}
-	adminNames := a.resolveAdminNames(ctx, uuids)
+	uuidList := make([]string, 0, len(uniqUUIDs))
+	for uid := range uniqUUIDs {
+		uuidList = append(uuidList, uid)
+	}
+	adminNames := a.resolveAdminNames(ctx, uuidList)
+
 	for _, row := range rows {
-		uid, _ := asString(row["registrado_por"])
-		if name, ok := adminNames[strings.TrimSpace(uid)]; ok {
+		pagoID, _ := asString(row["id"])
+		uid := strings.TrimSpace(pagoIDToUUID[pagoID])
+
+		if uid != "" {
+			row["registrado_por_id"] = uid
+		} else {
+			row["registrado_por_id"] = nil
+		}
+
+		if name, ok := adminNames[uid]; ok && name != "" {
 			row["registrado_por_nombre"] = name
 		} else {
-			row["registrado_por_nombre"] = nil
+			// Last-resort: the view's pre-joined string. It can carry a
+			// usable name even when our lookup misses (e.g. RLS lets the
+			// view see profile rows that our query cannot). Empty
+			// strings collapse to null so the UI shows the "—" fallback.
+			viewLabel, _ := asString(row["registrado_por"])
+			viewLabel = strings.TrimSpace(viewLabel)
+			if viewLabel != "" {
+				row["registrado_por_nombre"] = viewLabel
+			} else {
+				row["registrado_por_nombre"] = nil
+			}
 		}
 	}
 
 	return rows, http.StatusOK, nil
+}
+
+// loadPagoRegistradoPorIndex fetches `registrado_por` (UUID) for each pago id
+// in the supplied view rows. Returns a map pagoID -> UUID. Errors are
+// swallowed; on failure the returned map is empty and callers fall back to
+// the view's pre-joined name.
+func (a *App) loadPagoRegistradoPorIndex(
+	ctx context.Context,
+	rows []map[string]any,
+) map[string]string {
+	out := map[string]string{}
+	if len(rows) == 0 {
+		return out
+	}
+
+	ids := make([]string, 0, len(rows))
+	seen := map[string]bool{}
+	for _, row := range rows {
+		if id, ok := asString(row["id"]); ok {
+			trimmed := strings.TrimSpace(id)
+			if trimmed != "" && !seen[trimmed] {
+				seen[trimmed] = true
+				ids = append(ids, trimmed)
+			}
+		}
+	}
+	if len(ids) == 0 {
+		return out
+	}
+
+	query := url.Values{}
+	query.Set("id", buildStringInFilter(ids))
+	query.Set("select", "id,registrado_por")
+
+	body, _, err := a.CallSupabase(ctx, http.MethodGet, "/rest/v1/pagos", query, nil, false)
+	if err != nil {
+		return out
+	}
+
+	var pagoRows []struct {
+		ID            string `json:"id"`
+		RegistradoPor string `json:"registrado_por"`
+	}
+	if err := json.Unmarshal(body, &pagoRows); err != nil {
+		return out
+	}
+
+	for _, row := range pagoRows {
+		out[strings.TrimSpace(row.ID)] = strings.TrimSpace(row.RegistradoPor)
+	}
+	return out
 }
 
 func buildStudentUpdatePayload(data map[string]any) map[string]any {
