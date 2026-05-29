@@ -21,13 +21,14 @@ export default async function CourseMaterialsHomePage({
       ? `/dashboard/courses/${course.id_curso}`
       : "/dashboard/my-courses";
 
-  const snapshot = snapshotResult.success
-    ? snapshotResult.data
-    : {
-        coverImageUrl: null,
-        folders: [],
-        files: [],
-      };
+  const snapshot =
+    snapshotResult.success && snapshotResult.data
+      ? snapshotResult.data
+      : {
+          coverImageUrl: null,
+          folders: [],
+          files: [],
+        };
 
   return (
     <div className="space-y-6">

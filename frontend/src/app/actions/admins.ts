@@ -43,9 +43,12 @@ type BackendResponse<T> = {
   error?: string;
 };
 
-export async function createAdmin(
-  data: AdminFormData,
-): Promise<{ success: boolean; error?: string; data?: Admin }> {
+export async function createAdmin(data: AdminFormData): Promise<{
+  success: boolean;
+  error?: string;
+  data?: Admin;
+  alreadyRegistered?: boolean;
+}> {
   const approval = await ensureApprovedAdmin();
   if (!approval.ok) {
     return { success: false, error: approval.error };
